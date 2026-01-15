@@ -5,6 +5,11 @@ export type OutageJob = {
   outage_date: string;
   equipment_code: string;
   note: string | null;
+  nakhon_status: "PENDING" | "NOTIFIED" | "NOT_REQUIRED";
+  nakhon_notified_date: string | null;
+  nakhon_memo_no: string | null;
+  doc_status: "PENDING" | "REQUESTED" | "GENERATED";
+  doc_requested_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -54,4 +59,39 @@ export async function updateJob(
 
 export async function deleteJob(id: string) {
   return supabase.from("outage_jobs").delete().eq("id", id);
+}
+
+export async function setNakhonNotified(
+  id: string,
+  payload: { date: string; memoNo: string }
+) {
+  return supabase
+    .from("outage_jobs")
+    .update({
+      nakhon_status: "NOTIFIED",
+      nakhon_notified_date: payload.date,
+      nakhon_memo_no: payload.memoNo
+    })
+    .eq("id", id);
+}
+
+export async function setNakhonNotRequired(id: string) {
+  return supabase
+    .from("outage_jobs")
+    .update({
+      nakhon_status: "NOT_REQUIRED",
+      nakhon_notified_date: null,
+      nakhon_memo_no: null
+    })
+    .eq("id", id);
+}
+
+export async function requestDoc(id: string) {
+  return supabase
+    .from("outage_jobs")
+    .update({
+      doc_status: "REQUESTED",
+      doc_requested_at: new Date().toISOString()
+    })
+    .eq("id", id);
 }
