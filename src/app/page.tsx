@@ -6,7 +6,6 @@ import Modal from "@/components/Modal";
 import {
   listJobs,
   OutageJob,
-  requestDoc,
   setNakhonNotified,
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
@@ -18,6 +17,16 @@ import {
 
 type FilterOption = "all" | "green" | "yellow" | "red";
 
+type DocForm = {
+  doc_issue_date: string;
+  doc_purpose: string;
+  doc_area_title: string;
+  doc_time_start: string;
+  doc_time_end: string;
+  doc_area_detail: string;
+  map_link: string;
+};
+
 export default function DashboardPage() {
   const [jobs, setJobs] = useState<OutageJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,9 +35,6 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState<FilterOption>("all");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [docNoticeById, setDocNoticeById] = useState<Record<string, string>>(
     {}
   );
   const [selectedJob, setSelectedJob] = useState<OutageJob | null>(null);
@@ -40,6 +46,20 @@ export default function DashboardPage() {
     submit?: string;
   }>({});
   const [modalSaving, setModalSaving] = useState(false);
+  const [docJob, setDocJob] = useState<OutageJob | null>(null);
+  const [docForm, setDocForm] = useState<DocForm>({
+    doc_issue_date: "",
+    doc_purpose: "",
+    doc_area_title: "",
+    doc_time_start: "",
+    doc_time_end: "",
+    doc_area_detail: "",
+    map_link: ""
+  });
+  const [docErrors, setDocErrors] = useState<Partial<
+    Record<keyof DocForm | "submit", string>
+  >>({});
+  const [docSaving, setDocSaving] = useState(false);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -67,11 +87,40 @@ export default function DashboardPage() {
     setModalSaving(false);
   };
 
+  const closeDocModal = () => {
+    setDocJob(null);
+    setDocForm({
+      doc_issue_date: "",
+      doc_purpose: "",
+      doc_area_title: "",
+      doc_time_start: "",
+      doc_time_end: "",
+      doc_area_detail: "",
+      map_link: ""
+    });
+    setDocErrors({});
+    setDocSaving(false);
+  };
+
   const openNotifiedModal = (job: OutageJob) => {
     setSelectedJob(job);
     setNotifiedDate("");
     setMemoNo("");
     setModalErrors({});
+  };
+
+  const openDocModal = (job: OutageJob) => {
+    setDocJob(job);
+    setDocForm({
+      doc_issue_date: job.doc_issue_date ?? "",
+      doc_purpose: job.doc_purpose ?? "",
+      doc_area_title: job.doc_area_title ?? "",
+      doc_time_start: job.doc_time_start ?? "",
+      doc_time_end: job.doc_time_end ?? "",
+      doc_area_detail: job.doc_area_detail ?? "",
+      map_link: job.map_link ?? ""
+    });
+    setDocErrors({});
   };
 
   const handleSubmitNotified = async () => {
@@ -144,34 +193,90 @@ export default function DashboardPage() {
     setActionLoading((prev) => ({ ...prev, [job.id]: false }));
   };
 
-  const handleRequestDoc = async (job: OutageJob) => {
-    setActionError(null);
-    setActionLoading((prev) => ({ ...prev, [job.id]: true }));
-    const { error: updateError } = await requestDoc(job.id);
+  const handleCreateDoc = async () => {
+    if (!docJob) return;
+    const nextErrors: typeof docErrors = {};
+    if (!docForm.doc_issue_date) {
+      nextErrors.doc_issue_date = "กรุณาระบุวันที่ออกหนังสือ";
+    }
+    if (!docForm.doc_purpose.trim()) {
+      nextErrors.doc_purpose = "กรุณาระบุวัตถุประสงค์";
+    }
+    if (!docForm.doc_area_title.trim()) {
+      nextErrors.doc_area_title = "กรุณาระบุบริเวณที่ดับ";
+    }
+    if (!docForm.doc_time_start.trim()) {
+      nextErrors.doc_time_start = "กรุณาระบุเวลาเริ่มดับไฟ";
+    }
+    if (!docForm.doc_time_end.trim()) {
+      nextErrors.doc_time_end = "กรุณาระบุเวลาจ่ายไฟ";
+    }
+    if (!docForm.doc_area_detail.trim()) {
+      nextErrors.doc_area_detail = "กรุณาระบุรายละเอียดพื้นที่ดับไฟ";
+    }
+    if (!docForm.map_link.trim()) {
+      nextErrors.map_link = "กรุณาระบุลิ้ง google map";
+    }
 
-    if (updateError) {
-      setActionError(updateError.message || "อัปเดตไม่สำเร็จ");
-      setActionLoading((prev) => ({ ...prev, [job.id]: false }));
+    if (Object.keys(nextErrors).length > 0) {
+      setDocErrors(nextErrors);
       return;
     }
 
-    const timestamp = new Date().toISOString();
-    setJobs((prev) =>
-      prev.map((item) =>
-        item.id === job.id
-          ? {
-              ...item,
-              doc_status: "REQUESTED",
-              doc_requested_at: timestamp
-            }
-          : item
-      )
-    );
-    setDocNoticeById((prev) => ({
-      ...prev,
-      [job.id]: "บันทึกคำขอสร้างเอกสารแล้ว (กำลังพัฒนา)"
-    }));
-    setActionLoading((prev) => ({ ...prev, [job.id]: false }));
+    const payload = {
+      doc_issue_date: docForm.doc_issue_date,
+      doc_purpose: docForm.doc_purpose.trim(),
+      doc_area_title: docForm.doc_area_title.trim(),
+      doc_time_start: docForm.doc_time_start.trim(),
+      doc_time_end: docForm.doc_time_end.trim(),
+      doc_area_detail: docForm.doc_area_detail.trim(),
+      map_link: docForm.map_link.trim()
+    };
+
+    setDocSaving(true);
+    setDocErrors({});
+
+    try {
+      const response = await fetch("/api/docs/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: docJob.id,
+          payload
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        setDocErrors({
+          submit: result?.error || "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
+        });
+        setDocSaving(false);
+        return;
+      }
+
+      const generatedAt = new Date().toISOString();
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.id === docJob.id
+            ? {
+                ...item,
+                ...payload,
+                doc_status: "GENERATED",
+                doc_url: result.docUrl,
+                doc_generated_at: generatedAt
+              }
+            : item
+        )
+      );
+      closeDocModal();
+    } catch (submitError) {
+      console.error(submitError);
+      setDocErrors({
+        submit: "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
+      });
+      setDocSaving(false);
+    }
   };
 
   const filteredJobs = useMemo(() => {
@@ -275,7 +380,9 @@ export default function DashboardPage() {
             const isNotified = nakhonStatus === "NOTIFIED";
             const isNotRequired = nakhonStatus === "NOT_REQUIRED";
             const actionDisabled = actionLoading[job.id] ?? false;
-            const docNotice = docNoticeById[job.id];
+            const isDocGenerated =
+              job.doc_status === "GENERATED" && Boolean(job.doc_url);
+            const isDocGenerating = job.doc_status === "GENERATING";
             return (
               <div
                 key={job.id}
@@ -342,16 +449,28 @@ export default function DashboardPage() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleRequestDoc(job)}
-                          disabled={actionDisabled}
-                          className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-                        >
-                          {actionDisabled
-                            ? "กำลังบันทึก..."
-                            : "สร้างเอกสารดับไฟ"}
-                        </button>
+                        <>
+                          {isDocGenerated ? (
+                            <button
+                              type="button"
+                              onClick={() => window.open(job.doc_url!, "_blank")}
+                              className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 sm:w-auto"
+                            >
+                              พิมพ์เอกสาร
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openDocModal(job)}
+                              disabled={actionDisabled || isDocGenerating}
+                              className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                            >
+                              {isDocGenerating
+                                ? "กำลังสร้าง..."
+                                : "สร้างเอกสารดับไฟ"}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -381,11 +500,6 @@ export default function DashboardPage() {
                       )}
                     </div>
                   )}
-                  {docNotice ? (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                      {docNotice}
-                    </div>
-                  ) : null}
                 </div>
               </div>
             );
@@ -445,6 +559,177 @@ export default function DashboardPage() {
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {modalSaving ? "กำลังบันทึก..." : "ตกลง"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(docJob)}
+        title="สร้างเอกสารดับไฟ"
+        onClose={closeDocModal}
+      >
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            หนังสือลงวันที่
+            <input
+              type="date"
+              value={docForm.doc_issue_date}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_issue_date: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_issue_date ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_issue_date}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            ดับไฟเพื่อ
+            <input
+              type="text"
+              value={docForm.doc_purpose}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_purpose: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_purpose ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_purpose}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            บริเวณที่ดับ
+            <input
+              type="text"
+              value={docForm.doc_area_title}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_area_title: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_area_title ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_area_title}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            เวลาเริ่มดับไฟ
+            <input
+              type="time"
+              value={docForm.doc_time_start}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_time_start: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_time_start ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_time_start}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            เวลาจ่ายไฟ
+            <input
+              type="time"
+              value={docForm.doc_time_end}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_time_end: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_time_end ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_time_end}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            รายละเอียดพื้นที่ดับไฟ
+            <textarea
+              value={docForm.doc_area_detail}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_area_detail: event.target.value
+                }))
+              }
+              rows={3}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.doc_area_detail ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_area_detail}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            ลิ้ง google map
+            <input
+              type="url"
+              value={docForm.map_link}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  map_link: event.target.value
+                }))
+              }
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              required
+            />
+            {docErrors.map_link ? (
+              <span className="text-xs text-red-600">
+                {docErrors.map_link}
+              </span>
+            ) : null}
+          </label>
+          {docErrors.submit ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {docErrors.submit}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={closeDocModal}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateDoc}
+              disabled={docSaving}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {docSaving ? "กำลังสร้าง..." : "สร้าง"}
             </button>
           </div>
         </div>
