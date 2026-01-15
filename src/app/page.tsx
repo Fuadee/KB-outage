@@ -130,10 +130,15 @@ export default function DashboardPage() {
             const today = new Date();
             const daysLeft = daysBetween(today, parseLocalDate(job.outage_date));
             const status = getStatusColor(daysLeft);
+            const stepBadge =
+              job.nakhon_status === "NOTIFIED"
+                ? "แจ้งศูนย์นครแล้ว"
+                : job.nakhon_status === "NOT_REQUIRED"
+                ? "ไม่ต้องแจ้งศูนย์นคร"
+                : "รอศูนย์นคร";
             return (
-              <Link
+              <div
                 key={job.id}
-                href={`/job/${job.id}`}
                 className="group flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md"
               >
                 <div className={`w-2 ${status.strip}`} />
@@ -165,8 +170,19 @@ export default function DashboardPage() {
                       {job.note?.trim() || "ไม่มีหมายเหตุ"}
                     </p>
                   </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      {stepBadge}
+                    </span>
+                    <Link
+                      href={`/job/${job.id}`}
+                      className="text-sm font-medium text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    >
+                      จัดการ
+                    </Link>
+                  </div>
                 </div>
-              </Link>
+              </div>
             );
           })
         )}
