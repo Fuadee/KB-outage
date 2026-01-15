@@ -1,0 +1,57 @@
+import { supabase } from "./supabaseClient";
+
+export type OutageJob = {
+  id: string;
+  outage_date: string;
+  equipment_code: string;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NewOutageJob = {
+  outage_date: string;
+  equipment_code: string;
+  note?: string | null;
+};
+
+export async function listJobs() {
+  return supabase
+    .from("outage_jobs")
+    .select("*")
+    .order("outage_date", { ascending: true });
+}
+
+export async function getJob(id: string) {
+  return supabase
+    .from("outage_jobs")
+    .select("*")
+    .eq("id", id)
+    .single();
+}
+
+export async function createJob(data: NewOutageJob) {
+  return supabase.from("outage_jobs").insert({
+    outage_date: data.outage_date,
+    equipment_code: data.equipment_code,
+    note: data.note ?? null
+  });
+}
+
+export async function updateJob(
+  id: string,
+  patch: Partial<NewOutageJob>
+) {
+  return supabase
+    .from("outage_jobs")
+    .update({
+      outage_date: patch.outage_date,
+      equipment_code: patch.equipment_code,
+      note: patch.note ?? null
+    })
+    .eq("id", id);
+}
+
+export async function deleteJob(id: string) {
+  return supabase.from("outage_jobs").delete().eq("id", id);
+}
