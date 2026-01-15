@@ -11,9 +11,8 @@ import {
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
 import {
-  daysBetween,
-  getStatusColor,
-  getStatusLabel,
+  getJobUrgency,
+  getUrgencyStyles,
   parseLocalDate
 } from "@/lib/dateUtils";
 
@@ -176,7 +175,6 @@ export default function DashboardPage() {
   };
 
   const filteredJobs = useMemo(() => {
-    const today = new Date();
     const normalizedQuery = query.trim().toLowerCase();
     return jobs
       .filter((job) => {
@@ -185,9 +183,8 @@ export default function DashboardPage() {
       })
       .filter((job) => {
         if (filter === "all") return true;
-        const daysLeft = daysBetween(today, parseLocalDate(job.outage_date));
-        const color = getStatusColor(daysLeft).name;
-        return color === filter;
+        const urgency = getJobUrgency(job);
+        return urgency.color.toLowerCase() === filter;
       })
       .sort((a, b) =>
         parseLocalDate(a.outage_date).getTime() -
@@ -271,9 +268,8 @@ export default function DashboardPage() {
           </div>
         ) : (
           filteredJobs.map((job) => {
-            const today = new Date();
-            const daysLeft = daysBetween(today, parseLocalDate(job.outage_date));
-            const status = getStatusColor(daysLeft);
+            const urgency = getJobUrgency(job);
+            const status = getUrgencyStyles(urgency.color);
             const nakhonStatus = job.nakhon_status ?? "PENDING";
             const isPending = nakhonStatus === "PENDING";
             const isNotified = nakhonStatus === "NOTIFIED";
@@ -305,13 +301,13 @@ export default function DashboardPage() {
                             )}
                           </span>
                           <span className={`text-sm font-medium ${status.text}`}>
-                            {getStatusLabel(daysLeft)}
+                            {urgency.label}
                           </span>
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${status.badge}`}
                         >
-                          {status.name.toUpperCase()}
+                          {urgency.color}
                         </span>
                       </div>
                       <div>
