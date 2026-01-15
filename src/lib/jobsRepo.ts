@@ -8,7 +8,16 @@ export type OutageJob = {
   nakhon_status: "PENDING" | "NOTIFIED" | "NOT_REQUIRED";
   nakhon_notified_date: string | null;
   nakhon_memo_no: string | null;
-  doc_status: "PENDING" | "REQUESTED" | "GENERATED";
+  doc_issue_date: string | null;
+  doc_purpose: string | null;
+  doc_area_title: string | null;
+  doc_time_start: string | null;
+  doc_time_end: string | null;
+  doc_area_detail: string | null;
+  map_link: string | null;
+  doc_status: "PENDING" | "GENERATING" | "GENERATED" | "ERROR";
+  doc_url: string | null;
+  doc_generated_at: string | null;
   doc_requested_at: string | null;
   created_at: string;
   updated_at: string;
@@ -82,16 +91,6 @@ export async function setNakhonNotRequired(id: string) {
       nakhon_status: "NOT_REQUIRED",
       nakhon_notified_date: null,
       nakhon_memo_no: null
-    })
-    .eq("id", id);
-}
-
-export async function requestDoc(id: string) {
-  return supabase
-    .from("outage_jobs")
-    .update({
-      doc_status: "REQUESTED",
-      doc_requested_at: new Date().toISOString()
     })
     .eq("id", id);
 }
