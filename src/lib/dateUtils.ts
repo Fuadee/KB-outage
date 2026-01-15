@@ -1,4 +1,8 @@
+import type { OutageJob } from "./jobsRepo";
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export type UrgencyColor = "GREEN" | "YELLOW" | "RED";
 
 export function parseLocalDate(dateString: string) {
   return new Date(`${dateString}T00:00:00`);
@@ -29,27 +33,63 @@ export function getStatusLabel(daysLeft: number) {
   return `เหลือ ${daysLeft} วัน`;
 }
 
-export function getStatusColor(daysLeft: number) {
-  if (daysLeft < 14) {
+export function getUrgencyStyles(color: UrgencyColor) {
+  if (color === "RED") {
     return {
-      name: "red",
       strip: "bg-red-500",
       badge: "bg-red-50 text-red-700 ring-red-200",
       text: "text-red-700"
     };
   }
-  if (daysLeft <= 28) {
+  if (color === "YELLOW") {
     return {
-      name: "yellow",
       strip: "bg-amber-400",
       badge: "bg-amber-50 text-amber-700 ring-amber-200",
       text: "text-amber-700"
     };
   }
   return {
-    name: "green",
     strip: "bg-emerald-500",
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     text: "text-emerald-700"
   };
 }
+
+export function getJobUrgency(job: Pick<OutageJob, "outage_date" | "nakhon_status">) {
+  const todayStart = startOfDay(new Date());
+  const outageDateStart = startOfDay(parseLocalDate(job.outage_date));
+  const daysLeft = daysBetween(todayStart, outageDateStart);
+  const label = getStatusLabel(daysLeft);
+
+  if (daysLeft < 0) {
+    return { daysLeft, color: "RED" as const, label };
+  }
+
+  const nakhonStatus = job.nakhon_status ?? "PENDING";
+
+  if (nakhonStatus === "PENDING") {
+    if (daysLeft < 14) {
+      return { daysLeft, color: "RED" as const, label };
+    }
+    if (daysLeft <= 28) {
+      return { daysLeft, color: "YELLOW" as const, label };
+    }
+    return { daysLeft, color: "GREEN" as const, label };
+  }
+
+  if (daysLeft < 3) {
+    return { daysLeft, color: "RED" as const, label };
+  }
+  if (daysLeft <= 6) {
+    return { daysLeft, color: "YELLOW" as const, label };
+  }
+  return { daysLeft, color: "GREEN" as const, label };
+}
+
+/*
+Dev-only examples:
+- PENDING + 10 days => RED
+- NOTIFIED + 10 days => GREEN
+- NOTIFIED + 2 days => RED
+- NOT_REQUIRED + 5 days => YELLOW
+*/
