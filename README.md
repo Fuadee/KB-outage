@@ -36,8 +36,9 @@ Next.js (App Router) + Tailwind + TypeScript dashboard for tracking planned outa
 
 1. Create a Supabase project.
 2. Run the SQL in `sql/001_init.sql` using the Supabase SQL editor.
-3. Copy `.env.example` to `.env.local` and set the Supabase URL + anon key.
-4. Install dependencies and start the dev server:
+3. Run the SQL in `sql/002_nakhon_and_doc.sql` to add the นคร + เอกสาร workflow fields.
+4. Copy `.env.example` to `.env.local` and set the Supabase URL + anon key.
+5. Install dependencies and start the dev server:
 
 ```bash
 npm install
@@ -48,3 +49,4 @@ npm run dev
 
 - No authentication or login UI is included yet (open access).
 - Data is stored in the `outage_jobs` table and is shared across devices in the same Supabase project.
+- Dashboard cards now include an in-card workflow to record นคร notifications and request document creation.
