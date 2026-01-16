@@ -51,6 +51,49 @@ npm install
 npm run dev
 ```
 
+## DOCX Template Setup
+
+1. Create the file locally at `templates/outage_template.docx` (this file is **not** committed to the repo).
+2. Open Microsoft Word (or LibreOffice) and design the layout:
+   - Use A4 page size.
+   - Set margins as needed for your organization.
+   - Insert logos/headers/footers as required.
+3. Put the placeholders exactly as shown below (copy/paste them into the template).
+4. Place `{{MAP_QR}}` where the QR code should appear.
+5. Test locally:
+   - `npm run dev`
+   - Call `POST /api/docs/create` with JSON like:
+     ```json
+     {
+       "jobId": "JOB_ID",
+       "payload": {
+         "doc_issue_date": "2024-08-01",
+         "doc_purpose": "แจ้งดับไฟเพื่อปรับปรุงระบบ",
+         "doc_area_title": "เขตเมืองกระบี่",
+         "doc_time_start": "09:00",
+         "doc_time_end": "12:00",
+         "doc_area_detail": "รายละเอียดพื้นที่ดับไฟ",
+         "map_link": "https://maps.example.com"
+       }
+     }
+     ```
+6. Notes:
+   - If QR insertion fails, the system falls back to inserting the map link text.
+   - Do not rename placeholders (they must match exactly).
+
+Placeholders list:
+
+- `{{DOC_ISSUE_DATE}}`
+- `{{DOC_PURPOSE}}`
+- `{{DOC_AREA_TITLE}}`
+- `{{DOC_TIME_START}}`
+- `{{DOC_TIME_END}}`
+- `{{DOC_AREA_DETAIL}}`
+- `{{MAP_LINK}}`
+- `{{OUTAGE_DATE}}`
+- `{{EQUIPMENT_CODE}}`
+- `{{MAP_QR}}`
+
 ## Notes
 
 - No authentication or login UI is included yet (open access).
