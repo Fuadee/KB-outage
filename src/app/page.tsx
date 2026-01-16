@@ -246,14 +246,43 @@ export default function DashboardPage() {
         })
       });
 
-      const result = await response.json();
-      if (!response.ok || !result.ok) {
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
         setDocErrors({
           submit: result?.error || "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
         });
         setDocSaving(false);
         return;
       }
+
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (
+        !contentType.includes(
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+      ) {
+        const result = await response.json().catch(() => null);
+        setDocErrors({
+          submit: result?.error || "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
+        });
+        setDocSaving(false);
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename=\"(.+)\"/);
+      const filename =
+        match?.[1] ??
+        `เอกสารดับไฟ-${docJob.equipment_code}-${docJob.outage_date}.docx`;
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
 
       const generatedAt = new Date().toISOString();
       setJobs((prev) =>
@@ -263,7 +292,7 @@ export default function DashboardPage() {
                 ...item,
                 ...payload,
                 doc_status: "GENERATED",
-                doc_url: result.docUrl,
+                doc_url: null,
                 doc_generated_at: generatedAt
               }
             : item
