@@ -4,7 +4,8 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import QRCode from "qrcode";
 
-const PLACEHOLDER_QR_IMAGE = "word/media/qr_placeholder.png";
+const PLACEHOLDER_QR_IMAGE = "word/media/image2.png";
+const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
 type DocPayload = {
   doc_issue_date: string;
@@ -99,41 +100,6 @@ const logDocxRenderError = (error: unknown) => {
   }
 };
 
-const resolvePlaceholderImage = (zip: PizZip) => {
-  if (zip.file(PLACEHOLDER_QR_IMAGE)) {
-    return PLACEHOLDER_QR_IMAGE;
-  }
-
-  const envName = process.env.OUTAGE_QR_PLACEHOLDER_FILENAME;
-  if (envName) {
-    const normalized = envName.includes("/")
-      ? envName
-      : `word/media/${envName}`;
-    if (zip.file(normalized)) {
-      return normalized;
-    }
-  }
-
-  const pngEntries = zip.file(/^word\/media\/.+\.png$/i);
-  if (pngEntries.length === 0) {
-    return null;
-  }
-
-  const largest = pngEntries.reduce<{
-    name: string;
-    size: number;
-  } | null>((current, entry) => {
-    const buffer = entry.asNodeBuffer();
-    const size = buffer.length;
-    if (!current || size > current.size) {
-      return { name: entry.name, size };
-    }
-    return current;
-  }, null);
-
-  return largest?.name ?? null;
-};
-
 const renderTextPass = (templateBuffer: Buffer, data: Record<string, string>) => {
   const zip = new PizZip(templateBuffer);
   const doc = new Docxtemplater(zip, {
@@ -148,6 +114,26 @@ const renderTextPass = (templateBuffer: Buffer, data: Record<string, string>) =>
     throw error;
   }
   return doc.getZip().generate({ type: "nodebuffer" });
+};
+
+const ensurePngContentType = (zip: PizZip) => {
+  const contentTypesFile = zip.file(CONTENT_TYPES_PATH);
+  if (!contentTypesFile) {
+    console.warn("Missing [Content_Types].xml, unable to ensure image/png.");
+    return;
+  }
+  const xml = contentTypesFile.asText();
+  if (xml.includes('Extension="png"')) {
+    return;
+  }
+  const insertTag =
+    '<Default Extension="png" ContentType="image/png"/>';
+  if (!xml.includes("</Types>")) {
+    console.warn("Malformed [Content_Types].xml, unable to append image/png.");
+    return;
+  }
+  const updated = xml.replace("</Types>", `  ${insertTag}\n</Types>`);
+  zip.file(CONTENT_TYPES_PATH, updated);
 };
 
 export async function generateOutageDocxBuffer({
@@ -196,27 +182,27 @@ export async function generateOutageDocxBuffer({
     return pass1Buffer;
   }
 
-  try {
-    const zip = new PizZip(pass1Buffer);
-    const placeholder = resolvePlaceholderImage(zip);
-    if (!placeholder) {
-      console.warn(
-        "PASS2 FAILED, no placeholder image found under word/media/."
-      );
-      return pass1Buffer;
-    }
-    console.info(`Replacing placeholder image: ${placeholder}`);
-    zip.file(placeholder, imageBuffer);
-    const rendered = zip.generate({ type: "nodebuffer" });
-    console.info("MEDIA AFTER:", listMediaEntries(rendered));
-    if (!isDocumentXmlSane(rendered)) {
-      console.warn("Generated DOCX failed sanity check after image replacement.");
-      return pass1Buffer;
-    }
-    console.info("PASS2 OK (image replaced)");
-    return rendered;
-  } catch (error) {
-    console.warn("Failed to replace QR image, falling back to text.", error);
+  const zip = new PizZip(pass1Buffer);
+  if (!zip.file(PLACEHOLDER_QR_IMAGE)) {
+    const mediaEntries = zip
+      .file(/^word\/media\//i)
+      .map((entry) => entry.name)
+      .filter(Boolean);
+    throw new Error(
+      `Missing ${PLACEHOLDER_QR_IMAGE} in DOCX. Found media: ${mediaEntries.join(
+        ", "
+      )}`
+    );
+  }
+  console.info(`Replacing placeholder: ${PLACEHOLDER_QR_IMAGE}`);
+  zip.file(PLACEHOLDER_QR_IMAGE, imageBuffer);
+  ensurePngContentType(zip);
+  const rendered = zip.generate({ type: "nodebuffer" });
+  console.info("MEDIA AFTER:", listMediaEntries(rendered));
+  if (!isDocumentXmlSane(rendered)) {
+    console.warn("Generated DOCX failed sanity check after image replacement.");
     return pass1Buffer;
   }
+  console.info("PASS2 OK (image replaced)");
+  return rendered;
 }
