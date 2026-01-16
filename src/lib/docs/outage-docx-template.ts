@@ -217,6 +217,19 @@ const isDocumentXmlSane = (docBuffer: Buffer) => {
   }
 };
 
+const listMediaEntries = (docBuffer: Buffer) => {
+  try {
+    const zip = new PizZip(docBuffer);
+    return zip
+      .file(/^word\/media\//i)
+      .map((entry) => entry.name)
+      .filter(Boolean);
+  } catch (error) {
+    console.warn("Unable to read media entries from DOCX buffer.", error);
+    return [];
+  }
+};
+
 const logDocxRenderError = (error: unknown) => {
   console.error("Docxtemplater render failed.");
 
@@ -266,6 +279,7 @@ export async function generateOutageDocxBuffer({
     );
   }
 
+  const templateMediaEntries = listMediaEntries(templateBuffer);
   let imageBuffer: Buffer | null = null;
   let imageBase64: string | null = null;
   try {
@@ -290,7 +304,8 @@ export async function generateOutageDocxBuffer({
           }
           return Buffer.from(tagValue, "base64");
         },
-        getSize: () => [120, 120]
+        getSize: () => [120, 120],
+        delimiters: { start: "{{", end: "}}" }
       })
     : null;
 
@@ -339,6 +354,20 @@ export async function generateOutageDocxBuffer({
           );
           logTemplateScan(templateScan);
         } else {
+          const renderedMediaEntries = listMediaEntries(rendered);
+          const newMediaEntries = renderedMediaEntries.filter(
+            (entry) => !templateMediaEntries.includes(entry)
+          );
+          if (newMediaEntries.length > 0) {
+            console.info(
+              "QR image inserted; new media files detected under word/media/:",
+              newMediaEntries
+            );
+          } else {
+            console.warn(
+              "QR image insertion reported success, but no new media files were detected under word/media/."
+            );
+          }
           return rendered;
         }
       }
