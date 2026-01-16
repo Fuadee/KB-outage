@@ -65,6 +65,19 @@ const listMediaEntries = (docBuffer: Buffer) => {
   }
 };
 
+const findPlaceholderEntryName = (zip: PizZip) => {
+  const matches = zip.file(/^word\/media\/image2\.png$/i);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  if (matches.length > 1) {
+    console.warn(
+      `Multiple placeholder matches found for ${PLACEHOLDER_QR_IMAGE}, using first.`
+    );
+  }
+  return matches[0]?.name ?? null;
+};
+
 const logDocxRenderError = (error: unknown) => {
   console.error("Docxtemplater render failed.");
 
@@ -183,19 +196,18 @@ export async function generateOutageDocxBuffer({
   }
 
   const zip = new PizZip(pass1Buffer);
-  if (!zip.file(PLACEHOLDER_QR_IMAGE)) {
+  const placeholderEntryName = findPlaceholderEntryName(zip);
+  if (!placeholderEntryName) {
     const mediaEntries = zip
       .file(/^word\/media\//i)
       .map((entry) => entry.name)
       .filter(Boolean);
     throw new Error(
-      `Missing ${PLACEHOLDER_QR_IMAGE} in DOCX. Found media: ${mediaEntries.join(
-        ", "
-      )}`
+      `Missing ${PLACEHOLDER_QR_IMAGE} in DOCX. Found media: ${mediaEntries.join(", ")}`
     );
   }
-  console.info(`Replacing placeholder: ${PLACEHOLDER_QR_IMAGE}`);
-  zip.file(PLACEHOLDER_QR_IMAGE, imageBuffer);
+  console.info(`Replacing placeholder: ${placeholderEntryName}`);
+  zip.file(placeholderEntryName, imageBuffer);
   ensurePngContentType(zip);
   const rendered = zip.generate({ type: "nodebuffer" });
   console.info("MEDIA AFTER:", listMediaEntries(rendered));
