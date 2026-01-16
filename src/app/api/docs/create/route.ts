@@ -147,6 +147,7 @@ export async function POST(request: Request) {
     }
 
     const buffer = await generateOutageDocxBuffer({ payload, job });
+    const bytes = new Uint8Array(buffer);
 
     const { error: finalizeError } = await supabase
       .from("outage_jobs")
@@ -169,7 +170,7 @@ export async function POST(request: Request) {
     }.docx`;
     const encodedThai = encodeURIComponent(thaiName);
 
-    return new Response(buffer, {
+    return new Response(bytes, {
       status: 200,
       headers: {
         "Content-Type":
