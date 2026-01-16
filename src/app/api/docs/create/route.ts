@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import fs from "fs/promises";
 import {
-  AlignmentType,
-  Document,
-  HeadingLevel,
-  Packer,
-  Paragraph,
-  TextRun
-} from "docx";
+  generateOutageDocxBuffer,
+  OUTAGE_TEMPLATE_PATH
+} from "@/lib/docs/outage-docx-template";
 
 export const runtime = "nodejs";
 
@@ -50,46 +47,6 @@ function isPayloadValid(payload: Partial<DocPayload>) {
     Boolean(payload.doc_area_detail?.trim()) &&
     Boolean(payload.map_link?.trim())
   );
-}
-
-function buildOutageDocument(payload: DocPayload, job: Record<string, unknown>) {
-  const lines = [
-    { label: "รหัสอุปกรณ์", value: job.equipment_code ?? "-" },
-    { label: "วันที่ดับไฟ", value: job.outage_date ?? "-" },
-    { label: "วันที่ออกหนังสือ", value: payload.doc_issue_date },
-    { label: "วัตถุประสงค์", value: payload.doc_purpose },
-    { label: "บริเวณที่ดับ", value: payload.doc_area_title },
-    {
-      label: "เวลา",
-      value: `${payload.doc_time_start} - ${payload.doc_time_end}`
-    },
-    { label: "รายละเอียดพื้นที่ดับไฟ", value: payload.doc_area_detail },
-    { label: "ลิงก์แผนที่", value: payload.map_link }
-  ];
-
-  return new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            text: "หนังสือแจ้งดับไฟ",
-            heading: HeadingLevel.HEADING_1,
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({ text: "" }),
-          ...lines.map(
-            (line) =>
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `${line.label}: `, bold: true }),
-                  new TextRun({ text: String(line.value ?? "-") })
-                ]
-              })
-          )
-        ]
-      }
-    ]
-  });
 }
 
 export async function POST(request: Request) {
@@ -165,8 +122,31 @@ export async function POST(request: Request) {
       throw new Error(updateError.message);
     }
 
-    const document = buildOutageDocument(payload, job);
-    const buffer = await Packer.toBuffer(document);
+    console.info("DOCX template path:", OUTAGE_TEMPLATE_PATH);
+    console.info("DOCX template jobId:", jobId);
+    console.info("DOCX generation mode: template");
+    try {
+      await fs.access(OUTAGE_TEMPLATE_PATH);
+    } catch {
+      const missingMessage =
+        "Missing DOCX template at templates/outage_template.docx. See README: DOCX Template Setup.";
+      console.error(missingMessage);
+      await supabase
+        .from("outage_jobs")
+        .update({
+          doc_status: "ERROR"
+        })
+        .eq("id", jobId);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: missingMessage
+        },
+        { status: 500 }
+      );
+    }
+
+    const buffer = await generateOutageDocxBuffer({ payload, job });
 
     const { error: finalizeError } = await supabase
       .from("outage_jobs")
