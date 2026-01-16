@@ -25,9 +25,6 @@ const listMediaEntries = (docBuffer) => {
   }
 };
 
-const containsInvalidXmlChars = (xml) =>
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xml) || xml.includes("\uFFFD");
-
 const readDocumentXml = (docBuffer, label) => {
   try {
     const zip = new PizZip(docBuffer);
@@ -54,11 +51,12 @@ const readMediaFile = (docBuffer, filename) => {
 };
 
 const findPlaceholderEntryName = (zip) => {
-  const matches = zip.file(/^word\/media\/image2\.png$/i);
-  if (!matches || matches.length === 0) {
-    return null;
-  }
-  return matches[0]?.name ?? null;
+  const media = zip.file(/^word\/media\//i).map((entry) => entry.name);
+  return (
+    media.find(
+      (name) => name.toLowerCase() === PLACEHOLDER_QR_IMAGE.toLowerCase()
+    ) ?? null
+  );
 };
 
 const run = async () => {
@@ -72,8 +70,8 @@ const run = async () => {
   }
 
   const templateZip = new PizZip(templateBuffer);
-  const placeholderEntryName = findPlaceholderEntryName(templateZip);
-  if (!placeholderEntryName) {
+  const templatePlaceholderEntryName = findPlaceholderEntryName(templateZip);
+  if (!templatePlaceholderEntryName) {
     console.error("Template missing word/media/image2.png placeholder.");
     process.exit(1);
     return;
@@ -108,34 +106,44 @@ const run = async () => {
   const templateMedia = listMediaEntries(templateBuffer);
   const outputMedia = listMediaEntries(outputBuffer);
   const outputXml = readDocumentXml(outputBuffer, "OUTPUT");
-  const hasInvalidXmlChars = containsInvalidXmlChars(outputXml);
-  const outputHasPlaceholder = outputMedia.includes(placeholderEntryName);
-  const templateHasPlaceholder = templateMedia.includes(placeholderEntryName);
+  const outputZip = new PizZip(outputBuffer);
+  const outputPlaceholderEntryName = findPlaceholderEntryName(outputZip);
+  const outputHasPlaceholder = outputMedia.includes(
+    outputPlaceholderEntryName ?? ""
+  );
+  const templateHasPlaceholder = templateMedia.includes(
+    templatePlaceholderEntryName
+  );
   const templatePlaceholderBuffer = readMediaFile(
     templateBuffer,
-    placeholderEntryName
+    templatePlaceholderEntryName
   );
-  const outputPlaceholderBuffer = readMediaFile(
-    outputBuffer,
-    placeholderEntryName
-  );
+  const outputPlaceholderBuffer = outputPlaceholderEntryName
+    ? readMediaFile(outputBuffer, outputPlaceholderEntryName)
+    : null;
   const templateHash = templatePlaceholderBuffer
     ? getFileHash(templatePlaceholderBuffer)
     : null;
   const outputHash = outputPlaceholderBuffer
     ? getFileHash(outputPlaceholderBuffer)
     : null;
-  const placeholderReplaced =
-    templateHash && outputHash && templateHash !== outputHash;
+  const image2Changed = Boolean(
+    templateHash && outputHash && templateHash !== outputHash
+  );
+  const hasRawPngInXml = /data:image\/png;base64/i.test(outputXml);
 
   console.log(`TEMPLATE MEDIA: ${JSON.stringify(templateMedia)}`);
   console.log(`OUTPUT MEDIA: ${JSON.stringify(outputMedia)}`);
-  console.log(`TEMPLATE_IMAGE2_BYTES: ${templatePlaceholderBuffer?.length ?? 0}`);
-  console.log(`OUTPUT_IMAGE2_BYTES: ${outputPlaceholderBuffer?.length ?? 0}`);
-  console.log(`IMAGE2_CHANGED: ${Boolean(placeholderReplaced)}`);
-  console.log(`HAS_RAW_PNG_IN_XML: ${false}`);
+  console.log(`TEMPLATE_IMAGE2_SHA256: ${templateHash ?? "missing"}`);
+  console.log(`OUTPUT_IMAGE2_SHA256: ${outputHash ?? "missing"}`);
+  console.log(`IMAGE2_CHANGED: ${image2Changed}`);
+  console.log(`HAS_RAW_PNG_IN_XML: ${hasRawPngInXml}`);
 
-  const pass = templateHasPlaceholder && outputHasPlaceholder && placeholderReplaced;
+  const pass =
+    templateHasPlaceholder &&
+    outputHasPlaceholder &&
+    image2Changed &&
+    !hasRawPngInXml;
   if (pass) {
     console.log(`RESULT: PASS (saved to ${OUTPUT_PATH})`);
     process.exit(0);
@@ -151,7 +159,7 @@ const run = async () => {
         "Diagnostic: Placeholder image missing from output media entries."
       );
     }
-    if (!placeholderReplaced) {
+    if (!image2Changed) {
       console.error(
         "Diagnostic: Placeholder image content did not change in output."
       );

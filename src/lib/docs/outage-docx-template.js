@@ -90,8 +90,19 @@ async function generateOutageDocxBuffer({ payload, job }) {
   console.info(`QR bytes: ${imageBuffer.length}`);
 
   const zip = new PizZip(renderedBuffer);
-  zip.remove("word/media/image2.PNG");
-  zip.file("word/media/image2.PNG", imageBuffer, { binary: true });
+  const media = zip.file(/^word\/media\//).map((file) => file.name);
+  const target = media.find(
+    (name) => name.toLowerCase() === "word/media/image2.png"
+  );
+  if (!target) {
+    throw new Error(
+      `Template missing QR placeholder image2.(png) - media=${JSON.stringify(
+        media
+      )}`
+    );
+  }
+  zip.remove(target);
+  zip.file(target, imageBuffer, { binary: true });
   return zip.generate({ type: "nodebuffer" });
 }
 
