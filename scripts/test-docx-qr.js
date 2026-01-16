@@ -10,6 +10,7 @@ const {
 
 const OUTPUT_DIR = path.join(process.cwd(), "test-output");
 const OUTPUT_PATH = path.join(OUTPUT_DIR, "outage-test.docx");
+const PLACEHOLDER_QR_IMAGE = "word/media/qr_placeholder.png";
 
 const listMediaEntries = (docBuffer) => {
   try {
@@ -23,6 +24,9 @@ const listMediaEntries = (docBuffer) => {
     return [];
   }
 };
+
+const containsInvalidXmlChars = (xml) =>
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xml) || xml.includes("\uFFFD");
 
 const readDocumentXml = (docBuffer, label) => {
   try {
@@ -38,9 +42,47 @@ const readDocumentXml = (docBuffer, label) => {
   }
 };
 
-const diffMedia = (templateMedia, outputMedia) => {
-  const templateSet = new Set(templateMedia);
-  return outputMedia.filter((entry) => !templateSet.has(entry));
+const resolvePlaceholderImage = (zip) => {
+  if (zip.file(PLACEHOLDER_QR_IMAGE)) {
+    return PLACEHOLDER_QR_IMAGE;
+  }
+
+  const envName = process.env.OUTAGE_QR_PLACEHOLDER_FILENAME;
+  if (envName) {
+    const normalized = envName.includes("/")
+      ? envName
+      : `word/media/${envName}`;
+    if (zip.file(normalized)) {
+      return normalized;
+    }
+  }
+
+  const pngEntries = zip.file(/^word\/media\/.+\.png$/i);
+  if (pngEntries.length === 0) {
+    return null;
+  }
+
+  const largest = pngEntries.reduce((current, entry) => {
+    const buffer = entry.asNodeBuffer();
+    const size = buffer.length;
+    if (!current || size > current.size) {
+      return { name: entry.name, size };
+    }
+    return current;
+  }, null);
+
+  return largest?.name ?? null;
+};
+
+const getFileHash = (buffer) => {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+};
+
+const readMediaFile = (docBuffer, filename) => {
+  const zip = new PizZip(docBuffer);
+  const entry = zip.file(filename);
+  return entry?.asNodeBuffer() ?? null;
 };
 
 const run = async () => {
@@ -53,13 +95,12 @@ const run = async () => {
     return;
   }
 
-  const templateXml = readDocumentXml(templateBuffer, "TEMPLATE");
-  const templateHasImageTag = templateXml.includes("{%MAP_QR}");
-  const templateHasWrongImageTag = templateXml.includes("{%MAP_QR%}");
-  if (templateHasWrongImageTag) {
-    console.warn(
-      "WARNING: Template contains {%MAP_QR%}. Use {%MAP_QR} (no trailing %})."
-    );
+  const templateZip = new PizZip(templateBuffer);
+  const placeholderName = resolvePlaceholderImage(templateZip);
+  if (!placeholderName) {
+    console.error("Template has no PNG placeholder under word/media/.");
+    process.exit(1);
+    return;
   }
 
   const payload = {
@@ -90,30 +131,60 @@ const run = async () => {
 
   const templateMedia = listMediaEntries(templateBuffer);
   const outputMedia = listMediaEntries(outputBuffer);
-  const newMedia = diffMedia(templateMedia, outputMedia);
   const outputXml = readDocumentXml(outputBuffer, "OUTPUT");
-  const hasRawPngInXml = outputXml.includes("�PNG");
+  const hasInvalidXmlChars = containsInvalidXmlChars(outputXml);
+  const outputHasPlaceholder = outputMedia.includes(placeholderName);
+  const templateHasPlaceholder = templateMedia.includes(placeholderName);
+  const templatePlaceholderBuffer = readMediaFile(
+    templateBuffer,
+    placeholderName
+  );
+  const outputPlaceholderBuffer = readMediaFile(outputBuffer, placeholderName);
+  const templateHash = templatePlaceholderBuffer
+    ? getFileHash(templatePlaceholderBuffer)
+    : null;
+  const outputHash = outputPlaceholderBuffer
+    ? getFileHash(outputPlaceholderBuffer)
+    : null;
+  const placeholderReplaced =
+    templateHash && outputHash && templateHash !== outputHash;
 
   console.log(`TEMPLATE MEDIA: ${JSON.stringify(templateMedia)}`);
   console.log(`OUTPUT MEDIA: ${JSON.stringify(outputMedia)}`);
-  console.log(`NEW MEDIA: ${JSON.stringify(newMedia)}`);
-  console.log(`HAS_RAW_PNG_IN_XML: ${hasRawPngInXml}`);
-  console.log(`TEMPLATE_HAS_IMAGE_TAG: ${templateHasImageTag}`);
+  console.log(`PLACEHOLDER_FILE: ${placeholderName}`);
+  console.log(`TEMPLATE_HAS_PLACEHOLDER: ${templateHasPlaceholder}`);
+  console.log(`OUTPUT_HAS_PLACEHOLDER: ${outputHasPlaceholder}`);
+  console.log(`PLACEHOLDER_REPLACED: ${Boolean(placeholderReplaced)}`);
+  console.log(`HAS_INVALID_XML_CHARS: ${hasInvalidXmlChars}`);
 
-  const pass = newMedia.length >= 1 && !hasRawPngInXml;
+  const pass =
+    templateHasPlaceholder &&
+    outputHasPlaceholder &&
+    placeholderReplaced &&
+    !hasInvalidXmlChars;
   if (pass) {
     console.log(`RESULT: PASS (saved to ${OUTPUT_PATH})`);
     process.exit(0);
   } else {
     console.error("RESULT: FAIL");
-    if (newMedia.length === 0) {
+    if (!templateHasPlaceholder) {
       console.error(
-        "Diagnostic: No new media entries under word/media/ in output."
+        "Diagnostic: Placeholder image missing from template media entries."
       );
     }
-    if (hasRawPngInXml) {
+    if (!outputHasPlaceholder) {
       console.error(
-        "Diagnostic: document.xml contains raw PNG bytes; image may be inline."
+        "Diagnostic: Placeholder image missing from output media entries."
+      );
+    }
+    if (!placeholderReplaced) {
+      console.error(
+        "Diagnostic: Placeholder image content did not change in output."
+      );
+    }
+    if (hasInvalidXmlChars) {
+      console.error(
+        "Diagnostic: document.xml contains invalid XML characters."
       );
     }
     process.exit(1);
