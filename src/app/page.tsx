@@ -27,6 +27,24 @@ type DocForm = {
   map_link: string;
 };
 
+const getFilenameFromContentDisposition = (
+  headerValue: string | null
+): string | null => {
+  if (!headerValue) return null;
+
+  const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+
+  const filenameMatch = headerValue.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] ?? null;
+};
+
 export default function DashboardPage() {
   const [jobs, setJobs] = useState<OutageJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,9 +265,18 @@ export default function DashboardPage() {
       });
 
       if (!response.ok) {
-        const result = await response.json().catch(() => null);
+        const contentType = response.headers.get("Content-Type") ?? "";
+        let detail = "";
+        if (contentType.includes("application/json")) {
+          const result = await response.json().catch(() => null);
+          detail = result?.error || result?.message || "";
+        } else {
+          detail = await response.text().catch(() => "");
+        }
         setDocErrors({
-          submit: result?.error || "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
+          submit: detail
+            ? `ไม่สามารถสร้างเอกสารได้ กรุณาลองใหม่ (${detail})`
+            : "ไม่สามารถสร้างเอกสารได้ กรุณาลองใหม่"
         });
         setDocSaving(false);
         return;
@@ -257,11 +284,10 @@ export default function DashboardPage() {
 
       const blob = await response.blob();
       const objectUrl = window.URL.createObjectURL(blob);
-      const disposition = response.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename=\"(.+)\"/);
       const filename =
-        match?.[1] ??
-        `เอกสารดับไฟ-${docJob.equipment_code}-${docJob.outage_date}.docx`;
+        getFilenameFromContentDisposition(
+          response.headers.get("Content-Disposition")
+        ) ?? `outage-doc-${docJob.id}.docx`;
       const link = document.createElement("a");
       link.href = objectUrl;
       link.download = filename;
