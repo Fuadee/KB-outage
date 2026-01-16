@@ -181,16 +181,20 @@ export async function POST(request: Request) {
       throw new Error(finalizeError.message);
     }
 
-    const filename = `เอกสารดับไฟ-${job.equipment_code ?? "JOB"}-${
+    const asciiName = `outage-doc-${job.equipment_code ?? "JOB"}-${
       job.outage_date ?? ""
     }.docx`;
+    const thaiName = `เอกสารดับไฟ-${job.equipment_code ?? "JOB"}-${
+      job.outage_date ?? ""
+    }.docx`;
+    const encodedThai = encodeURIComponent(thaiName);
 
     return new Response(buffer, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${filename}"`
+        "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedThai}`
       }
     });
   } catch (error) {
