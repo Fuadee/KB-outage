@@ -59,7 +59,7 @@ npm run dev
    - Set margins as needed for your organization.
    - Insert logos/headers/footers as required.
 3. Put the placeholders exactly as shown below (copy/paste them into the template).
-4. Place `{%MAP_QR}` where the QR code should appear (image tag syntax, no trailing `%}`).
+4. Place a placeholder image named `qr_placeholder.png` at the QR position (ensure it lands in `word/media/qr_placeholder.png` inside the DOCX zip).
 5. Test locally:
    - `npm run dev`
    - Call `POST /api/docs/create` with JSON like:
@@ -112,7 +112,6 @@ Placeholders list:
 - `{{MAP_LINK}}`
 - `{{OUTAGE_DATE}}`
 - `{{EQUIPMENT_CODE}}`
-- `{%MAP_QR}`
 
 ## Notes
 
