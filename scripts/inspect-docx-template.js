@@ -9,7 +9,9 @@ const DEFAULT_TEMPLATE_PATH = path.join(
   "templates",
   "outage_template.docx"
 );
-const TAG_TO_CHECK = "{{DOC_ISSUE_DATE}}";
+const TAG_TO_CHECK = "MAP_QR";
+const EXACT_TAG = "{{MAP_QR}}";
+const TAG_REGEX = /\{\{\s*MAP_QR\s*\}\}/g;
 const TEXTBOX_MARKERS = ["w:txbxContent", "v:textbox", "wps:"];
 
 const args = process.argv.slice(2);
@@ -59,7 +61,7 @@ const analyzeTagSplit = (xml, tag) => {
 };
 
 const getSnippets = (xml, windowSize = 120) => {
-  const regex = /\{\{|\}\}/g;
+  const regex = /MAP_QR|\{\{|\}\}/g;
   const snippets = [];
   let match = regex.exec(xml);
   while (match) {
@@ -91,17 +93,17 @@ const run = () => {
   const xmlEntries = entries.filter((entry) =>
     /\.xml$|\.rels$/i.test(entry.name)
   );
+  const issueSet = new Set();
+  let foundInDocument = false;
 
-  const matches = xmlEntries.filter((entry) =>
-    entry.text.includes("{{") || entry.text.includes("}}")
-  );
+  const matches = xmlEntries.filter((entry) => entry.text.includes("MAP_QR"));
 
   console.log("DOCX Template Inspector");
   console.log(`Template: ${inputPath}`);
   console.log(`XML parts scanned: ${xmlEntries.length}`);
-  console.log(`Parts containing {{ or }}: ${matches.length}`);
+  console.log(`Parts containing MAP_QR: ${matches.length}`);
   if (matches.length === 0) {
-    console.log("No template markers found.");
+    console.log("No MAP_QR markers found.");
     return;
   }
 
@@ -114,28 +116,55 @@ const run = () => {
   console.log("");
   console.log("Detailed report:");
   matches.forEach((entry) => {
-    const tagAnalysis = analyzeTagSplit(entry.text, TAG_TO_CHECK);
+    const tagAnalysis = analyzeTagSplit(entry.text, EXACT_TAG);
+    const hasTagMatch = TAG_REGEX.test(entry.text);
+    TAG_REGEX.lastIndex = 0;
+    const exactTagPresent = entry.text.includes(EXACT_TAG);
     const snippets = getSnippets(entry.text);
     const textboxDetected = hasTextboxMarkers(entry.text);
+    const isHeaderFooter = /word\/(header|footer)\d*\.xml$/i.test(entry.name);
+    const isDocument = entry.name === "word/document.xml";
+
+    if (isDocument && hasTagMatch) {
+      foundInDocument = true;
+    }
 
     console.log("");
     console.log(`Part: ${entry.name}`);
+    console.log(`Document body: ${isDocument ? "yes" : "no"}`);
+    console.log(`Header/footer: ${isHeaderFooter ? "yes" : "no"}`);
     console.log(`Textbox/shape markers: ${textboxDetected ? "yes" : "no"}`);
 
     if (tagAnalysis.xmlContainsTag) {
-      console.log(`DOC_ISSUE_DATE tag: contiguous in XML`);
+      console.log(`MAP_QR tag: contiguous in XML`);
     } else if (tagAnalysis.isSplitAcrossNodes) {
-      console.log(`DOC_ISSUE_DATE tag: split across <w:t> nodes`);
+      console.log(`MAP_QR tag: split across <w:t> nodes`);
+      issueSet.add(
+        "MAP_QR is split across multiple runs. Re-type {{MAP_QR}} in a single run."
+      );
     } else if (tagAnalysis.concatenatedContainsTag) {
       console.log(
-        `DOC_ISSUE_DATE tag: present across text nodes (check formatting runs)`
+        `MAP_QR tag: present across text nodes (check formatting runs)`
+      );
+      issueSet.add(
+        "MAP_QR is broken by formatting runs. Remove styling inside the tag."
       );
     } else {
-      console.log("DOC_ISSUE_DATE tag: not found in this part");
+      console.log("MAP_QR tag: not found in this part");
+    }
+
+    if (hasTagMatch && !exactTagPresent) {
+      console.log("MAP_QR tag formatting: found with spaces ({{ MAP_QR }})");
+      issueSet.add("Use the exact {{MAP_QR}} tag without spaces.");
+    } else if (!hasTagMatch && entry.text.includes(TAG_TO_CHECK)) {
+      console.log("MAP_QR tag formatting: missing {{ }} delimiters");
+      issueSet.add("Ensure MAP_QR is wrapped with {{ }} delimiters.");
+    } else if (exactTagPresent) {
+      console.log("MAP_QR tag formatting: exact {{MAP_QR}}");
     }
 
     if (snippets.length === 0) {
-      console.log("No {{ or }} markers found in this part.");
+      console.log("No MAP_QR-related markers found in this part.");
       return;
     }
 
@@ -146,7 +175,33 @@ const run = () => {
       );
       console.log(`     snippet: ${snippet.snippet}`);
     });
+
+    if (textboxDetected && hasTagMatch) {
+      issueSet.add(
+        "MAP_QR appears inside a textbox/shape. Move it to the main document body."
+      );
+    }
+    if (isHeaderFooter && hasTagMatch) {
+      issueSet.add(
+        "MAP_QR appears in a header/footer. Move it to word/document.xml."
+      );
+    }
   });
+
+  if (!foundInDocument) {
+    issueSet.add(
+      "MAP_QR is not in word/document.xml. Place it in the main document body."
+    );
+  }
+
+  if (issueSet.size > 0) {
+    console.log("");
+    console.log("Actionable fixes:");
+    issueSet.forEach((issue) => console.log(`- ${issue}`));
+  } else {
+    console.log("");
+    console.log("No common MAP_QR issues detected.");
+  }
 };
 
 try {
