@@ -10,8 +10,10 @@ const DEFAULT_TEMPLATE_PATH = path.join(
   "outage_template.docx"
 );
 const TAG_TO_CHECK = "MAP_QR";
-const EXACT_TAG = "{{MAP_QR}}";
-const TAG_REGEX = /\{\{\s*MAP_QR\s*\}\}/g;
+const IMAGE_TAG = "{%MAP_QR}";
+const TEXT_TAG = "{{MAP_QR}}";
+const WRONG_IMAGE_TAG = "{%MAP_QR%}";
+const TAG_REGEX = /\{\%\s*MAP_QR\s*\}/g;
 const TEXTBOX_MARKERS = ["w:txbxContent", "v:textbox", "wps:"];
 
 const args = process.argv.slice(2);
@@ -61,7 +63,7 @@ const analyzeTagSplit = (xml, tag) => {
 };
 
 const getSnippets = (xml, windowSize = 120) => {
-  const regex = /MAP_QR|\{\{|\}\}/g;
+  const regex = /MAP_QR|\{\{|\{\%|\%\}|\}/g;
   const snippets = [];
   let match = regex.exec(xml);
   while (match) {
@@ -116,10 +118,12 @@ const run = () => {
   console.log("");
   console.log("Detailed report:");
   matches.forEach((entry) => {
-    const tagAnalysis = analyzeTagSplit(entry.text, EXACT_TAG);
+    const tagAnalysis = analyzeTagSplit(entry.text, IMAGE_TAG);
     const hasTagMatch = TAG_REGEX.test(entry.text);
     TAG_REGEX.lastIndex = 0;
-    const exactTagPresent = entry.text.includes(EXACT_TAG);
+    const exactTagPresent = entry.text.includes(IMAGE_TAG);
+    const hasWrongImageTag = entry.text.includes(WRONG_IMAGE_TAG);
+    const hasTextTag = entry.text.includes(TEXT_TAG);
     const snippets = getSnippets(entry.text);
     const textboxDetected = hasTextboxMarkers(entry.text);
     const isHeaderFooter = /word\/(header|footer)\d*\.xml$/i.test(entry.name);
@@ -140,7 +144,7 @@ const run = () => {
     } else if (tagAnalysis.isSplitAcrossNodes) {
       console.log(`MAP_QR tag: split across <w:t> nodes`);
       issueSet.add(
-        "MAP_QR is split across multiple runs. Re-type {{MAP_QR}} in a single run."
+        "MAP_QR is split across multiple runs. Re-type {%MAP_QR} in a single run."
       );
     } else if (tagAnalysis.concatenatedContainsTag) {
       console.log(
@@ -153,14 +157,20 @@ const run = () => {
       console.log("MAP_QR tag: not found in this part");
     }
 
-    if (hasTagMatch && !exactTagPresent) {
-      console.log("MAP_QR tag formatting: found with spaces ({{ MAP_QR }})");
-      issueSet.add("Use the exact {{MAP_QR}} tag without spaces.");
+    if (hasWrongImageTag) {
+      console.log("MAP_QR tag formatting: wrong image tag ({%MAP_QR%})");
+      issueSet.add("Use {%MAP_QR} (no trailing %}).");
+    } else if (hasTextTag) {
+      console.log("MAP_QR tag formatting: using text tag ({{MAP_QR}})");
+      issueSet.add("Use {%MAP_QR} for image tags.");
+    } else if (hasTagMatch && !exactTagPresent) {
+      console.log("MAP_QR tag formatting: found with spaces ({% MAP_QR })");
+      issueSet.add("Use the exact {%MAP_QR} tag without spaces.");
     } else if (!hasTagMatch && entry.text.includes(TAG_TO_CHECK)) {
-      console.log("MAP_QR tag formatting: missing {{ }} delimiters");
-      issueSet.add("Ensure MAP_QR is wrapped with {{ }} delimiters.");
+      console.log("MAP_QR tag formatting: missing {% } delimiters");
+      issueSet.add("Ensure MAP_QR is wrapped with {% } delimiters.");
     } else if (exactTagPresent) {
-      console.log("MAP_QR tag formatting: exact {{MAP_QR}}");
+      console.log("MAP_QR tag formatting: exact {%MAP_QR}");
     }
 
     if (snippets.length === 0) {

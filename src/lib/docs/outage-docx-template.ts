@@ -6,8 +6,10 @@ import ImageModule from "docxtemplater-image-module-free";
 import QRCode from "qrcode";
 
 const MAP_QR_TAG = "MAP_QR";
-const MAP_QR_EXACT = "{{MAP_QR}}";
-const MAP_QR_REGEX = /\{\{\s*MAP_QR\s*\}\}/g;
+const MAP_QR_IMAGE_EXACT = "{%MAP_QR}";
+const MAP_QR_IMAGE_REGEX = /\{\%\s*MAP_QR\s*\}/g;
+const MAP_QR_WRONG_IMAGE_EXACT = "{%MAP_QR%}";
+const MAP_QR_TEXT_EXACT = "{{MAP_QR}}";
 const TEXTBOX_MARKERS = ["w:txbxContent", "v:textbox", "wps:"];
 
 type DocPayload = {
@@ -90,6 +92,8 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
   let foundSplitRuns = false;
   let foundSpacedTag = false;
   let foundWrongDelimiter = false;
+  let foundWrongImageDelimiter = false;
+  let foundTextDelimiter = false;
 
   entries.forEach((entry) => {
     const xml = entry.asText();
@@ -103,10 +107,10 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
     const hasTextboxMarkers = TEXTBOX_MARKERS.some((marker) =>
       xml.includes(marker)
     );
-    const hasTagMatch = MAP_QR_REGEX.test(xml);
-    MAP_QR_REGEX.lastIndex = 0;
-    const exactTagPresent = xml.includes(MAP_QR_EXACT);
-    const tagSplit = analyzeTagSplit(xml, MAP_QR_EXACT);
+    const hasTagMatch = MAP_QR_IMAGE_REGEX.test(xml);
+    MAP_QR_IMAGE_REGEX.lastIndex = 0;
+    const exactTagPresent = xml.includes(MAP_QR_IMAGE_EXACT);
+    const tagSplit = analyzeTagSplit(xml, MAP_QR_IMAGE_EXACT);
     const snippets = extractSnippets(xml, MAP_QR_TAG);
 
     if (isDocument && hasTagMatch) {
@@ -127,6 +131,12 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
     if (!hasTagMatch && xml.includes(MAP_QR_TAG)) {
       foundWrongDelimiter = true;
     }
+    if (xml.includes(MAP_QR_WRONG_IMAGE_EXACT)) {
+      foundWrongImageDelimiter = true;
+    }
+    if (xml.includes(MAP_QR_TEXT_EXACT)) {
+      foundTextDelimiter = true;
+    }
 
     if (snippets.length > 0) {
       snippets.forEach((snippet) => {
@@ -137,7 +147,7 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
 
   if (!foundAnyTag) {
     issues.push(
-      "MAP_QR placeholder was not found in any XML part. Ensure {{MAP_QR}} exists in the template."
+      "MAP_QR placeholder was not found in any XML part. Ensure {%MAP_QR} exists in the template."
     );
   }
   if (foundSplitRuns) {
@@ -156,12 +166,20 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
     );
   }
   if (foundSpacedTag) {
-    issues.push("MAP_QR tag has spaces. Use the exact {{MAP_QR}} tag.");
+    issues.push("MAP_QR tag has spaces. Use the exact {%MAP_QR} tag.");
   }
   if (foundWrongDelimiter) {
     issues.push(
-      "MAP_QR appears without {{ }} delimiters. Ensure the placeholder uses {{MAP_QR}}."
+      "MAP_QR appears without {% } delimiters. Ensure the placeholder uses {%MAP_QR}."
     );
+  }
+  if (foundWrongImageDelimiter) {
+    issues.push(
+      "MAP_QR uses the wrong image tag syntax ({%MAP_QR%}). Use {%MAP_QR} (no trailing %})."
+    );
+  }
+  if (foundTextDelimiter) {
+    issues.push("MAP_QR uses text delimiters. Use {%MAP_QR} for images.");
   }
 
   const canInsertImage =
@@ -170,7 +188,9 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
     !foundInTextbox &&
     !foundInHeaderFooter &&
     !foundSpacedTag &&
-    !foundWrongDelimiter;
+    !foundWrongDelimiter &&
+    !foundWrongImageDelimiter &&
+    !foundTextDelimiter;
 
   return { canInsertImage, issues, foundInDocument };
 };
@@ -189,9 +209,6 @@ const logTemplateScan = (scan: MapQrTemplateScan) => {
   }
   scan.issues.forEach((issue) => console.warn(`- ${issue}`));
 };
-
-const isLikelyBase64 = (value: string) =>
-  /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length % 4 === 0;
 
 const containsInvalidXmlChars = (xml: string) =>
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xml) || xml.includes("\uFFFD");
@@ -213,6 +230,20 @@ const isDocumentXmlSane = (docBuffer: Buffer) => {
     return true;
   } catch (error) {
     console.warn("Sanity check failed while reading document.xml.", error);
+    return false;
+  }
+};
+
+const containsRawPngInDocumentXml = (docBuffer: Buffer) => {
+  try {
+    const zip = new PizZip(docBuffer);
+    const documentXml = zip.file("word/document.xml")?.asText();
+    if (!documentXml) {
+      return false;
+    }
+    return documentXml.includes("�PNG");
+  } catch (error) {
+    console.warn("Unable to scan document.xml for raw PNG bytes.", error);
     return false;
   }
 };
@@ -265,6 +296,62 @@ const logDocxRenderError = (error: unknown) => {
   }
 };
 
+const renderTextPass = (templateBuffer: Buffer, data: Record<string, string>) => {
+  const zip = new PizZip(templateBuffer);
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: "{{", end: "}}" }
+  });
+  try {
+    doc.render({
+      ...data,
+      MAP_QR: ""
+    });
+  } catch (error) {
+    logDocxRenderError(error);
+    throw error;
+  }
+  return doc.getZip().generate({ type: "nodebuffer" });
+};
+
+const renderImagePass = (
+  templateBuffer: Buffer,
+  imageBuffer: Buffer,
+  imageModule: ImageModule
+) => {
+  const zip = new PizZip(templateBuffer);
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: "{%", end: "}" },
+    modules: [imageModule]
+  });
+  try {
+    doc.render({ MAP_QR: imageBuffer });
+  } catch (error) {
+    logDocxRenderError(error);
+    throw error;
+  }
+  return doc.getZip().generate({ type: "nodebuffer" });
+};
+
+const renderImageFallbackPass = (templateBuffer: Buffer, mapLink: string) => {
+  const zip = new PizZip(templateBuffer);
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: "{%", end: "}" }
+  });
+  try {
+    doc.render({ MAP_QR: mapLink });
+  } catch (error) {
+    logDocxRenderError(error);
+    throw error;
+  }
+  return doc.getZip().generate({ type: "nodebuffer" });
+};
+
 export async function generateOutageDocxBuffer({
   payload,
   job
@@ -281,31 +368,21 @@ export async function generateOutageDocxBuffer({
 
   const templateMediaEntries = listMediaEntries(templateBuffer);
   let imageBuffer: Buffer | null = null;
-  let imageBase64: string | null = null;
   try {
     imageBuffer = await QRCode.toBuffer(payload.map_link, {
       type: "png",
       width: 120,
       margin: 1
     });
-    imageBase64 = imageBuffer.toString("base64");
+    console.info(`QR bytes: ${imageBuffer.length}`);
   } catch (error) {
     console.warn("Failed to generate QR code, falling back to text.", error);
   }
 
-  const imageModule = imageBase64
+  const imageModule = imageBuffer
     ? new ImageModule({
-        getImage: (tagValue: string) => {
-          if (typeof tagValue !== "string") {
-            throw new Error("MAP_QR tag value must be a base64 string.");
-          }
-          if (!isLikelyBase64(tagValue)) {
-            throw new Error("MAP_QR tag value is not valid base64.");
-          }
-          return Buffer.from(tagValue, "base64");
-        },
-        getSize: () => [120, 120],
-        delimiters: { start: "{{", end: "}}" }
+        getImage: (tagValue: Buffer) => tagValue,
+        getSize: () => [120, 120]
       })
     : null;
 
@@ -322,37 +399,25 @@ export async function generateOutageDocxBuffer({
     EQUIPMENT_CODE: String(job.equipment_code ?? "-")
   };
 
-  const renderWithOptions = (useImage: boolean, mapQrValue: Buffer | string) => {
-    const zip = new PizZip(templateBuffer);
-    const doc = new Docxtemplater(zip, {
-      paragraphLoop: true,
-      linebreaks: true,
-      delimiters: { start: "{{", end: "}}" },
-      modules: useImage && imageModule ? [imageModule] : []
-    });
-    try {
-      doc.render({
-        ...baseData,
-        MAP_QR: mapQrValue
-      });
-    } catch (error) {
-      logDocxRenderError(error);
-      throw error;
-    }
-    return doc.getZip().generate({ type: "nodebuffer" });
-  };
+  const pass1Buffer = renderTextPass(templateBuffer, baseData);
+  console.info("PASS1 OK");
 
-  if (imageBase64) {
+  if (imageBuffer && imageModule) {
     try {
       if (!templateScan.canInsertImage) {
         logTemplateScan(templateScan);
       } else {
-        const rendered = renderWithOptions(true, imageBase64);
+        const rendered = renderImagePass(pass1Buffer, imageBuffer, imageModule);
         if (!isDocumentXmlSane(rendered)) {
           console.warn(
             "Generated DOCX failed sanity check after image insertion."
           );
           logTemplateScan(templateScan);
+        } else if (containsRawPngInDocumentXml(rendered)) {
+          console.warn(
+            "Detected raw PNG bytes in document.xml after image insertion. Falling back to text-only output."
+          );
+          return pass1Buffer;
         } else {
           const renderedMediaEntries = listMediaEntries(rendered);
           const newMediaEntries = renderedMediaEntries.filter(
@@ -368,6 +433,7 @@ export async function generateOutageDocxBuffer({
               "QR image insertion reported success, but no new media files were detected under word/media/."
             );
           }
+          console.info("PASS2 OK (image inserted)");
           return rendered;
         }
       }
@@ -377,5 +443,11 @@ export async function generateOutageDocxBuffer({
     }
   }
 
-  return renderWithOptions(false, payload.map_link);
+  console.warn("PASS2 FAILED, fallback to text");
+  try {
+    return renderImageFallbackPass(pass1Buffer, payload.map_link);
+  } catch (error) {
+    console.warn("Fallback render failed. Returning text-only output.", error);
+  }
+  return pass1Buffer;
 }
