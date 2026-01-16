@@ -81,6 +81,26 @@ npm run dev
    - If QR insertion fails, the system falls back to inserting the map link text.
    - Do not rename placeholders (they must match exactly).
 
+### DOCX Template Inspector
+
+When docxtemplater throws a `multi_error`, run the inspector to locate broken tags:
+
+```bash
+npm run inspect:docx
+```
+
+To inspect a different template path:
+
+```bash
+npm run inspect:docx -- path/to/template.docx
+```
+
+Common fixes:
+
+- **Split runs**: retype the placeholder in one go so `{{DOC_ISSUE_DATE}}` is not split across multiple `<w:t>` nodes or formatting runs.
+- **Textboxes/shapes**: move placeholders out of textboxes/WordArt into the main document body, header, or footer.
+- **Headers/footers**: check `word/header*.xml` and `word/footer*.xml` if the placeholder lives outside the main body.
+
 Placeholders list:
 
 - `{{DOC_ISSUE_DATE}}`

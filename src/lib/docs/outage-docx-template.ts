@@ -26,6 +26,41 @@ type GenerateArgs = {
   job: Record<string, unknown>;
 };
 
+const logDocxRenderError = (error: unknown) => {
+  console.error("Docxtemplater render failed.");
+
+  if (error instanceof Error) {
+    console.error("Docxtemplater error message:", error.message);
+  } else {
+    console.error("Docxtemplater error (non-Error):", error);
+  }
+
+  const errorWithProps = error as {
+    properties?: {
+      errors?: Array<{
+        message?: string;
+        name?: string;
+        properties?: Record<string, unknown>;
+      }>;
+    };
+  };
+
+  const subErrors = errorWithProps?.properties?.errors;
+  if (subErrors && subErrors.length > 0) {
+    console.error(`Docxtemplater sub-errors (${subErrors.length}):`);
+    subErrors.forEach((subError, index) => {
+      console.error(`  [${index + 1}] name:`, subError.name);
+      console.error(`  [${index + 1}] message:`, subError.message);
+      console.error(
+        `  [${index + 1}] properties:`,
+        subError.properties ?? {}
+      );
+    });
+  } else if (errorWithProps?.properties) {
+    console.error("Docxtemplater error properties:", errorWithProps.properties);
+  }
+};
+
 export async function generateOutageDocxBuffer({
   payload,
   job
@@ -77,10 +112,15 @@ export async function generateOutageDocxBuffer({
       linebreaks: true,
       modules: useImage && imageModule ? [imageModule] : []
     });
-    doc.render({
-      ...baseData,
-      MAP_QR: mapQrValue
-    });
+    try {
+      doc.render({
+        ...baseData,
+        MAP_QR: mapQrValue
+      });
+    } catch (error) {
+      logDocxRenderError(error);
+      throw error;
+    }
     return doc.getZip().generate({ type: "nodebuffer" });
   };
 
