@@ -26,14 +26,18 @@ type CreateDocRequest = {
   payload: DocPayload;
 };
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function createSupabaseServerClient() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Missing Supabase env vars.");
+  if (!SUPABASE_URL) {
+    throw new Error("Missing SUPABASE_URL env var.");
   }
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var.");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
 function isPayloadValid(payload: Partial<DocPayload>) {
@@ -113,12 +117,21 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY env var." },
+        { status: 500 }
+      );
+    }
+
     const supabase = createSupabaseServerClient();
     const { data: job, error: jobError } = await supabase
       .from("outage_jobs")
       .select("*")
       .eq("id", jobId)
       .single();
+    console.log("Docs create jobError:", jobError);
+    console.log("Docs create job:", job);
 
     if (jobError || !job) {
       return NextResponse.json(
