@@ -113,7 +113,7 @@ const scanTemplateForMapQr = (templateBuffer: Buffer): MapQrTemplateScan => {
     const tagSplit = analyzeTagSplit(xml, MAP_QR_IMAGE_EXACT);
     const snippets = extractSnippets(xml, MAP_QR_TAG);
 
-    if (isDocument && hasTagMatch) {
+    if (isDocument && exactTagPresent) {
       foundInDocument = true;
     }
     if (isHeaderFooter && hasTagMatch) {
@@ -336,22 +336,6 @@ const renderImagePass = (
   return doc.getZip().generate({ type: "nodebuffer" });
 };
 
-const renderImageFallbackPass = (templateBuffer: Buffer, mapLink: string) => {
-  const zip = new PizZip(templateBuffer);
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: true,
-    delimiters: { start: "{%", end: "}" }
-  });
-  try {
-    doc.render({ MAP_QR: mapLink });
-  } catch (error) {
-    logDocxRenderError(error);
-    throw error;
-  }
-  return doc.getZip().generate({ type: "nodebuffer" });
-};
-
 export async function generateOutageDocxBuffer({
   payload,
   job
@@ -402,12 +386,13 @@ export async function generateOutageDocxBuffer({
   const pass1Buffer = renderTextPass(templateBuffer, baseData);
   console.info("PASS1 OK");
 
-  if (imageBuffer && imageModule) {
+  if (imageBuffer && imageModule && templateScan.foundInDocument) {
     try {
       if (!templateScan.canInsertImage) {
         logTemplateScan(templateScan);
       } else {
         const rendered = renderImagePass(pass1Buffer, imageBuffer, imageModule);
+        console.info("MEDIA AFTER:", listMediaEntries(rendered));
         if (!isDocumentXmlSane(rendered)) {
           console.warn(
             "Generated DOCX failed sanity check after image insertion."
@@ -429,9 +414,8 @@ export async function generateOutageDocxBuffer({
               newMediaEntries
             );
           } else {
-            console.warn(
-              "QR image insertion reported success, but no new media files were detected under word/media/."
-            );
+            console.warn("NO NEW MEDIA");
+            return pass1Buffer;
           }
           console.info("PASS2 OK (image inserted)");
           return rendered;
@@ -444,10 +428,5 @@ export async function generateOutageDocxBuffer({
   }
 
   console.warn("PASS2 FAILED, fallback to text");
-  try {
-    return renderImageFallbackPass(pass1Buffer, payload.map_link);
-  } catch (error) {
-    console.warn("Fallback render failed. Returning text-only output.", error);
-  }
   return pass1Buffer;
 }
