@@ -89,12 +89,24 @@ function buildOutageDocument(payload: DocPayload, job: Record<string, unknown>) 
 }
 
 export async function POST(request: Request) {
-  let jobId: string | undefined;
+  let jobId: string | number | undefined;
   try {
-    const body = (await request.json()) as CreateDocRequest;
-    jobId = body?.jobId;
+    const body = (await request.json()) as Partial<CreateDocRequest> & {
+      id?: string | number;
+      payload?: Partial<DocPayload> & { jobId?: string | number };
+    };
+    console.info("Docs create request body:", JSON.stringify(body, null, 2));
+    jobId = body?.jobId ?? body?.payload?.jobId ?? body?.id;
+    console.info("Docs create jobId:", jobId);
 
-    if (!body?.jobId || !body?.payload || !isPayloadValid(body.payload)) {
+    if (!jobId) {
+      return NextResponse.json(
+        { ok: false, error: "missing jobId" },
+        { status: 400 }
+      );
+    }
+
+    if (!body?.payload || !isPayloadValid(body.payload)) {
       return NextResponse.json(
         { ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" },
         { status: 400 }
@@ -105,17 +117,21 @@ export async function POST(request: Request) {
     const { data: job, error: jobError } = await supabase
       .from("outage_jobs")
       .select("*")
-      .eq("id", body.jobId)
+      .eq("id", jobId)
       .single();
 
     if (jobError || !job) {
       return NextResponse.json(
-        { ok: false, error: "ไม่พบข้อมูลงานที่ต้องการ" },
+        {
+          ok: false,
+          error: "ไม่พบข้อมูลงานที่ต้องการ",
+          debug: { jobId, jobError }
+        },
         { status: 404 }
       );
     }
 
-    const payload = body.payload;
+    const payload = body.payload as DocPayload;
     const { error: updateError } = await supabase
       .from("outage_jobs")
       .update({
@@ -130,7 +146,7 @@ export async function POST(request: Request) {
         doc_url: null,
         doc_generated_at: null
       })
-      .eq("id", body.jobId);
+      .eq("id", jobId);
 
     if (updateError) {
       throw new Error(updateError.message);
@@ -146,7 +162,7 @@ export async function POST(request: Request) {
         doc_url: null,
         doc_generated_at: new Date().toISOString()
       })
-      .eq("id", body.jobId);
+      .eq("id", jobId);
 
     if (finalizeError) {
       throw new Error(finalizeError.message);
