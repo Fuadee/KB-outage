@@ -53,6 +53,14 @@ const readMediaFile = (docBuffer, filename) => {
   return entry?.asNodeBuffer() ?? null;
 };
 
+const findPlaceholderEntryName = (zip) => {
+  const matches = zip.file(/^word\/media\/image2\.png$/i);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  return matches[0]?.name ?? null;
+};
+
 const run = async () => {
   let templateBuffer;
   try {
@@ -64,7 +72,8 @@ const run = async () => {
   }
 
   const templateZip = new PizZip(templateBuffer);
-  if (!templateZip.file(PLACEHOLDER_QR_IMAGE)) {
+  const placeholderEntryName = findPlaceholderEntryName(templateZip);
+  if (!placeholderEntryName) {
     console.error("Template missing word/media/image2.png placeholder.");
     process.exit(1);
     return;
@@ -100,15 +109,15 @@ const run = async () => {
   const outputMedia = listMediaEntries(outputBuffer);
   const outputXml = readDocumentXml(outputBuffer, "OUTPUT");
   const hasInvalidXmlChars = containsInvalidXmlChars(outputXml);
-  const outputHasPlaceholder = outputMedia.includes(PLACEHOLDER_QR_IMAGE);
-  const templateHasPlaceholder = templateMedia.includes(PLACEHOLDER_QR_IMAGE);
+  const outputHasPlaceholder = outputMedia.includes(placeholderEntryName);
+  const templateHasPlaceholder = templateMedia.includes(placeholderEntryName);
   const templatePlaceholderBuffer = readMediaFile(
     templateBuffer,
-    PLACEHOLDER_QR_IMAGE
+    placeholderEntryName
   );
   const outputPlaceholderBuffer = readMediaFile(
     outputBuffer,
-    PLACEHOLDER_QR_IMAGE
+    placeholderEntryName
   );
   const templateHash = templatePlaceholderBuffer
     ? getFileHash(templatePlaceholderBuffer)
