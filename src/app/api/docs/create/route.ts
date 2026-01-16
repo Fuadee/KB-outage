@@ -6,11 +6,7 @@ import {
   HeadingLevel,
   Packer,
   Paragraph,
-  Table,
-  TableCell,
-  TableRow,
-  TextRun,
-  WidthType
+  TextRun
 } from "docx";
 
 export const runtime = "nodejs";
@@ -52,26 +48,21 @@ function isPayloadValid(payload: Partial<DocPayload>) {
   );
 }
 
-function buildTableRow(label: string, value: string) {
-  return new TableRow({
-    children: [
-      new TableCell({
-        width: { size: 35, type: WidthType.PERCENTAGE },
-        children: [
-          new Paragraph({
-            children: [new TextRun({ text: label, bold: true })]
-          })
-        ]
-      }),
-      new TableCell({
-        width: { size: 65, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: value || "-" })]
-      })
-    ]
-  });
-}
+function buildOutageDocument(payload: DocPayload, job: Record<string, unknown>) {
+  const lines = [
+    { label: "รหัสอุปกรณ์", value: job.equipment_code ?? "-" },
+    { label: "วันที่ดับไฟ", value: job.outage_date ?? "-" },
+    { label: "วันที่ออกหนังสือ", value: payload.doc_issue_date },
+    { label: "วัตถุประสงค์", value: payload.doc_purpose },
+    { label: "บริเวณที่ดับ", value: payload.doc_area_title },
+    {
+      label: "เวลา",
+      value: `${payload.doc_time_start} - ${payload.doc_time_end}`
+    },
+    { label: "รายละเอียดพื้นที่ดับไฟ", value: payload.doc_area_detail },
+    { label: "ลิงก์แผนที่", value: payload.map_link }
+  ];
 
-function buildOutageDocument(payload: DocPayload, job: any) {
   return new Document({
     sections: [
       {
@@ -82,22 +73,15 @@ function buildOutageDocument(payload: DocPayload, job: any) {
             alignment: AlignmentType.CENTER
           }),
           new Paragraph({ text: "" }),
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              buildTableRow("รหัสอุปกรณ์", job.equipment_code ?? "-"),
-              buildTableRow("วันที่ดับไฟ", job.outage_date ?? "-"),
-              buildTableRow("วันที่ออกหนังสือ", payload.doc_issue_date),
-              buildTableRow("วัตถุประสงค์", payload.doc_purpose),
-              buildTableRow("บริเวณที่ดับ", payload.doc_area_title),
-              buildTableRow(
-                "เวลา",
-                `${payload.doc_time_start} - ${payload.doc_time_end}`
-              ),
-              buildTableRow("รายละเอียดพื้นที่ดับไฟ", payload.doc_area_detail),
-              buildTableRow("ลิงก์แผนที่", payload.map_link)
-            ]
-          })
+          ...lines.map(
+            (line) =>
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `${line.label}: `, bold: true }),
+                  new TextRun({ text: String(line.value ?? "-") })
+                ]
+              })
+          )
         ]
       }
     ]
@@ -109,6 +93,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateDocRequest;
     jobId = body?.jobId;
+
     if (!body?.jobId || !body?.payload || !isPayloadValid(body.payload)) {
       return NextResponse.json(
         { ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" },
@@ -131,8 +116,6 @@ export async function POST(request: Request) {
     }
 
     const payload = body.payload;
-
-    // Persist form data and mark as generating before building the document.
     const { error: updateError } = await supabase
       .from("outage_jobs")
       .update({

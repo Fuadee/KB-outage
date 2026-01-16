@@ -255,20 +255,6 @@ export default function DashboardPage() {
         return;
       }
 
-      const contentType = response.headers.get("Content-Type") ?? "";
-      if (
-        !contentType.includes(
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-      ) {
-        const result = await response.json().catch(() => null);
-        setDocErrors({
-          submit: result?.error || "สร้างเอกสารไม่สำเร็จ กรุณาลองใหม่"
-        });
-        setDocSaving(false);
-        return;
-      }
-
       const blob = await response.blob();
       const objectUrl = window.URL.createObjectURL(blob);
       const disposition = response.headers.get("Content-Disposition") ?? "";
