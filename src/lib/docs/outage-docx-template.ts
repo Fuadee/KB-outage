@@ -191,8 +191,9 @@ export async function generateOutageDocxBuffer({
   console.info("PASS1 OK");
 
   if (!imageBuffer) {
-    console.warn("PASS2 FAILED, fallback to text");
-    return pass1Buffer;
+    throw new Error(
+      "QR image generation failed; cannot replace placeholder image2.png."
+    );
   }
 
   const zip = new PizZip(pass1Buffer);
@@ -206,15 +207,23 @@ export async function generateOutageDocxBuffer({
       `Missing ${PLACEHOLDER_QR_IMAGE} in DOCX. Found media: ${mediaEntries.join(", ")}`
     );
   }
-  console.info(`Replacing placeholder: ${placeholderEntryName}`);
-  zip.file(placeholderEntryName, imageBuffer);
+  const bytesBefore =
+    zip.file(placeholderEntryName)?.asUint8Array().length ?? 0;
+  console.info(
+    `Placeholder bytes for ${placeholderEntryName} before replace: ${bytesBefore}`
+  );
+  zip.remove(placeholderEntryName);
+  zip.file(placeholderEntryName, imageBuffer, { binary: true });
+  const bytesAfter =
+    zip.file(placeholderEntryName)?.asUint8Array().length ?? 0;
+  console.info(
+    `Placeholder bytes for ${placeholderEntryName} after replace: ${bytesAfter}`
+  );
   ensurePngContentType(zip);
   const rendered = zip.generate({ type: "nodebuffer" });
   console.info("MEDIA AFTER:", listMediaEntries(rendered));
   if (!isDocumentXmlSane(rendered)) {
     console.warn("Generated DOCX failed sanity check after image replacement.");
-    return pass1Buffer;
   }
-  console.info("PASS2 OK (image replaced)");
   return rendered;
 }
