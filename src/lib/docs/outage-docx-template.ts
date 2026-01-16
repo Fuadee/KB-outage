@@ -110,6 +110,7 @@ export async function generateOutageDocxBuffer({
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      delimiters: { start: "{{", end: "}}" },
       modules: useImage && imageModule ? [imageModule] : []
     });
     try {
