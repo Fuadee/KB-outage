@@ -23,7 +23,6 @@ import {
 } from "@/lib/dateUtils";
 import {
   cardBase,
-  ghostBtn,
   inputBase,
   pageBg,
   primaryBtn,
@@ -32,6 +31,12 @@ import {
 
 type FilterOption = "all" | "green" | "yellow" | "red";
 type TabOption = "active" | "closed";
+type ActionKey =
+  | "notify_nakhon"
+  | "create_doc"
+  | "wait_approval"
+  | "notify_outage_letter"
+  | "close_job";
 
 type DocForm = {
   doc_issue_date: string;
@@ -60,6 +65,46 @@ const getFilenameFromContentDisposition = (
   const filenameMatch = headerValue.match(/filename="?([^";]+)"?/i);
   return filenameMatch?.[1] ?? null;
 };
+
+const getNextAction = (job: OutageJob): ActionKey => {
+  const nakhonStatus = job.nakhon_status ?? "PENDING";
+  if (nakhonStatus === "PENDING") {
+    return "notify_nakhon";
+  }
+
+  const isDocGenerated =
+    job.doc_status === "GENERATED" && Boolean(job.doc_url);
+  if (!isDocGenerated) {
+    return "create_doc";
+  }
+
+  const socialStatus = job.social_status ?? "DRAFT";
+  if (socialStatus === "PENDING_APPROVAL") {
+    return "wait_approval";
+  }
+
+  const noticeStatus = job.notice_status ?? "NONE";
+  if (socialStatus === "POSTED" && noticeStatus !== "SCHEDULED") {
+    return "notify_outage_letter";
+  }
+
+  return "close_job";
+};
+
+const actionLabelMap: Record<ActionKey, string> = {
+  notify_nakhon: "แจ้งศูนย์นคร",
+  create_doc: "สร้างเอกสารดับไฟ",
+  wait_approval: "รออนุมัติ",
+  notify_outage_letter: "แจ้งหนังสือดับไฟ",
+  close_job: "ปิดงาน"
+};
+
+const actionBtnBase =
+  "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+const actionBtnPrimary = `${actionBtnBase} bg-purple-600 text-white hover:bg-purple-700 focus-visible:ring-purple-300`;
+const actionBtnSecondary = `${actionBtnBase} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-200`;
+const actionBtnDisabled =
+  "disabled:cursor-not-allowed disabled:opacity-60";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -647,6 +692,10 @@ export default function DashboardPage() {
                 socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
               const showNoticeButton = socialStatus === "POSTED";
               const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
+              const nextAction = getNextAction(job);
+              const nextActionLabel = actionLabelMap[nextAction];
+              const actionClass = (actionKey: ActionKey) =>
+                actionKey === nextAction ? actionBtnPrimary : actionBtnSecondary;
               return (
                 <div
                   key={job.id}
@@ -746,12 +795,18 @@ export default function DashboardPage() {
 
                     {!isClosed ? (
                       <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px]">
+                        <div className="text-xs font-medium text-slate-500">
+                          ขั้นตอนถัดไป:{" "}
+                          <span className="text-slate-700">
+                            {nextActionLabel}
+                          </span>
+                        </div>
                         {isPending ? (
                           <>
                             <button
                               type="button"
                               onClick={() => openNotifiedModal(job)}
-                              className={secondaryBtn}
+                              className={actionClass("notify_nakhon")}
                             >
                               แจ้งศูนย์นครแล้ว
                             </button>
@@ -759,7 +814,7 @@ export default function DashboardPage() {
                               type="button"
                               onClick={() => handleNotRequired(job)}
                               disabled={actionDisabled}
-                              className={`${ghostBtn} disabled:cursor-not-allowed disabled:opacity-60`}
+                              className={`${actionBtnSecondary} ${actionBtnDisabled}`}
                             >
                               {actionDisabled
                                 ? "กำลังบันทึก..."
@@ -774,7 +829,7 @@ export default function DashboardPage() {
                                 onClick={() =>
                                   window.open(job.doc_url!, "_blank")
                                 }
-                                className={secondaryBtn}
+                                className={actionClass("create_doc")}
                               >
                                 พิมพ์เอกสาร
                               </button>
@@ -783,7 +838,7 @@ export default function DashboardPage() {
                                 type="button"
                                 onClick={() => openDocModal(job)}
                                 disabled={actionDisabled || isDocGenerating}
-                                className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
+                                className={`${actionClass("create_doc")} ${actionBtnDisabled}`}
                               >
                                 {isDocGenerating
                                   ? "กำลังสร้าง..."
@@ -796,7 +851,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => setSocialJob(job)}
-                            className={secondaryBtn}
+                            className={actionClass("wait_approval")}
                           >
                             {socialStatus === "POSTED"
                               ? "Posted แล้วสื่อ Social"
@@ -807,7 +862,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => setNoticeJob(job)}
-                            className={secondaryBtn}
+                            className={actionClass("notify_outage_letter")}
                           >
                             {noticeStatus === "SCHEDULED"
                               ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
@@ -818,7 +873,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => openCloseModal(job)}
-                            className={secondaryBtn}
+                            className={actionClass("close_job")}
                           >
                             ปิดงาน
                           </button>
