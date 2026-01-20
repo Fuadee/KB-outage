@@ -78,10 +78,6 @@ export async function updateJob(
     .eq("id", id);
 }
 
-export async function deleteJob(id: string) {
-  return supabase.from("outage_jobs").delete().eq("id", id);
-}
-
 export async function setNakhonNotified(
   id: string,
   payload: { date: string; memoNo: string }
