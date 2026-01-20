@@ -28,6 +28,9 @@ export type OutageJob = {
   notice_by: string | null;
   mymaps_url: string | null;
   notice_scheduled_at: string | null;
+  is_closed: boolean;
+  closed_at: string | null;
+  closed_by: string | null;
   created_at: string;
   updated_at: string;
 };

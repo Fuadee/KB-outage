@@ -11,6 +11,7 @@ import {
   setNakhonNotified,
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
+import { supabase } from "@/lib/supabaseClient";
 import {
   getJobUrgency,
   getUrgencyStyles,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/dateUtils";
 
 type FilterOption = "all" | "green" | "yellow" | "red";
+type TabOption = "active" | "closed";
 
 type DocForm = {
   doc_issue_date: string;
@@ -53,6 +55,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterOption>("all");
+  const [tab, setTab] = useState<TabOption>("active");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
     {}
@@ -82,24 +85,39 @@ export default function DashboardPage() {
     Record<keyof DocForm | "submit", string>
   >>({});
   const [docSaving, setDocSaving] = useState(false);
+  const [closeJob, setCloseJob] = useState<OutageJob | null>(null);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "error";
+  } | null>(null);
+
+  const fetchJobs = async () => {
+    setLoading(true);
+    setError(null);
+    setActionError(null);
+    const { data, error: fetchError } = await listJobs();
+    if (fetchError) {
+      setError(fetchError.message);
+      setJobs([]);
+    } else {
+      setJobs(data ?? []);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const fetchJobs = async () => {
-      setLoading(true);
-      setError(null);
-      setActionError(null);
-      const { data, error: fetchError } = await listJobs();
-      if (fetchError) {
-        setError(fetchError.message);
-        setJobs([]);
-      } else {
-        setJobs(data ?? []);
-      }
-      setLoading(false);
-    };
-
     fetchJobs();
   }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 2000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const closeModal = () => {
     setSelectedJob(null);
@@ -151,6 +169,53 @@ export default function DashboardPage() {
       map_link: job.map_link ?? ""
     });
     setDocErrors({});
+  };
+
+  const openCloseModal = (job: OutageJob) => {
+    setCloseJob(job);
+    setCloseSaving(false);
+    setCloseError(null);
+  };
+
+  const handleCloseJob = async () => {
+    if (!closeJob) return;
+    setCloseSaving(true);
+    setCloseError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setCloseError("กรุณาเข้าสู่ระบบก่อนปิดงาน");
+      setCloseSaving(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/jobs/${closeJob.id}/close`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ปิดงานไม่สำเร็จ กรุณาลองใหม่");
+      }
+
+      setToast({ message: "✅ ปิดงานเรียบร้อย", tone: "success" });
+      await fetchJobs();
+      setCloseJob(null);
+    } catch (closeError) {
+      const message =
+        closeError instanceof Error
+          ? closeError.message
+          : "ปิดงานไม่สำเร็จ กรุณาลองใหม่";
+      setCloseError(message);
+      setToast({ message, tone: "error" });
+    } finally {
+      setCloseSaving(false);
+    }
   };
 
   const handleSubmitNotified = async () => {
@@ -356,6 +421,9 @@ export default function DashboardPage() {
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return jobs
+      .filter((job) =>
+        tab === "closed" ? job.is_closed : !job.is_closed
+      )
       .filter((job) => {
         if (!normalizedQuery) return true;
         return job.equipment_code.toLowerCase().includes(normalizedQuery);
@@ -365,11 +433,18 @@ export default function DashboardPage() {
         const urgency = getJobUrgency(job);
         return urgency.color.toLowerCase() === filter;
       })
-      .sort((a, b) =>
-        parseLocalDate(a.outage_date).getTime() -
-        parseLocalDate(b.outage_date).getTime()
-      );
-  }, [jobs, query, filter]);
+      .sort((a, b) => {
+        if (tab === "closed") {
+          const aClosed = a.closed_at ? new Date(a.closed_at).getTime() : 0;
+          const bClosed = b.closed_at ? new Date(b.closed_at).getTime() : 0;
+          return bClosed - aClosed;
+        }
+        return (
+          parseLocalDate(a.outage_date).getTime() -
+          parseLocalDate(b.outage_date).getTime()
+        );
+      });
+  }, [jobs, query, filter, tab]);
 
   const handleSocialJobUpdate = (
     jobId: string,
@@ -460,8 +535,39 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { id: "active", label: "กำลังดำเนินการ" },
+              { id: "closed", label: "ปิดแล้ว" }
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.id}
+              onClick={() => setTab(option.id)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                tab === option.id
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </header>
 
+      {toast ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            toast.tone === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {toast.message}
+        </div>
+      ) : null}
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -491,6 +597,7 @@ export default function DashboardPage() {
             const isNotified = nakhonStatus === "NOTIFIED";
             const isNotRequired = nakhonStatus === "NOT_REQUIRED";
             const actionDisabled = actionLoading[job.id] ?? false;
+            const isClosed = job.is_closed ?? false;
             const isDocGenerated =
               job.doc_status === "GENERATED" && Boolean(job.doc_url);
             const isDocGenerating = job.doc_status === "GENERATING";
@@ -499,6 +606,7 @@ export default function DashboardPage() {
             const showSocialButton =
               socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
             const showNoticeButton = socialStatus === "POSTED";
+            const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
             return (
               <div
                 key={job.id}
@@ -533,6 +641,25 @@ export default function DashboardPage() {
                           {urgency.color}
                         </span>
                       </div>
+                      {isClosed ? (
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                            ปิดแล้ว
+                          </span>
+                          <span>
+                            ปิดเมื่อ{" "}
+                            {job.closed_at
+                              ? new Date(job.closed_at).toLocaleString("th-TH", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })
+                              : "-"}
+                          </span>
+                        </div>
+                      ) : null}
                       <div>
                         <p className="text-lg font-semibold text-slate-900">
                           {job.equipment_code}
@@ -543,74 +670,87 @@ export default function DashboardPage() {
                       </div>
                     </Link>
 
-                    <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
-                      {isPending ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openNotifiedModal(job)}
-                            className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
-                          >
-                            แจ้งศูนย์นครแล้ว
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleNotRequired(job)}
-                            disabled={actionDisabled}
-                            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-                          >
-                            {actionDisabled
-                              ? "กำลังบันทึก..."
-                              : "ไม่ต้องแจ้งศูนย์นคร"}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {isDocGenerated ? (
+                    {!isClosed ? (
+                      <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
+                        {isPending ? (
+                          <>
                             <button
                               type="button"
-                              onClick={() => window.open(job.doc_url!, "_blank")}
-                              className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 sm:w-auto"
+                              onClick={() => openNotifiedModal(job)}
+                              className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
                             >
-                              พิมพ์เอกสาร
+                              แจ้งศูนย์นครแล้ว
                             </button>
-                          ) : (
                             <button
                               type="button"
-                              onClick={() => openDocModal(job)}
-                              disabled={actionDisabled || isDocGenerating}
-                              className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                              onClick={() => handleNotRequired(job)}
+                              disabled={actionDisabled}
+                              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                             >
-                              {isDocGenerating
-                                ? "กำลังสร้าง..."
-                                : "สร้างเอกสารดับไฟ"}
+                              {actionDisabled
+                                ? "กำลังบันทึก..."
+                                : "ไม่ต้องแจ้งศูนย์นคร"}
                             </button>
-                          )}
-                        </>
-                      )}
-                      {showSocialButton ? (
-                        <button
-                          type="button"
-                          onClick={() => setSocialJob(job)}
-                          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
-                        >
-                          {socialStatus === "POSTED"
-                            ? "Posted แล้วสื่อ Social"
-                            : "รออนุมัติ"}
-                        </button>
-                      ) : null}
-                      {showNoticeButton ? (
-                        <button
-                          type="button"
-                          onClick={() => setNoticeJob(job)}
-                          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
-                        >
-                          {noticeStatus === "SCHEDULED"
-                            ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                            : "แจ้งหนังสือดับไฟ"}
-                        </button>
-                      ) : null}
-                    </div>
+                          </>
+                        ) : (
+                          <>
+                            {isDocGenerated ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  window.open(job.doc_url!, "_blank")
+                                }
+                                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 sm:w-auto"
+                              >
+                                พิมพ์เอกสาร
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openDocModal(job)}
+                                disabled={actionDisabled || isDocGenerating}
+                                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                              >
+                                {isDocGenerating
+                                  ? "กำลังสร้าง..."
+                                  : "สร้างเอกสารดับไฟ"}
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {showSocialButton ? (
+                          <button
+                            type="button"
+                            onClick={() => setSocialJob(job)}
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                          >
+                            {socialStatus === "POSTED"
+                              ? "Posted แล้วสื่อ Social"
+                              : "รออนุมัติ"}
+                          </button>
+                        ) : null}
+                        {showNoticeButton ? (
+                          <button
+                            type="button"
+                            onClick={() => setNoticeJob(job)}
+                            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                          >
+                            {noticeStatus === "SCHEDULED"
+                              ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                              : "แจ้งหนังสือดับไฟ"}
+                          </button>
+                        ) : null}
+                        {canCloseJob ? (
+                          <button
+                            type="button"
+                            onClick={() => openCloseModal(job)}
+                            className="w-full rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-400 sm:w-auto"
+                          >
+                            ปิดงาน
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   {(isNotified || isNotRequired) && (
                     <div className="text-sm text-slate-600">
@@ -890,6 +1030,41 @@ export default function DashboardPage() {
         }}
         onJobUpdate={handleNoticeJobUpdate}
       />
+
+      <Modal
+        isOpen={Boolean(closeJob)}
+        title="ยืนยันปิดงาน?"
+        onClose={() => setCloseJob(null)}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600">
+            ปิดงานแล้วจะถูกย้ายไปที่ &quot;งานที่ปิดแล้ว&quot;
+            และไม่สามารถแก้ไขได้
+          </p>
+          {closeError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {closeError}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setCloseJob(null)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseJob}
+              disabled={closeSaving}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
