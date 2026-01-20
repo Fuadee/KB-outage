@@ -52,16 +52,27 @@ export default function NoticeScheduleModal({
   const handleSubmit = async () => {
     if (!job) return;
     const nextErrors: typeof errors = {};
+    const trimmedMymapsUrl = mymapsUrl.trim();
     if (!noticeDate) {
       nextErrors.noticeDate = "กรุณาระบุวันที่จะไปดำเนินการแจ้ง";
     }
     if (!noticeBy.trim()) {
       nextErrors.noticeBy = "กรุณาระบุผู้แจ้ง";
     }
-    if (!mymapsUrl.trim()) {
+    if (!trimmedMymapsUrl) {
       nextErrors.mymapsUrl = "กรุณาระบุลิ้ง my map";
-    } else if (!/^https?:\/\//i.test(mymapsUrl.trim())) {
-      nextErrors.mymapsUrl = "ลิ้งต้องขึ้นต้นด้วย http";
+    } else {
+      const normalizedMymapsUrl = /^https?:\/\//i.test(trimmedMymapsUrl)
+        ? trimmedMymapsUrl
+        : `https://${trimmedMymapsUrl}`;
+      try {
+        const parsedUrl = new URL(normalizedMymapsUrl);
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+          throw new Error("invalid protocol");
+        }
+      } catch {
+        nextErrors.mymapsUrl = "ลิ้งไม่ถูกต้อง";
+      }
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -73,11 +84,14 @@ export default function NoticeScheduleModal({
     setErrors({});
 
     try {
+      const normalizedMymapsUrl = /^https?:\/\//i.test(trimmedMymapsUrl)
+        ? trimmedMymapsUrl
+        : `https://${trimmedMymapsUrl}`;
       const payload = {
         jobId: job.id,
         notice_date: noticeDate,
         notice_by: noticeBy.trim(),
-        mymaps_url: mymapsUrl.trim()
+        mymaps_url: normalizedMymapsUrl
       };
       const response = await fetch("/api/jobs/notice-schedule", {
         method: "POST",

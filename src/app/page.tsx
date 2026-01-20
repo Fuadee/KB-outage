@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import ExternalMapLink from "@/components/ExternalMapLink";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
@@ -800,6 +801,19 @@ export default function DashboardPage() {
                         ) : null}
                       </div>
                     ) : null}
+                  </div>
+                  <div className="grid gap-2 text-xs text-slate-500">
+                    <div className="flex flex-col gap-1">
+                      <span>ลิ้ง Google Map</span>
+                      <ExternalMapLink
+                        url={job.map_link ?? undefined}
+                        label="เปิด Google Map"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span>ลิ้ง My Map</span>
+                      <ExternalMapLink url={job.mymaps_url ?? undefined} />
+                    </div>
                   </div>
                   {(isNotified || isNotRequired) && (
                     <div className="text-sm text-slate-600">
