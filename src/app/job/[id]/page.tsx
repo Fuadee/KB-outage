@@ -6,7 +6,7 @@ import Link from "next/link";
 import ExternalMapLink from "@/components/ExternalMapLink";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import Modal from "@/components/Modal";
-import { deleteJob, getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
+import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function JobDetailPage() {
@@ -91,13 +91,33 @@ export default function JobDetailPage() {
     if (job?.is_closed) return;
     setSaving(true);
     setError(null);
-    const { error: deleteError } = await deleteJob(params.id);
-    if (deleteError) {
-      setError(deleteError.message);
+    try {
+      const response = await fetch(`/api/jobs/${params.id}/delete`, {
+        method: "DELETE"
+      });
+      const result = await response.json().catch(() => null);
+      if (process.env.NODE_ENV !== "production") {
+        console.info("Delete job response", { response, result });
+      }
+      if (!response.ok || !result?.ok || result.deletedCount === 0) {
+        const message =
+          result?.error ?? "ลบไม่สำเร็จ (สิทธิไม่อนุญาตหรือไม่พบรายการ)";
+        setError(message);
+        setToast({ message, tone: "error" });
+        setSaving(false);
+        return;
+      }
+      router.push("/");
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error
+          ? deleteError.message
+          : "ลบไม่สำเร็จ (สิทธิไม่อนุญาตหรือไม่พบรายการ)";
+      setError(message);
+      setToast({ message, tone: "error" });
+    } finally {
       setSaving(false);
-      return;
     }
-    router.push("/");
   };
 
   const handleNoticeJobUpdate = (patch: Partial<OutageJob>) => {
