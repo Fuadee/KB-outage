@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import ExternalMapLink from "@/components/ExternalMapLink";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
+import SegmentedFilter from "@/components/SegmentedFilter";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
+import StatusBadge from "@/components/StatusBadge";
 import {
   listJobs,
   OutageJob,
@@ -19,6 +21,14 @@ import {
   getUrgencyStyles,
   parseLocalDate
 } from "@/lib/dateUtils";
+import {
+  cardBase,
+  ghostBtn,
+  inputBase,
+  pageBg,
+  primaryBtn,
+  secondaryBtn
+} from "@/lib/ui/classes";
 
 type FilterOption = "all" | "green" | "yellow" | "red";
 type TabOption = "active" | "closed";
@@ -518,159 +528,138 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Krabi Outage Tracker</h1>
-            <p className="text-sm text-slate-500">
-              ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            {userEmail ? (
-              <span className="text-xs font-medium text-slate-500">
-                {userEmail}
-              </span>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/new"
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
-              >
-                + สร้างงาน
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
-              >
-                ออกจากระบบ
-              </button>
+    <div className={pageBg}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-5 rounded-2xl border border-slate-200/60 bg-white/80 p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                Krabi Outage Tracker
+              </h1>
+              <p className="text-sm text-slate-500">
+                ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              {userEmail ? (
+                <span className="text-xs font-medium text-slate-500">
+                  {userEmail}
+                </span>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Link href="/new" className={primaryBtn}>
+                  + สร้างงาน
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className={secondaryBtn}
+                >
+                  ออกจากระบบ
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex w-full max-w-md flex-col gap-2">
-            <label className="text-sm font-medium text-slate-600">
-              ค้นหาอุปกรณ์
-            </label>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="กรอกรหัสอุปกรณ์"
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-slate-400"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex w-full max-w-md flex-col gap-2">
+              <label className="text-sm font-medium text-slate-600">
+                ค้นหาอุปกรณ์
+              </label>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="กรอกรหัสอุปกรณ์"
+                className={inputBase}
+              />
+            </div>
+            <SegmentedFilter
+              options={[
                 { id: "all", label: "ทั้งหมด" },
                 { id: "green", label: "เขียว" },
                 { id: "yellow", label: "เหลือง" },
                 { id: "red", label: "แดง" }
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.id}
-                onClick={() => setFilter(option.id)}
-                className={`rounded-full px-4 py-1 text-sm font-medium transition ${
-                  filter === option.id
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+              ]}
+              value={filter}
+              onChange={setFilter}
+            />
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
+          <SegmentedFilter
+            options={[
               { id: "active", label: "กำลังดำเนินการ" },
               { id: "closed", label: "ปิดแล้ว" }
-            ] as const
-          ).map((option) => (
-            <button
-              key={option.id}
-              onClick={() => setTab(option.id)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                tab === option.id
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        </header>
+
+        {toast ? (
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm ${
+              toast.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+        {actionError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            {actionError}
+          </div>
+        ) : null}
+
+        <section className="grid gap-4">
+          {loading ? (
+            <div
+              className={`${cardBase} px-4 py-8 text-center text-sm text-slate-500`}
             >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      {toast ? (
-        <div
-          className={`rounded-xl border px-4 py-3 text-sm ${
-            toast.tone === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {toast.message}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-      {actionError ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          {actionError}
-        </div>
-      ) : null}
-
-      <section className="grid gap-4">
-        {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
-            กำลังโหลดข้อมูล...
-          </div>
-        ) : filteredJobs.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
-            ยังไม่มีงานที่ตรงกับตัวกรอง
-          </div>
-        ) : (
-          filteredJobs.map((job) => {
-            const urgency = getJobUrgency(job);
-            const status = getUrgencyStyles(urgency.color);
-            const nakhonStatus = job.nakhon_status ?? "PENDING";
-            const isPending = nakhonStatus === "PENDING";
-            const isNotified = nakhonStatus === "NOTIFIED";
-            const isNotRequired = nakhonStatus === "NOT_REQUIRED";
-            const actionDisabled = actionLoading[job.id] ?? false;
-            const isClosed = job.is_closed ?? false;
-            const isDocGenerated =
-              job.doc_status === "GENERATED" && Boolean(job.doc_url);
-            const isDocGenerating = job.doc_status === "GENERATING";
-            const socialStatus = job.social_status ?? "DRAFT";
-            const noticeStatus = job.notice_status ?? "NONE";
-            const showSocialButton =
-              socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
-            const showNoticeButton = socialStatus === "POSTED";
-            const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
-            return (
-              <div
-                key={job.id}
-                className="group flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md"
-              >
-                <div className={`w-2 ${status.strip}`} />
-                <div className="flex w-full flex-col gap-4 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+              กำลังโหลดข้อมูล...
+            </div>
+          ) : filteredJobs.length === 0 ? (
+            <div
+              className={`${cardBase} px-4 py-8 text-center text-sm text-slate-500`}
+            >
+              ยังไม่มีงานที่ตรงกับตัวกรอง
+            </div>
+          ) : (
+            filteredJobs.map((job) => {
+              const urgency = getJobUrgency(job);
+              const status = getUrgencyStyles(urgency.color);
+              const nakhonStatus = job.nakhon_status ?? "PENDING";
+              const isPending = nakhonStatus === "PENDING";
+              const isNotified = nakhonStatus === "NOTIFIED";
+              const isNotRequired = nakhonStatus === "NOT_REQUIRED";
+              const actionDisabled = actionLoading[job.id] ?? false;
+              const isClosed = job.is_closed ?? false;
+              const isDocGenerated =
+                job.doc_status === "GENERATED" && Boolean(job.doc_url);
+              const isDocGenerating = job.doc_status === "GENERATING";
+              const socialStatus = job.social_status ?? "DRAFT";
+              const noticeStatus = job.notice_status ?? "NONE";
+              const showSocialButton =
+                socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
+              const showNoticeButton = socialStatus === "POSTED";
+              const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
+              return (
+                <div
+                  key={job.id}
+                  className={`${cardBase} group flex items-stretch overflow-hidden transition hover:-translate-y-0.5`}
+                >
+                  <div className={`w-2 ${status.strip}`} />
+                  <div className="flex w-full flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
                     <Link
                       href={`/job/${job.id}`}
-                      className="flex min-w-[240px] flex-1 flex-col gap-3"
+                      className="flex min-w-[240px] flex-1 flex-col gap-4"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-col">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-col gap-1">
                           <span className="text-sm text-slate-500">
                             {parseLocalDate(job.outage_date).toLocaleDateString(
                               "th-TH",
@@ -685,11 +674,7 @@ export default function DashboardPage() {
                             {urgency.label}
                           </span>
                         </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${status.badge}`}
-                        >
-                          {urgency.color}
-                        </span>
+                        <StatusBadge status={urgency.color} label={urgency.color} />
                       </div>
                       {isClosed ? (
                         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
@@ -710,24 +695,63 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       ) : null}
-                      <div>
-                        <p className="text-lg font-semibold text-slate-900">
+                      <div className="space-y-1">
+                        <p className="text-lg font-semibold tracking-tight text-slate-900">
                           {job.equipment_code}
                         </p>
                         <p className="text-sm text-slate-600">
                           {job.note?.trim() || "ไม่มีหมายเหตุ"}
                         </p>
                       </div>
+                      <div className="grid gap-3 text-xs text-slate-500 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <span>ลิ้ง Google Map</span>
+                          <ExternalMapLink
+                            url={job.map_link ?? undefined}
+                            label="เปิด Google Map"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span>ลิ้ง My Map</span>
+                          <ExternalMapLink url={job.mymaps_url ?? undefined} />
+                        </div>
+                      </div>
+                      {(isNotified || isNotRequired) && (
+                        <div className="text-sm text-slate-600">
+                          {isNotified ? (
+                            <>
+                              แจ้งศูนย์นครแล้ว:{" "}
+                              <span className="font-medium text-slate-800">
+                                {job.nakhon_notified_date
+                                  ? parseLocalDate(
+                                      job.nakhon_notified_date
+                                    ).toLocaleDateString("th-TH", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric"
+                                    })
+                                  : "-"}
+                              </span>{" "}
+                              | เลขที่บันทึก:{" "}
+                              <span className="font-medium text-slate-800">
+                                {job.nakhon_memo_no ?? "-"}
+                              </span>
+                            </>
+                          ) : (
+                            <span>ไม่ต้องแจ้งศูนย์นคร</span>
+                          )}
+                        </div>
+                      )}
                     </Link>
 
                     {!isClosed ? (
-                      <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
+                      <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px]">
                         {isPending ? (
                           <>
                             <button
                               type="button"
                               onClick={() => openNotifiedModal(job)}
-                              className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
+                              className={secondaryBtn}
                             >
                               แจ้งศูนย์นครแล้ว
                             </button>
@@ -735,7 +759,7 @@ export default function DashboardPage() {
                               type="button"
                               onClick={() => handleNotRequired(job)}
                               disabled={actionDisabled}
-                              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                              className={`${ghostBtn} disabled:cursor-not-allowed disabled:opacity-60`}
                             >
                               {actionDisabled
                                 ? "กำลังบันทึก..."
@@ -750,7 +774,7 @@ export default function DashboardPage() {
                                 onClick={() =>
                                   window.open(job.doc_url!, "_blank")
                                 }
-                                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 sm:w-auto"
+                                className={secondaryBtn}
                               >
                                 พิมพ์เอกสาร
                               </button>
@@ -759,7 +783,7 @@ export default function DashboardPage() {
                                 type="button"
                                 onClick={() => openDocModal(job)}
                                 disabled={actionDisabled || isDocGenerating}
-                                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                                className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
                               >
                                 {isDocGenerating
                                   ? "กำลังสร้าง..."
@@ -772,7 +796,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => setSocialJob(job)}
-                            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                            className={secondaryBtn}
                           >
                             {socialStatus === "POSTED"
                               ? "Posted แล้วสื่อ Social"
@@ -783,7 +807,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => setNoticeJob(job)}
-                            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                            className={secondaryBtn}
                           >
                             {noticeStatus === "SCHEDULED"
                               ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
@@ -794,7 +818,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => openCloseModal(job)}
-                            className="w-full rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-400 sm:w-auto"
+                            className={secondaryBtn}
                           >
                             ปิดงาน
                           </button>
@@ -802,53 +826,13 @@ export default function DashboardPage() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="grid gap-2 text-xs text-slate-500">
-                    <div className="flex flex-col gap-1">
-                      <span>ลิ้ง Google Map</span>
-                      <ExternalMapLink
-                        url={job.map_link ?? undefined}
-                        label="เปิด Google Map"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span>ลิ้ง My Map</span>
-                      <ExternalMapLink url={job.mymaps_url ?? undefined} />
-                    </div>
-                  </div>
-                  {(isNotified || isNotRequired) && (
-                    <div className="text-sm text-slate-600">
-                      {isNotified ? (
-                        <>
-                          แจ้งศูนย์นครแล้ว:{" "}
-                          <span className="font-medium text-slate-800">
-                            {job.nakhon_notified_date
-                              ? parseLocalDate(
-                                  job.nakhon_notified_date
-                                ).toLocaleDateString("th-TH", {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric"
-                                })
-                              : "-"}
-                          </span>{" "}
-                          | เลขที่บันทึก:{" "}
-                          <span className="font-medium text-slate-800">
-                            {job.nakhon_memo_no ?? "-"}
-                          </span>
-                        </>
-                      ) : (
-                        <span>ไม่ต้องแจ้งศูนย์นคร</span>
-                      )}
-                    </div>
-                  )}
                 </div>
-              </div>
-            );
-          })
-        )}
-      </section>
+              );
+            })
+          )}
+        </section>
 
-      <Modal
+        <Modal
         isOpen={Boolean(selectedJob)}
         title="แจ้งศูนย์นครแล้ว"
         onClose={closeModal}
@@ -860,7 +844,7 @@ export default function DashboardPage() {
               type="date"
               value={notifiedDate}
               onChange={(event) => setNotifiedDate(event.target.value)}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {modalErrors.date ? (
@@ -873,7 +857,7 @@ export default function DashboardPage() {
               type="text"
               value={memoNo}
               onChange={(event) => setMemoNo(event.target.value)}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {modalErrors.memoNo ? (
@@ -889,7 +873,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={closeModal}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+              className={secondaryBtn}
             >
               ยกเลิก
             </button>
@@ -897,15 +881,15 @@ export default function DashboardPage() {
               type="button"
               onClick={handleSubmitNotified}
               disabled={modalSaving}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {modalSaving ? "กำลังบันทึก..." : "ตกลง"}
             </button>
           </div>
         </div>
-      </Modal>
+        </Modal>
 
-      <Modal
+        <Modal
         isOpen={Boolean(docJob)}
         title="สร้างเอกสารดับไฟ"
         onClose={closeDocModal}
@@ -922,7 +906,7 @@ export default function DashboardPage() {
                   doc_issue_date: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_issue_date ? (
@@ -942,7 +926,7 @@ export default function DashboardPage() {
                   doc_purpose: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_purpose ? (
@@ -962,7 +946,7 @@ export default function DashboardPage() {
                   doc_area_title: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_area_title ? (
@@ -982,7 +966,7 @@ export default function DashboardPage() {
                   doc_time_start: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_time_start ? (
@@ -1002,7 +986,7 @@ export default function DashboardPage() {
                   doc_time_end: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_time_end ? (
@@ -1022,7 +1006,7 @@ export default function DashboardPage() {
                 }))
               }
               rows={3}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.doc_area_detail ? (
@@ -1042,7 +1026,7 @@ export default function DashboardPage() {
                   map_link: event.target.value
                 }))
               }
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
+              className={inputBase}
               required
             />
             {docErrors.map_link ? (
@@ -1060,7 +1044,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={closeDocModal}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+              className={secondaryBtn}
             >
               ยกเลิก
             </button>
@@ -1068,22 +1052,22 @@ export default function DashboardPage() {
               type="button"
               onClick={handleCreateDoc}
               disabled={docSaving}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {docSaving ? "กำลังสร้าง..." : "สร้าง"}
             </button>
           </div>
         </div>
-      </Modal>
+        </Modal>
 
-      <SocialPostPreviewModal
+        <SocialPostPreviewModal
         job={socialJob}
         isOpen={Boolean(socialJob)}
         onClose={closeSocialModal}
         onJobUpdate={handleSocialJobUpdate}
       />
 
-      <NoticeScheduleModal
+        <NoticeScheduleModal
         job={noticeJob}
         open={Boolean(noticeJob)}
         onOpenChange={(nextOpen) => {
@@ -1094,7 +1078,7 @@ export default function DashboardPage() {
         onJobUpdate={handleNoticeJobUpdate}
       />
 
-      <Modal
+        <Modal
         isOpen={Boolean(closeJob)}
         title="ยืนยันปิดงาน?"
         onClose={() => setCloseJob(null)}
@@ -1113,7 +1097,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setCloseJob(null)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+              className={secondaryBtn}
             >
               ยกเลิก
             </button>
@@ -1121,13 +1105,14 @@ export default function DashboardPage() {
               type="button"
               onClick={handleCloseJob}
               disabled={closeSaving}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
             </button>
           </div>
         </div>
-      </Modal>
+        </Modal>
+      </div>
     </div>
   );
 }

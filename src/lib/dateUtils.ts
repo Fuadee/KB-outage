@@ -36,21 +36,21 @@ export function getStatusLabel(daysLeft: number) {
 export function getUrgencyStyles(color: UrgencyColor) {
   if (color === "RED") {
     return {
-      strip: "bg-red-500",
-      badge: "bg-red-50 text-red-700 ring-red-200",
-      text: "text-red-700"
+      strip: "bg-rose-200/80",
+      badge: "border border-rose-200/80 bg-rose-50 text-rose-700",
+      text: "text-rose-700"
     };
   }
   if (color === "YELLOW") {
     return {
-      strip: "bg-amber-400",
-      badge: "bg-amber-50 text-amber-700 ring-amber-200",
+      strip: "bg-amber-200/80",
+      badge: "border border-amber-200/80 bg-amber-50 text-amber-700",
       text: "text-amber-700"
     };
   }
   return {
-    strip: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    strip: "bg-emerald-200/80",
+    badge: "border border-emerald-200/80 bg-emerald-50 text-emerald-700",
     text: "text-emerald-700"
   };
 }
