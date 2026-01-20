@@ -274,11 +274,15 @@ export async function generateOutageDocxBuffer({
 
   let imageBuffer: Buffer | null = null;
   try {
-    imageBuffer = await QRCode.toBuffer(payload.map_link, {
+    const buffer = await QRCode.toBuffer(payload.map_link, {
       type: "png",
       width: 120,
       margin: 1
     });
+    if (!buffer || buffer.length === 0) {
+      throw new Error("QR buffer empty");
+    }
+    imageBuffer = buffer;
     console.info(`QR bytes: ${imageBuffer.length}`);
   } catch (error) {
     console.warn("Failed to generate QR code, falling back to text.", error);
@@ -307,9 +311,7 @@ export async function generateOutageDocxBuffer({
   console.info("PASS1 OK");
 
   if (!imageBuffer) {
-    throw new Error(
-      "QR image generation failed; cannot replace placeholder image2.png."
-    );
+    return pass1Buffer;
   }
 
   const zip = new PizZip(pass1Buffer);
