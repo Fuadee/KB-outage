@@ -135,7 +135,7 @@ export default function SocialPostPreviewModal({
         <div className="flex flex-wrap justify-end gap-3">
           <button
             type="button"
-            onClick={handleCopy}
+            onClick={() => void handleCopy(true)}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
           >
             คัดลอกข้อความ
