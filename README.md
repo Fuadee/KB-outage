@@ -38,13 +38,14 @@ Next.js (App Router) + Tailwind + TypeScript dashboard for tracking planned outa
 2. Run the SQL in `sql/001_init.sql` using the Supabase SQL editor.
 3. Run the SQL in `sql/002_nakhon_and_doc.sql` to add the นคร + เอกสาร workflow fields.
 4. Run the SQL in `sql/003_doc_fields.sql` to add Google Doc generation fields.
-5. Copy `.env.example` to `.env.local` and set the Supabase URL + anon key.
-6. Configure Google Docs integration:
+5. Run the SQL in `sql/004_social_post.sql` to add the social post workflow fields.
+6. Copy `.env.example` to `.env.local` and set the Supabase URL + anon key.
+7. Configure Google Docs integration:
    - Create a Google Cloud project and enable the Google Drive API + Google Docs API.
    - Create a Service Account and download its JSON key.
    - Share the Google Doc template with the Service Account email.
    - Add the Google env vars from `.env.example` (service account email, private key, template ID, and optional folder ID).
-7. Install dependencies and start the dev server:
+8. Install dependencies and start the dev server:
 
 ```bash
 npm install
@@ -112,6 +113,10 @@ Placeholders list:
 - `{{MAP_LINK}}`
 - `{{OUTAGE_DATE}}`
 - `{{EQUIPMENT_CODE}}`
+
+## Social Post Flow
+
+After creating a document, the dashboard will mark the job as `PENDING_APPROVAL` for social posting. Use the “รออนุมัติ” button on the job card to open the preview modal, copy the text, and finalize posting. Once posted, the job is marked as `POSTED` and keeps the preview text stored in the database for future access.
 
 ## Notes
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/Modal";
+import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import {
   listJobs,
   OutageJob,
@@ -65,6 +66,7 @@ export default function DashboardPage() {
   }>({});
   const [modalSaving, setModalSaving] = useState(false);
   const [docJob, setDocJob] = useState<OutageJob | null>(null);
+  const [socialJob, setSocialJob] = useState<OutageJob | null>(null);
   const [docForm, setDocForm] = useState<DocForm>({
     doc_issue_date: "",
     doc_purpose: "",
@@ -118,6 +120,10 @@ export default function DashboardPage() {
     });
     setDocErrors({});
     setDocSaving(false);
+  };
+
+  const closeSocialModal = () => {
+    setSocialJob(null);
   };
 
   const openNotifiedModal = (job: OutageJob) => {
@@ -310,6 +316,27 @@ export default function DashboardPage() {
             : item
         )
       );
+      try {
+        const socialResponse = await fetch("/api/jobs/social-pending", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: docJob.id })
+        });
+        const socialResult = await socialResponse.json().catch(() => null);
+        if (socialResponse.ok && socialResult?.ok) {
+          setJobs((prev) =>
+            prev.map((item) =>
+              item.id === docJob.id
+                ? { ...item, social_status: "PENDING_APPROVAL" }
+                : item
+            )
+          );
+        } else {
+          console.warn("Failed to set social pending status", socialResult);
+        }
+      } catch (socialError) {
+        console.warn("Failed to set social pending status", socialError);
+      }
       closeDocModal();
     } catch (submitError) {
       console.error(submitError);
@@ -337,6 +364,18 @@ export default function DashboardPage() {
         parseLocalDate(b.outage_date).getTime()
       );
   }, [jobs, query, filter]);
+
+  const handleSocialJobUpdate = (
+    jobId: string,
+    patch: Partial<OutageJob>
+  ) => {
+    setJobs((prev) =>
+      prev.map((item) => (item.id === jobId ? { ...item, ...patch } : item))
+    );
+    setSocialJob((prev) =>
+      prev?.id === jobId ? { ...prev, ...patch } : prev
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -424,6 +463,9 @@ export default function DashboardPage() {
             const isDocGenerated =
               job.doc_status === "GENERATED" && Boolean(job.doc_url);
             const isDocGenerating = job.doc_status === "GENERATING";
+            const socialStatus = job.social_status ?? "DRAFT";
+            const showSocialButton =
+              socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
             return (
               <div
                 key={job.id}
@@ -513,6 +555,17 @@ export default function DashboardPage() {
                           )}
                         </>
                       )}
+                      {showSocialButton ? (
+                        <button
+                          type="button"
+                          onClick={() => setSocialJob(job)}
+                          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                        >
+                          {socialStatus === "POSTED"
+                            ? "Posted แล้วสื่อ Social"
+                            : "รออนุมัติ"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   {(isNotified || isNotRequired) && (
@@ -775,6 +828,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </Modal>
+
+      <SocialPostPreviewModal
+        job={socialJob}
+        isOpen={Boolean(socialJob)}
+        onClose={closeSocialModal}
+        onJobUpdate={handleSocialJobUpdate}
+      />
     </div>
   );
 }
