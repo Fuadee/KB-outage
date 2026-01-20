@@ -73,7 +73,7 @@ const getNextAction = (job: OutageJob): ActionKey => {
   }
 
   const isDocGenerated =
-    job.doc_status === "GENERATED" && Boolean(job.doc_url);
+    job.doc_status === "GENERATED" || Boolean(job.doc_generated_at);
   if (!isDocGenerated) {
     return "create_doc";
   }
@@ -684,7 +684,8 @@ export default function DashboardPage() {
               const actionDisabled = actionLoading[job.id] ?? false;
               const isClosed = job.is_closed ?? false;
               const isDocGenerated =
-                job.doc_status === "GENERATED" && Boolean(job.doc_url);
+                job.doc_status === "GENERATED" ||
+                Boolean(job.doc_generated_at);
               const isDocGenerating = job.doc_status === "GENERATING";
               const socialStatus = job.social_status ?? "DRAFT";
               const noticeStatus = job.notice_status ?? "NONE";
@@ -824,15 +825,25 @@ export default function DashboardPage() {
                         ) : (
                           <>
                             {isDocGenerated ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  window.open(job.doc_url!, "_blank")
-                                }
-                                className={actionClass("create_doc")}
-                              >
-                                พิมพ์เอกสาร
-                              </button>
+                              job.doc_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.open(job.doc_url, "_blank")
+                                  }
+                                  className={actionClass("create_doc")}
+                                >
+                                  พิมพ์เอกสาร
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openDocModal(job)}
+                                  className={actionBtnSecondary}
+                                >
+                                  ดาวน์โหลดเอกสารอีกครั้ง
+                                </button>
+                              )
                             ) : (
                               <button
                                 type="button"
