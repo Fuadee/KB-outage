@@ -18,6 +18,15 @@ const THAI_MONTHS = [
   "พฤศจิกายน",
   "ธันวาคม"
 ];
+const THAI_WEEKDAYS = [
+  "วันอาทิตย์",
+  "วันจันทร์",
+  "วันอังคาร",
+  "วันพุธ",
+  "วันพฤหัสบดี",
+  "วันศุกร์",
+  "วันเสาร์"
+];
 
 const formatThaiDateBE = (isoDate) => {
   if (!isoDate?.trim()) {
@@ -61,6 +70,55 @@ const formatThaiDateBE = (isoDate) => {
 
   const beYear = year + 543;
   return `${day} ${thaiMonth} ${beYear}`;
+};
+
+const formatThaiDateWithWeekdayBE = (isoDate) => {
+  if (typeof isoDate !== "string" || !isoDate.trim()) {
+    return "";
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+  if (!match) {
+    return "";
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return "";
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return "";
+  }
+
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() !== month - 1 ||
+    utcDate.getUTCDate() !== day
+  ) {
+    return "";
+  }
+
+  const thaiMonth = THAI_MONTHS[month - 1];
+  if (!thaiMonth) {
+    return "";
+  }
+
+  const weekday = THAI_WEEKDAYS[utcDate.getUTCDay()];
+  if (!weekday) {
+    return "";
+  }
+
+  const beYear = year + 543;
+  return `${weekday}ที่ ${day} ${thaiMonth} ${beYear}`;
 };
 
 const OUTAGE_TEMPLATE_PATH = path.join(
@@ -127,9 +185,13 @@ async function generateOutageDocxBuffer({ payload, job }) {
   }
 
   const doc_issue_date_th = formatThaiDateBE(payload.doc_issue_date);
+  const doc_outage_date_full_th = formatThaiDateWithWeekdayBE(
+    job?.outage_date ?? ""
+  );
   const baseData = {
     doc_issue_date: payload.doc_issue_date,
     doc_issue_date_th,
+    doc_outage_date_full_th,
     DOC_ISSUE_DATE: payload.doc_issue_date,
     DOC_PURPOSE: payload.doc_purpose,
     DOC_AREA_TITLE: payload.doc_area_title,
@@ -171,5 +233,6 @@ async function generateOutageDocxBuffer({ payload, job }) {
 module.exports = {
   generateOutageDocxBuffer,
   formatThaiDateBE,
+  formatThaiDateWithWeekdayBE,
   OUTAGE_TEMPLATE_PATH
 };
