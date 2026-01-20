@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
+import Modal from "@/components/Modal";
 import { deleteJob, getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function JobDetailPage() {
   const router = useRouter();
@@ -17,6 +19,13 @@ export default function JobDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<OutageJob | null>(null);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "error";
+  } | null>(null);
 
   useEffect(() => {
     const loadJob = async () => {
@@ -40,9 +49,18 @@ export default function JobDetailPage() {
     loadJob();
   }, [params.id]);
 
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 2000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
   const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!params.id) return;
+    if (job?.is_closed) return;
     setError(null);
 
     if (!outageDate || !equipmentCode.trim()) {
@@ -69,6 +87,7 @@ export default function JobDetailPage() {
 
   const handleDelete = async () => {
     if (!params.id) return;
+    if (job?.is_closed) return;
     setSaving(true);
     setError(null);
     const { error: deleteError } = await deleteJob(params.id);
@@ -84,6 +103,54 @@ export default function JobDetailPage() {
     setJob((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
+  const handleCloseJob = async () => {
+    if (!job) return;
+    setCloseSaving(true);
+    setCloseError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setCloseError("กรุณาเข้าสู่ระบบก่อนปิดงาน");
+      setCloseSaving(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/close`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ปิดงานไม่สำเร็จ กรุณาลองใหม่");
+      }
+      setToast({ message: "✅ ปิดงานเรียบร้อย", tone: "success" });
+      setJob((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_closed: true,
+              closed_at: result.closed_at ?? new Date().toISOString()
+            }
+          : prev
+      );
+      setCloseOpen(false);
+    } catch (closeError) {
+      const message =
+        closeError instanceof Error
+          ? closeError.message
+          : "ปิดงานไม่สำเร็จ กรุณาลองใหม่";
+      setCloseError(message);
+      setToast({ message, tone: "error" });
+    } finally {
+      setCloseSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
@@ -92,15 +159,50 @@ export default function JobDetailPage() {
     );
   }
 
+  const isClosed = job?.is_closed ?? false;
+  const canCloseJob =
+    (job?.notice_status ?? "NONE") === "SCHEDULED" && !isClosed;
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">แก้ไขงาน</h1>
+        <h1 className="text-2xl font-semibold">
+          {isClosed ? "รายละเอียดงาน" : "แก้ไขงาน"}
+        </h1>
         <p className="text-sm text-slate-500">
-          ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ
+          {isClosed
+            ? "งานนี้ถูกปิดแล้วและไม่สามารถแก้ไขได้"
+            : "ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ"}
         </p>
-        {job?.social_status === "POSTED" ? (
-          <div className="mt-2 flex flex-wrap gap-2">
+        {toast ? (
+          <div
+            className={`mt-2 rounded-xl border px-4 py-3 text-sm ${
+              toast.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ) : null}
+        {isClosed ? (
+          <div className="mt-2 text-sm text-slate-600">
+            ปิดเมื่อ{" "}
+            <span className="font-medium text-slate-800">
+              {job?.closed_at
+                ? new Date(job.closed_at).toLocaleString("th-TH", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })
+                : "-"}
+            </span>
+          </div>
+        ) : null}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {job?.social_status === "POSTED" && !isClosed ? (
             <button
               type="button"
               onClick={() => setNoticeOpen(true)}
@@ -110,8 +212,20 @@ export default function JobDetailPage() {
                 ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
                 : "แจ้งหนังสือดับไฟ"}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          {canCloseJob ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCloseError(null);
+                setCloseOpen(true);
+              }}
+              className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-400"
+            >
+              ปิดงาน
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <form
@@ -124,6 +238,7 @@ export default function JobDetailPage() {
             type="date"
             value={outageDate}
             onChange={(event) => setOutageDate(event.target.value)}
+            disabled={isClosed}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
             required
           />
@@ -134,6 +249,7 @@ export default function JobDetailPage() {
             type="text"
             value={equipmentCode}
             onChange={(event) => setEquipmentCode(event.target.value)}
+            disabled={isClosed}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
             required
           />
@@ -144,6 +260,7 @@ export default function JobDetailPage() {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={4}
+            disabled={isClosed}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
           />
         </label>
@@ -155,21 +272,25 @@ export default function JobDetailPage() {
         ) : null}
 
         <div className="flex flex-wrap gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {saving ? "กำลังบันทึก..." : "บันทึก"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={saving}
-            className="rounded-xl border border-red-200 px-5 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            ลบงาน
-          </button>
+          {!isClosed ? (
+            <>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {saving ? "กำลังบันทึก..." : "บันทึก"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving}
+                className="rounded-xl border border-red-200 px-5 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                ลบงาน
+              </button>
+            </>
+          ) : null}
           <Link
             href="/"
             className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
@@ -185,6 +306,41 @@ export default function JobDetailPage() {
         onOpenChange={setNoticeOpen}
         onJobUpdate={(_, patch) => handleNoticeJobUpdate(patch)}
       />
+
+      <Modal
+        isOpen={closeOpen}
+        title="ยืนยันปิดงาน?"
+        onClose={() => setCloseOpen(false)}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600">
+            ปิดงานแล้วจะถูกย้ายไปที่ &quot;งานที่ปิดแล้ว&quot;
+            และไม่สามารถแก้ไขได้
+          </p>
+          {closeError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {closeError}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setCloseOpen(false)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseJob}
+              disabled={closeSaving}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
