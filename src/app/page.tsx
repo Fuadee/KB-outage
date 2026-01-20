@@ -828,9 +828,17 @@ export default function DashboardPage() {
                               job.doc_url ? (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    window.open(job.doc_url, "_blank")
-                                  }
+                                  onClick={() => {
+                                    if (job.doc_url) {
+                                      window.open(
+                                        job.doc_url,
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      );
+                                      return;
+                                    }
+                                    openDocModal(job);
+                                  }}
                                   className={actionClass("create_doc")}
                                 >
                                   พิมพ์เอกสาร
