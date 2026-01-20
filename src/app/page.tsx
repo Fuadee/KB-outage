@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/Modal";
+import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import {
   listJobs,
@@ -67,6 +68,7 @@ export default function DashboardPage() {
   const [modalSaving, setModalSaving] = useState(false);
   const [docJob, setDocJob] = useState<OutageJob | null>(null);
   const [socialJob, setSocialJob] = useState<OutageJob | null>(null);
+  const [noticeJob, setNoticeJob] = useState<OutageJob | null>(null);
   const [docForm, setDocForm] = useState<DocForm>({
     doc_issue_date: "",
     doc_purpose: "",
@@ -124,6 +126,10 @@ export default function DashboardPage() {
 
   const closeSocialModal = () => {
     setSocialJob(null);
+  };
+
+  const closeNoticeModal = () => {
+    setNoticeJob(null);
   };
 
   const openNotifiedModal = (job: OutageJob) => {
@@ -377,6 +383,18 @@ export default function DashboardPage() {
     );
   };
 
+  const handleNoticeJobUpdate = (
+    jobId: string,
+    patch: Partial<OutageJob>
+  ) => {
+    setJobs((prev) =>
+      prev.map((item) => (item.id === jobId ? { ...item, ...patch } : item))
+    );
+    setNoticeJob((prev) =>
+      prev?.id === jobId ? { ...prev, ...patch } : prev
+    );
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm">
@@ -464,8 +482,10 @@ export default function DashboardPage() {
               job.doc_status === "GENERATED" && Boolean(job.doc_url);
             const isDocGenerating = job.doc_status === "GENERATING";
             const socialStatus = job.social_status ?? "DRAFT";
+            const noticeStatus = job.notice_status ?? "NONE";
             const showSocialButton =
               socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
+            const showNoticeButton = socialStatus === "POSTED";
             return (
               <div
                 key={job.id}
@@ -564,6 +584,17 @@ export default function DashboardPage() {
                           {socialStatus === "POSTED"
                             ? "Posted แล้วสื่อ Social"
                             : "รออนุมัติ"}
+                        </button>
+                      ) : null}
+                      {showNoticeButton ? (
+                        <button
+                          type="button"
+                          onClick={() => setNoticeJob(job)}
+                          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                        >
+                          {noticeStatus === "SCHEDULED"
+                            ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                            : "แจ้งหนังสือดับไฟ"}
                         </button>
                       ) : null}
                     </div>
@@ -834,6 +865,17 @@ export default function DashboardPage() {
         isOpen={Boolean(socialJob)}
         onClose={closeSocialModal}
         onJobUpdate={handleSocialJobUpdate}
+      />
+
+      <NoticeScheduleModal
+        job={noticeJob}
+        open={Boolean(noticeJob)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            closeNoticeModal();
+          }
+        }}
+        onJobUpdate={handleNoticeJobUpdate}
       />
     </div>
   );

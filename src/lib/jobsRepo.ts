@@ -23,6 +23,11 @@ export type OutageJob = {
   social_post_text: string | null;
   social_posted_at: string | null;
   social_approved_at: string | null;
+  notice_status: "NONE" | "SCHEDULED";
+  notice_date: string | null;
+  notice_by: string | null;
+  mymaps_url: string | null;
+  notice_scheduled_at: string | null;
   created_at: string;
   updated_at: string;
 };
