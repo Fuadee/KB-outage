@@ -28,6 +28,61 @@ type GenerateArgs = {
   job: Record<string, unknown>;
 };
 
+const THAI_MONTHS = [
+  "มกราคม",
+  "กุมภาพันธ์",
+  "มีนาคม",
+  "เมษายน",
+  "พฤษภาคม",
+  "มิถุนายน",
+  "กรกฎาคม",
+  "สิงหาคม",
+  "กันยายน",
+  "ตุลาคม",
+  "พฤศจิกายน",
+  "ธันวาคม"
+];
+
+export const formatThaiDateBE = (isoDate: string): string => {
+  if (!isoDate?.trim()) {
+    return "";
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+  if (!match) {
+    return "";
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return "";
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return "";
+  }
+
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() !== month - 1 ||
+    utcDate.getUTCDate() !== day
+  ) {
+    return "";
+  }
+
+  const thaiMonth = THAI_MONTHS[month - 1];
+  if (!thaiMonth) {
+    return "";
+  }
+
+  const beYear = year + 543;
+  return `${day} ${thaiMonth} ${beYear}`;
+};
+
 const containsInvalidXmlChars = (xml: string) =>
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xml) || xml.includes("\uFFFD");
 
@@ -175,7 +230,10 @@ export async function generateOutageDocxBuffer({
     console.warn("Failed to generate QR code, falling back to text.", error);
   }
 
+  const doc_issue_date_th = formatThaiDateBE(payload.doc_issue_date);
   const baseData = {
+    doc_issue_date: payload.doc_issue_date,
+    doc_issue_date_th,
     DOC_ISSUE_DATE: payload.doc_issue_date,
     DOC_PURPOSE: payload.doc_purpose,
     DOC_AREA_TITLE: payload.doc_area_title,
