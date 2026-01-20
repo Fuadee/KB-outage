@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
@@ -50,6 +51,7 @@ const getFilenameFromContentDisposition = (
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<OutageJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export default function DashboardPage() {
     message: string;
     tone: "success" | "error";
   } | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -109,6 +112,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserEmail(data.user?.email ?? null);
+    };
+
+    loadUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUserEmail(session?.user?.email ?? null);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -183,10 +205,10 @@ export default function DashboardPage() {
     setCloseError(null);
 
     const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setCloseError("กรุณาเข้าสู่ระบบก่อนปิดงาน");
+    if (!sessionData.session) {
       setCloseSaving(false);
+      setCloseJob(null);
+      router.push("/login");
       return;
     }
 
@@ -194,10 +216,15 @@ export default function DashboardPage() {
       const response = await fetch(`/api/jobs/${closeJob.id}/close`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         }
       });
+      if (response.status === 401) {
+        setCloseSaving(false);
+        setCloseJob(null);
+        router.push("/login");
+        return;
+      }
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) {
         throw new Error(result?.error ?? "ปิดงานไม่สำเร็จ กรุณาลองใหม่");
@@ -216,6 +243,12 @@ export default function DashboardPage() {
     } finally {
       setCloseSaving(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    await fetch("/api/auth/session", { method: "DELETE" });
+    router.push("/login");
   };
 
   const handleSubmitNotified = async () => {
@@ -493,12 +526,28 @@ export default function DashboardPage() {
               ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
             </p>
           </div>
-          <Link
-            href="/new"
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
-          >
-            + สร้างงาน
-          </Link>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            {userEmail ? (
+              <span className="text-xs font-medium text-slate-500">
+                {userEmail}
+              </span>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/new"
+                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+              >
+                + สร้างงาน
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+              >
+                ออกจากระบบ
+              </button>
+            </div>
+          </div>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex w-full max-w-md flex-col gap-2">
