@@ -109,10 +109,10 @@ export default function JobDetailPage() {
     setCloseError(null);
 
     const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setCloseError("กรุณาเข้าสู่ระบบก่อนปิดงาน");
+    if (!sessionData.session) {
       setCloseSaving(false);
+      setCloseOpen(false);
+      router.push("/login");
       return;
     }
 
@@ -120,10 +120,15 @@ export default function JobDetailPage() {
       const response = await fetch(`/api/jobs/${job.id}/close`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         }
       });
+      if (response.status === 401) {
+        setCloseSaving(false);
+        setCloseOpen(false);
+        router.push("/login");
+        return;
+      }
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) {
         throw new Error(result?.error ?? "ปิดงานไม่สำเร็จ กรุณาลองใหม่");

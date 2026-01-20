@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ANON_KEY =
-  process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function createSupabaseAdminClient() {
   if (!SUPABASE_URL) {
@@ -19,42 +18,28 @@ function createSupabaseAdminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
-function createSupabaseAuthClient() {
-  if (!SUPABASE_URL) {
-    throw new Error("Missing SUPABASE_URL env var.");
-  }
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error("Missing SUPABASE_ANON_KEY env var.");
-  }
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
 export async function POST(
   request: Request,
   context: { params: { id: string } }
 ) {
   try {
-    const authHeader = request.headers.get("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.replace("Bearer ", "").trim()
-      : "";
-
-    if (!token) {
+    const { accessToken } = getAuthTokens();
+    if (!accessToken) {
       return NextResponse.json(
-        { ok: false, error: "ต้องเข้าสู่ระบบก่อนปิดงาน" },
+        { ok: false, message: "UNAUTHENTICATED" },
         { status: 401 }
       );
     }
 
-    const authClient = createSupabaseAuthClient();
+    const authClient = createServerClient();
     const {
       data: { user },
       error: userError
-    } = await authClient.auth.getUser(token);
+    } = await authClient.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
-        { ok: false, error: "ไม่พบผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่" },
+        { ok: false, message: "UNAUTHENTICATED" },
         { status: 401 }
       );
     }
