@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { linkBase } from "@/lib/ui/classes";
 
 type ExternalMapLinkProps = {
   url?: string;
@@ -48,7 +49,7 @@ export default function ExternalMapLink({
         href={result.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`inline-flex items-center text-sm font-medium text-blue-600 underline transition hover:text-blue-700${sharedClassName}`}
+        className={`inline-flex items-center ${linkBase}${sharedClassName}`}
       >
         {label}
       </a>
