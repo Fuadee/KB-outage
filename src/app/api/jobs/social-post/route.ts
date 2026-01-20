@@ -24,7 +24,9 @@ function createSupabaseServerClient() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { jobId?: string | number };
-    console.info("Social post request body:", body);
+    if (process.env.NODE_ENV === "development") {
+      console.info("Social post request body:", body);
+    }
     const jobId = body?.jobId;
 
     if (!jobId) {
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     const { data: job, error: jobError } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, social_status, social_post_text, social_posted_at"
+        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, mymaps_url, notice_scheduled_at"
       )
       .eq("id", jobId)
       .single();
@@ -73,31 +75,66 @@ export async function POST(request: Request) {
         ok: true,
         preview_text: previewText,
         social_status: "POSTED",
-        social_posted_at: job.social_posted_at
+        social_post_text: job.social_post_text,
+        social_posted_at: job.social_posted_at,
+        job: {
+          social_status: "POSTED",
+          social_post_text: job.social_post_text,
+          social_posted_at: job.social_posted_at,
+          notice_status: job.notice_status,
+          notice_date: job.notice_date,
+          notice_by: job.notice_by,
+          mymaps_url: job.mymaps_url,
+          notice_scheduled_at: job.notice_scheduled_at
+        }
       });
     }
 
     const postedAt = job.social_posted_at ?? new Date().toISOString();
     const postText = previewText || buildSocialPostText(job);
 
-    const { error: updateError } = await supabase
+    const { data: updatedJob, error: updateError } = await supabase
       .from("outage_jobs")
       .update({
         social_status: "POSTED",
         social_post_text: postText,
         social_posted_at: postedAt
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .select(
+        "social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, mymaps_url, notice_scheduled_at"
+      )
+      .single();
 
     if (updateError) {
       throw new Error(updateError.message);
     }
 
+    if (process.env.NODE_ENV === "development") {
+      console.info("Social post updated job:", {
+        jobId,
+        social_status: updatedJob?.social_status,
+        social_posted_at: updatedJob?.social_posted_at,
+        notice_status: updatedJob?.notice_status
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       preview_text: postText,
-      social_status: "POSTED",
-      social_posted_at: postedAt
+      social_status: updatedJob?.social_status ?? "POSTED",
+      social_post_text: updatedJob?.social_post_text ?? postText,
+      social_posted_at: updatedJob?.social_posted_at ?? postedAt,
+      job: updatedJob ?? {
+        social_status: "POSTED",
+        social_post_text: postText,
+        social_posted_at: postedAt,
+        notice_status: job.notice_status,
+        notice_date: job.notice_date,
+        notice_by: job.notice_by,
+        mymaps_url: job.mymaps_url,
+        notice_scheduled_at: job.notice_scheduled_at
+      }
     });
   } catch (error) {
     console.error("Social post failed", error);
