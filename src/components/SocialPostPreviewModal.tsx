@@ -75,14 +75,28 @@ export default function SocialPostPreviewModal({
         throw new Error(result?.error ?? "ไม่สามารถโพสต์ข้อความได้");
       }
 
+      if (process.env.NODE_ENV === "development") {
+        console.log("Social post response:", result);
+      }
+
+      const postedAt = result.social_posted_at ?? new Date().toISOString();
+      const socialPostText =
+        result.social_post_text ??
+        result.preview_text ??
+        buildSocialPostText(job);
+
       onJobUpdate(job.id, {
-        social_status: "POSTED",
-        social_post_text: result.preview_text ?? buildSocialPostText(job),
-        social_posted_at: result.social_posted_at ?? new Date().toISOString()
+        ...(result.job ?? {}),
+        social_status: result.social_status ?? "POSTED",
+        social_post_text: socialPostText,
+        social_posted_at: postedAt
       });
 
       void handleCopy(false);
-      onClose();
+      setToastMessage("โพสต์ข้อความสำเร็จแล้ว");
+      window.setTimeout(() => {
+        onClose();
+      }, 500);
     } catch (error) {
       console.error("Social post failed", error);
       setToastMessage("โพสต์ข้อความไม่สำเร็จ กรุณาลองใหม่");

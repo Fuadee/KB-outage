@@ -375,9 +375,22 @@ export default function DashboardPage() {
     jobId: string,
     patch: Partial<OutageJob>
   ) => {
-    setJobs((prev) =>
-      prev.map((item) => (item.id === jobId ? { ...item, ...patch } : item))
-    );
+    setJobs((prev) => {
+      const nextJobs = prev.map((item) =>
+        item.id === jobId ? { ...item, ...patch } : item
+      );
+      if (process.env.NODE_ENV === "development") {
+        const updatedJob = nextJobs.find((item) => item.id === jobId);
+        if (updatedJob) {
+          console.log("Updated job fields:", {
+            jobId,
+            social_status: updatedJob.social_status,
+            notice_status: updatedJob.notice_status
+          });
+        }
+      }
+      return nextJobs;
+    });
     setSocialJob((prev) =>
       prev?.id === jobId ? { ...prev, ...patch } : prev
     );
