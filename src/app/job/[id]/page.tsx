@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { deleteJob, getJob, updateJob } from "@/lib/jobsRepo";
+import NoticeScheduleModal from "@/components/NoticeScheduleModal";
+import { deleteJob, getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 
 export default function JobDetailPage() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [job, setJob] = useState<OutageJob | null>(null);
+  const [noticeOpen, setNoticeOpen] = useState(false);
 
   useEffect(() => {
     const loadJob = async () => {
@@ -27,6 +30,7 @@ export default function JobDetailPage() {
         return;
       }
 
+      setJob(data);
       setOutageDate(data.outage_date);
       setEquipmentCode(data.equipment_code);
       setNote(data.note ?? "");
@@ -76,6 +80,10 @@ export default function JobDetailPage() {
     router.push("/");
   };
 
+  const handleNoticeJobUpdate = (patch: Partial<OutageJob>) => {
+    setJob((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
@@ -91,6 +99,19 @@ export default function JobDetailPage() {
         <p className="text-sm text-slate-500">
           ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ
         </p>
+        {job?.social_status === "POSTED" ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setNoticeOpen(true)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+            >
+              {(job.notice_status ?? "NONE") === "SCHEDULED"
+                ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                : "แจ้งหนังสือดับไฟ"}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <form
@@ -157,6 +178,13 @@ export default function JobDetailPage() {
           </Link>
         </div>
       </form>
+
+      <NoticeScheduleModal
+        job={job}
+        open={noticeOpen}
+        onOpenChange={setNoticeOpen}
+        onJobUpdate={(_, patch) => handleNoticeJobUpdate(patch)}
+      />
     </div>
   );
 }

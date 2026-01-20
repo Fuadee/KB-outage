@@ -37,14 +37,18 @@ export default function SocialPostPreviewModal({
     return () => window.clearTimeout(timeout);
   }, [toastMessage]);
 
-  const handleCopy = async () => {
+  const handleCopy = async (showToast = true) => {
     if (!previewText) return;
     try {
       await navigator.clipboard.writeText(previewText);
-      setToastMessage("คัดลอกข้อความแล้ว — ไปวางใน Facebook/LINE ได้เลย");
+      if (showToast) {
+        setToastMessage("คัดลอกข้อความแล้ว — ไปวางใน Facebook/LINE ได้เลย");
+      }
     } catch (error) {
       console.error("Failed to copy text", error);
-      setToastMessage("คัดลอกข้อความไม่สำเร็จ กรุณาลองใหม่");
+      if (showToast) {
+        setToastMessage("คัดลอกข้อความไม่สำเร็จ กรุณาลองใหม่");
+      }
     }
   };
 
@@ -77,7 +81,8 @@ export default function SocialPostPreviewModal({
         social_posted_at: result.social_posted_at ?? new Date().toISOString()
       });
 
-      await handleCopy();
+      void handleCopy(false);
+      onClose();
     } catch (error) {
       console.error("Social post failed", error);
       setToastMessage("โพสต์ข้อความไม่สำเร็จ กรุณาลองใหม่");
