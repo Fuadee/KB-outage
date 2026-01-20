@@ -19,6 +19,10 @@ export type OutageJob = {
   doc_url: string | null;
   doc_generated_at: string | null;
   doc_requested_at: string | null;
+  social_status: "DRAFT" | "PENDING_APPROVAL" | "POSTED";
+  social_post_text: string | null;
+  social_posted_at: string | null;
+  social_approved_at: string | null;
   created_at: string;
   updated_at: string;
 };
