@@ -6,8 +6,21 @@ import Link from "next/link";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import Modal from "@/components/Modal";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/Card";
+import Input from "@/components/ui/Input";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
+
+const textareaStyles =
+  "w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-200";
 
 export default function JobDetailPage() {
   const router = useRouter();
@@ -190,150 +203,214 @@ export default function JobDetailPage() {
     (job?.notice_status ?? "NONE") === "SCHEDULED" && !isClosed;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">
-          {isClosed ? "รายละเอียดงาน" : "แก้ไขงาน"}
-        </h1>
-        <p className="text-sm text-slate-500">
-          {isClosed
-            ? "งานนี้ถูกปิดแล้วและไม่สามารถแก้ไขได้"
-            : "ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ"}
+    <div className="space-y-6">
+      <header className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+          Job detail
         </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              {isClosed ? "รายละเอียดงาน" : "แก้ไขงาน"}
+            </h1>
+            <p className="text-sm text-slate-600">
+              {isClosed
+                ? "งานนี้ถูกปิดแล้วและไม่สามารถแก้ไขได้"
+                : "ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ"}
+            </p>
+            {isClosed ? (
+              <div className="text-sm text-slate-600">
+                ปิดเมื่อ{" "}
+                <span className="font-medium text-slate-800">
+                  {job?.closed_at
+                    ? new Date(job.closed_at).toLocaleString("th-TH", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })
+                    : "-"}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {job?.social_status === "POSTED" && !isClosed ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setNoticeOpen(true)}
+              >
+                {(job.notice_status ?? "NONE") === "SCHEDULED"
+                  ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                  : "แจ้งหนังสือดับไฟ"}
+              </Button>
+            ) : null}
+            {canCloseJob ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setCloseError(null);
+                  setCloseOpen(true);
+                }}
+              >
+                ปิดงาน
+              </Button>
+            ) : null}
+            <Badge variant={isClosed ? "neutral" : "accent"}>
+              {isClosed ? "Closed" : "Active"}
+            </Badge>
+          </div>
+        </div>
         {toast ? (
-          <div
-            className={`mt-2 rounded-xl border px-4 py-3 text-sm ${
+          <Card
+            className={`${
               toast.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700"
+                ? "border-emerald-200 bg-emerald-50/80"
+                : "border-rose-200 bg-rose-50/80"
             }`}
           >
-            {toast.message}
-          </div>
-        ) : null}
-        {isClosed ? (
-          <div className="mt-2 text-sm text-slate-600">
-            ปิดเมื่อ{" "}
-            <span className="font-medium text-slate-800">
-              {job?.closed_at
-                ? new Date(job.closed_at).toLocaleString("th-TH", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  })
-                : "-"}
-            </span>
-          </div>
-        ) : null}
-        <div className="mt-2 flex flex-wrap gap-2">
-          {job?.social_status === "POSTED" && !isClosed ? (
-            <button
-              type="button"
-              onClick={() => setNoticeOpen(true)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+            <CardContent
+              className={`py-3 text-sm ${
+                toast.tone === "success"
+                  ? "text-emerald-700"
+                  : "text-rose-700"
+              }`}
             >
-              {(job.notice_status ?? "NONE") === "SCHEDULED"
-                ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                : "แจ้งหนังสือดับไฟ"}
-            </button>
-          ) : null}
-          {canCloseJob ? (
-            <button
-              type="button"
-              onClick={() => {
-                setCloseError(null);
-                setCloseOpen(true);
-              }}
-              className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-400"
-            >
-              ปิดงาน
-            </button>
-          ) : null}
-        </div>
+              {toast.message}
+            </CardContent>
+          </Card>
+        ) : null}
       </header>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700">ลิงก์แผนที่</h2>
-        <MapActionButtons
-          googleUrl={job?.map_link}
-          myMapUrl={job?.mymaps_url}
-          className="mt-3"
-        />
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>รายละเอียดงาน</CardTitle>
+            <CardDescription>ข้อมูลพื้นฐานและหมายเหตุเพิ่มเติม</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSave} className="flex flex-col gap-6">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                วันที่ดับไฟ
+                <Input
+                  type="date"
+                  value={outageDate}
+                  onChange={(event) => setOutageDate(event.target.value)}
+                  disabled={isClosed}
+                  required
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                รหัสอุปกรณ์
+                <Input
+                  type="text"
+                  value={equipmentCode}
+                  onChange={(event) => setEquipmentCode(event.target.value)}
+                  disabled={isClosed}
+                  required
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                หมายเหตุเพิ่มเติม
+                <textarea
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  rows={4}
+                  disabled={isClosed}
+                  className={textareaStyles}
+                />
+              </label>
 
-      <form
-        onSubmit={handleSave}
-        className="flex flex-col gap-6 rounded-2xl bg-white p-6 shadow-sm"
-      >
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-          วันที่ดับไฟ
-          <input
-            type="date"
-            value={outageDate}
-            onChange={(event) => setOutageDate(event.target.value)}
-            disabled={isClosed}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-          รหัสอุปกรณ์
-          <input
-            type="text"
-            value={equipmentCode}
-            onChange={(event) => setEquipmentCode(event.target.value)}
-            disabled={isClosed}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-          หมายเหตุเพิ่มเติม
-          <textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            rows={4}
-            disabled={isClosed}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
-          />
-        </label>
+              {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </div>
+              ) : null}
 
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
+              <div className="flex flex-wrap gap-3">
+                {!isClosed ? (
+                  <>
+                    <Button type="submit" disabled={saving}>
+                      {saving ? "กำลังบันทึก..." : "บันทึก"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={saving}
+                      onClick={handleDelete}
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50"
+                    >
+                      ลบงาน
+                    </Button>
+                  </>
+                ) : null}
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+                >
+                  กลับ
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
-        <div className="flex flex-wrap gap-3">
-          {!isClosed ? (
-            <>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {saving ? "กำลังบันทึก..." : "บันทึก"}
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={saving}
-                className="rounded-xl border border-red-200 px-5 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                ลบงาน
-              </button>
-            </>
-          ) : null}
-          <Link
-            href="/"
-            className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
-          >
-            กลับ
-          </Link>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>ลิงก์แผนที่</CardTitle>
+              <CardDescription>เข้าถึงแผนที่และจุดงาน</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MapActionButtons
+                googleUrl={job?.map_link}
+                myMapUrl={job?.mymaps_url}
+                className="mt-3"
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>การดำเนินการ</CardTitle>
+              <CardDescription>งานที่เกี่ยวข้องกับสถานะนี้</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {job?.social_status === "POSTED" && !isClosed ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setNoticeOpen(true)}
+                >
+                  {(job.notice_status ?? "NONE") === "SCHEDULED"
+                    ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                    : "แจ้งหนังสือดับไฟ"}
+                </Button>
+              ) : (
+                <Badge variant="default">รอการโพสต์ Social</Badge>
+              )}
+              {canCloseJob ? (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    setCloseError(null);
+                    setCloseOpen(true);
+                  }}
+                >
+                  ปิดงาน
+                </Button>
+              ) : (
+                <Badge variant="neutral">ยังไม่พร้อมปิดงาน</Badge>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </form>
+      </div>
 
       <NoticeScheduleModal
         job={job}
@@ -358,21 +435,20 @@ export default function JobDetailPage() {
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-3">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => setCloseOpen(false)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
             >
               ยกเลิก
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleCloseJob}
               disabled={closeSaving}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
 import type { OutageJob } from "@/lib/jobsRepo";
 
 const TOAST_TIMEOUT_MS = 2000;
@@ -143,11 +145,10 @@ export default function NoticeScheduleModal({
         ) : null}
         <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
           วันที่จะไปดำเนินการแจ้ง
-          <input
+          <Input
             type="date"
             value={noticeDate}
             onChange={(event) => setNoticeDate(event.target.value)}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
             required
           />
           {errors.noticeDate ? (
@@ -156,11 +157,10 @@ export default function NoticeScheduleModal({
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
           ผู้แจ้ง
-          <input
+          <Input
             type="text"
             value={noticeBy}
             onChange={(event) => setNoticeBy(event.target.value)}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
             required
           />
           {errors.noticeBy ? (
@@ -169,12 +169,11 @@ export default function NoticeScheduleModal({
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
           ลิ้ง my map
-          <input
+          <Input
             type="url"
             value={mymapsUrl}
             onChange={(event) => setMymapsUrl(event.target.value)}
             placeholder="https://"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400"
             required
           />
           {errors.mymapsUrl ? (
@@ -187,21 +186,16 @@ export default function NoticeScheduleModal({
           </div>
         ) : null}
         <div className="flex flex-wrap justify-end gap-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => onOpenChange(false)}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
           >
             ยกเลิก
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
+          </Button>
+          <Button type="button" onClick={handleSubmit} disabled={isSaving}>
             {isSaving ? "กำลังบันทึก..." : "บันทึกกำหนดการ"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

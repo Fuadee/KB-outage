@@ -13,11 +13,11 @@ export default function Modal({ isOpen, title, onClose, children }: ModalProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div
-        className="absolute inset-0 bg-slate-900/40"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={onClose}
         role="presentation"
       />
-      <div className="relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-slate-200/70 bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           {title ? (
             <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
@@ -25,7 +25,7 @@ export default function Modal({ isOpen, title, onClose, children }: ModalProps) 
           <button
             type="button"
             onClick={onClose}
-            className="text-sm text-slate-500 hover:text-slate-700"
+            className="text-sm font-medium text-slate-500 hover:text-slate-700"
           >
             ปิด
           </button>

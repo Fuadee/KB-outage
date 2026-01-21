@@ -1,14 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
-import SegmentedFilter from "@/components/SegmentedFilter";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import StatusBadge from "@/components/StatusBadge";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/Card";
+import Input from "@/components/ui/Input";
+import Segmented from "@/components/ui/Segmented";
 import {
   listJobs,
   OutageJob,
@@ -21,13 +30,6 @@ import {
   getUrgencyStyles,
   parseLocalDate
 } from "@/lib/dateUtils";
-import {
-  cardBase,
-  inputBase,
-  primaryBtn,
-  primaryPurpleBtn,
-  secondaryBtn
-} from "@/lib/ui/classes";
 
 type FilterOption = "all" | "green" | "yellow" | "red";
 type TabOption = "active" | "closed";
@@ -99,12 +101,10 @@ const actionLabelMap: Record<ActionKey, string> = {
   close_job: "ปิดงาน"
 };
 
-const actionBtnBase =
-  "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
-const actionBtnPrimary = `${actionBtnBase} ${primaryPurpleBtn}`;
-const actionBtnSecondary = `${actionBtnBase} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-200`;
-const actionBtnDisabled =
-  "disabled:cursor-not-allowed disabled:opacity-60";
+const actionButtonVariant = (isPrimary: boolean) =>
+  isPrimary ? "primary" : "secondary";
+const textareaStyles =
+  "w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-200";
 
 export default function JobsPage() {
   const router = useRouter();
@@ -574,50 +574,44 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-5 rounded-2xl border border-slate-200/60 bg-white/80 p-6 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Krabi Outage Tracker
-              </h1>
-              <p className="text-sm text-slate-500">
-                ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
+      <Card className="bg-white/80">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                Jobs
               </p>
+              <CardTitle>Krabi Outage Tracker</CardTitle>
+              <CardDescription>
+                ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
+              </CardDescription>
             </div>
-            <div className="flex flex-col items-start gap-3 sm:items-end">
-              {userEmail ? (
-                <span className="text-xs font-medium text-slate-500">
-                  {userEmail}
-                </span>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Link href="/new" className={primaryBtn}>
-                  + สร้างงาน
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className={secondaryBtn}
-                >
-                  ออกจากระบบ
-                </button>
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {userEmail ? <Badge variant="neutral">{userEmail}</Badge> : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleLogout}
+              >
+                ออกจากระบบ
+              </Button>
             </div>
           </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex w-full max-w-md flex-col gap-2">
               <label className="text-sm font-medium text-slate-600">
                 ค้นหาอุปกรณ์
               </label>
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="กรอกรหัสอุปกรณ์"
-                className={inputBase}
               />
             </div>
-            <SegmentedFilter
+            <Segmented
               options={[
                 { id: "all", label: "ทั้งหมด" },
                 { id: "green", label: "เขียว" },
@@ -628,7 +622,7 @@ export default function JobsPage() {
               onChange={setFilter}
             />
           </div>
-          <SegmentedFilter
+          <Segmented
             options={[
               { id: "active", label: "กำลังดำเนินการ" },
               { id: "closed", label: "ปิดแล้ว" }
@@ -636,286 +630,322 @@ export default function JobsPage() {
             value={tab}
             onChange={setTab}
           />
-        </header>
+        </CardContent>
+      </Card>
 
-        {toast ? (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm ${
+      {toast ? (
+        <Card
+          className={`${
+            toast.tone === "success"
+              ? "border-emerald-200 bg-emerald-50/80"
+              : "border-rose-200 bg-rose-50/80"
+          }`}
+        >
+          <CardContent
+            className={`py-3 text-sm ${
               toast.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-rose-200 bg-rose-50 text-rose-700"
+                ? "text-emerald-700"
+                : "text-rose-700"
             }`}
           >
             {toast.message}
-          </div>
-        ) : null}
-        {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          </CardContent>
+        </Card>
+      ) : null}
+      {error ? (
+        <Card className="border-rose-200 bg-rose-50/80">
+          <CardContent className="py-3 text-sm text-rose-700">
             {error}
-          </div>
-        ) : null}
-        {actionError ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          </CardContent>
+        </Card>
+      ) : null}
+      {actionError ? (
+        <Card className="border-amber-200 bg-amber-50/80">
+          <CardContent className="py-3 text-sm text-amber-700">
             {actionError}
-          </div>
-        ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
-        <section className="grid gap-4">
-          {loading ? (
-            <div
-              className={`${cardBase} px-4 py-8 text-center text-sm text-slate-500`}
-            >
+      <section className="grid gap-4">
+        {loading ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-slate-500">
               กำลังโหลดข้อมูล...
-            </div>
-          ) : filteredJobs.length === 0 ? (
-            <div
-              className={`${cardBase} px-4 py-8 text-center text-sm text-slate-500`}
-            >
+            </CardContent>
+          </Card>
+        ) : filteredJobs.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-slate-500">
               ยังไม่มีงานที่ตรงกับตัวกรอง
-            </div>
-          ) : (
-            filteredJobs.map((job) => {
-              const urgency = getJobUrgency(job);
-              const status = getUrgencyStyles(urgency.color);
-              const nakhonStatus = job.nakhon_status ?? "PENDING";
-              const isPending = nakhonStatus === "PENDING";
-              const isNotified = nakhonStatus === "NOTIFIED";
-              const isNotRequired = nakhonStatus === "NOT_REQUIRED";
-              const actionDisabled = actionLoading[job.id] ?? false;
-              const isClosed = job.is_closed ?? false;
-              const isDocGenerated =
-                job.doc_status === "GENERATED" ||
-                Boolean(job.doc_generated_at);
-              const isDocGenerating = job.doc_status === "GENERATING";
-              const socialStatus = job.social_status ?? "DRAFT";
-              const noticeStatus = job.notice_status ?? "NONE";
-              const showSocialButton =
-                socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
-              const showNoticeButton = socialStatus === "POSTED";
-              const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
-              const nextAction = getNextAction(job);
-              const nextActionLabel = actionLabelMap[nextAction];
-              const actionClass = (actionKey: ActionKey) =>
-                actionKey === nextAction ? actionBtnPrimary : actionBtnSecondary;
-              return (
-                <div
-                  key={job.id}
-                  className={`${cardBase} group flex items-stretch overflow-hidden transition hover:-translate-y-0.5`}
-                >
-                  <div className={`w-2 ${status.strip}`} />
-                  <div className="flex w-full flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-[240px] flex-1 flex-col gap-4">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => router.push(`/job/${job.id}`)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            router.push(`/job/${job.id}`);
-                          }
-                        }}
-                        className="cursor-pointer space-y-4 rounded-2xl outline-none transition focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm text-slate-500">
-                              {parseLocalDate(job.outage_date).toLocaleDateString(
-                                "th-TH",
-                                {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric"
-                                }
-                              )}
-                            </span>
-                            <span
-                              className={`text-sm font-medium ${status.text}`}
-                            >
-                              {urgency.label}
-                            </span>
-                          </div>
-                          <StatusBadge
-                            status={urgency.color}
-                            label={urgency.color}
-                          />
-                        </div>
-                        {isClosed ? (
-                          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                              ปิดแล้ว
-                            </span>
-                            <span>
-                              ปิดเมื่อ{" "}
-                              {job.closed_at
-                                ? new Date(job.closed_at).toLocaleString(
-                                    "th-TH",
-                                    {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                      hour: "2-digit",
-                                      minute: "2-digit"
-                                    }
-                                  )
-                                : "-"}
-                            </span>
-                          </div>
-                        ) : null}
-                        <div className="space-y-1">
-                          <p className="text-lg font-semibold tracking-tight text-slate-900">
-                            {job.equipment_code}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {job.note?.trim() || "ไม่มีหมายเหตุ"}
-                          </p>
-                        </div>
-                        {(isNotified || isNotRequired) && (
-                          <div className="text-sm text-slate-600">
-                            {isNotified ? (
-                              <>
-                                แจ้งศูนย์นครแล้ว:{" "}
-                                <span className="font-medium text-slate-800">
-                                  {job.nakhon_notified_date
-                                    ? parseLocalDate(
-                                        job.nakhon_notified_date
-                                      ).toLocaleDateString("th-TH", {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric"
-                                      })
-                                    : "-"}
-                                </span>{" "}
-                                | เลขที่บันทึก:{" "}
-                                <span className="font-medium text-slate-800">
-                                  {job.nakhon_memo_no ?? "-"}
-                                </span>
-                              </>
-                            ) : (
-                              <span>ไม่ต้องแจ้งศูนย์นคร</span>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredJobs.map((job) => {
+            const urgency = getJobUrgency(job);
+            const status = getUrgencyStyles(urgency.color);
+            const nakhonStatus = job.nakhon_status ?? "PENDING";
+            const isPending = nakhonStatus === "PENDING";
+            const isNotified = nakhonStatus === "NOTIFIED";
+            const isNotRequired = nakhonStatus === "NOT_REQUIRED";
+            const actionDisabled = actionLoading[job.id] ?? false;
+            const isClosed = job.is_closed ?? false;
+            const isDocGenerated =
+              job.doc_status === "GENERATED" || Boolean(job.doc_generated_at);
+            const isDocGenerating = job.doc_status === "GENERATING";
+            const socialStatus = job.social_status ?? "DRAFT";
+            const noticeStatus = job.notice_status ?? "NONE";
+            const showSocialButton =
+              socialStatus === "PENDING_APPROVAL" || socialStatus === "POSTED";
+            const showNoticeButton = socialStatus === "POSTED";
+            const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
+            const nextAction = getNextAction(job);
+            const nextActionLabel = actionLabelMap[nextAction];
+            const isPrimaryAction = (actionKey: ActionKey) =>
+              actionKey === nextAction;
+            return (
+              <Card
+                key={job.id}
+                className="group flex items-stretch overflow-hidden transition hover:-translate-y-0.5"
+              >
+                <div className={`w-1.5 ${status.strip}`} />
+                <div className="flex w-full flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-[240px] flex-1 flex-col gap-4">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/job/${job.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(`/job/${job.id}`);
+                        }
+                      }}
+                      className="cursor-pointer space-y-4 rounded-2xl outline-none transition focus-visible:ring-2 focus-visible:ring-fuchsia-300 focus-visible:ring-offset-2"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-slate-500">
+                            {parseLocalDate(job.outage_date).toLocaleDateString(
+                              "th-TH",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric"
+                              }
                             )}
-                          </div>
-                        )}
-                      </div>
-                      <MapActionButtons
-                        googleUrl={job.map_link}
-                        myMapUrl={job.mymaps_url}
-                      />
-                    </div>
-
-                    {!isClosed ? (
-                      <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px]">
-                        <div className="text-xs font-medium text-slate-500">
-                          ขั้นตอนถัดไป:{" "}
-                          <span className="text-slate-700">
-                            {nextActionLabel}
+                          </span>
+                          <span className={`text-sm font-medium ${status.text}`}>
+                            {urgency.label}
                           </span>
                         </div>
-                        {isPending ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => openNotifiedModal(job)}
-                              className={actionClass("notify_nakhon")}
-                            >
-                              แจ้งศูนย์นครแล้ว
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNotRequired(job)}
-                              disabled={actionDisabled}
-                              className={`${actionBtnSecondary} ${actionBtnDisabled}`}
-                            >
-                              {actionDisabled
-                                ? "กำลังบันทึก..."
-                                : "ไม่ต้องแจ้งศูนย์นคร"}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {isDocGenerated ? (
-                              job.doc_url ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (job.doc_url) {
-                                      window.open(
-                                        job.doc_url,
-                                        "_blank",
-                                        "noopener,noreferrer"
-                                      );
-                                      return;
-                                    }
-                                    openDocModal(job);
-                                  }}
-                                  className={actionClass("create_doc")}
-                                >
-                                  พิมพ์เอกสาร
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openDocModal(job)}
-                                  className={actionBtnSecondary}
-                                >
-                                  ดาวน์โหลดเอกสารอีกครั้ง
-                                </button>
-                              )
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => openDocModal(job)}
-                                disabled={actionDisabled || isDocGenerating}
-                                className={`${actionClass("create_doc")} ${actionBtnDisabled}`}
-                              >
-                                {isDocGenerating
-                                  ? "กำลังสร้าง..."
-                                  : "สร้างเอกสารดับไฟ"}
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {showSocialButton ? (
-                          <button
-                            type="button"
-                            onClick={() => setSocialJob(job)}
-                            className={actionClass("wait_approval")}
-                          >
-                            {socialStatus === "POSTED"
-                              ? "Posted แล้วสื่อ Social"
-                              : "รออนุมัติ"}
-                          </button>
-                        ) : null}
-                        {showNoticeButton ? (
-                          <button
-                            type="button"
-                            onClick={() => setNoticeJob(job)}
-                            className={actionClass("notify_outage_letter")}
-                          >
-                            {noticeStatus === "SCHEDULED"
-                              ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                              : "แจ้งหนังสือดับไฟ"}
-                          </button>
-                        ) : null}
-                        {canCloseJob ? (
-                          <button
-                            type="button"
-                            onClick={() => openCloseModal(job)}
-                            className={actionClass("close_job")}
-                          >
-                            ปิดงาน
-                          </button>
-                        ) : null}
+                        <StatusBadge
+                          status={urgency.color}
+                          label={urgency.color}
+                        />
                       </div>
-                    ) : null}
+                      {isClosed ? (
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                          <Badge variant="neutral">ปิดแล้ว</Badge>
+                          <span>
+                            ปิดเมื่อ{" "}
+                            {job.closed_at
+                              ? new Date(job.closed_at).toLocaleString(
+                                  "th-TH",
+                                  {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit"
+                                  }
+                                )
+                              : "-"}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="space-y-1">
+                        <p className="text-lg font-semibold tracking-tight text-slate-900">
+                          {job.equipment_code}
+                        </p>
+                        <p className="text-sm text-slate-600">
+                          {job.note?.trim() || "ไม่มีหมายเหตุ"}
+                        </p>
+                      </div>
+                      {(isNotified || isNotRequired) && (
+                        <div className="text-sm text-slate-600">
+                          {isNotified ? (
+                            <>
+                              แจ้งศูนย์นครแล้ว:{" "}
+                              <span className="font-medium text-slate-800">
+                                {job.nakhon_notified_date
+                                  ? parseLocalDate(
+                                      job.nakhon_notified_date
+                                    ).toLocaleDateString("th-TH", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric"
+                                    })
+                                  : "-"}
+                              </span>{" "}
+                              | เลขที่บันทึก:{" "}
+                              <span className="font-medium text-slate-800">
+                                {job.nakhon_memo_no ?? "-"}
+                              </span>
+                            </>
+                          ) : (
+                            <span>ไม่ต้องแจ้งศูนย์นคร</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <MapActionButtons
+                      googleUrl={job.map_link}
+                      myMapUrl={job.mymaps_url}
+                    />
                   </div>
-                </div>
-              );
-            })
-          )}
-        </section>
 
-        <Modal
+                  {!isClosed ? (
+                    <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px]">
+                      <div className="text-xs font-medium text-slate-500">
+                        ขั้นตอนถัดไป:{" "}
+                        <span className="text-slate-700">
+                          {nextActionLabel}
+                        </span>
+                      </div>
+                      {isPending ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={actionButtonVariant(
+                              isPrimaryAction("notify_nakhon")
+                            )}
+                            className="w-full"
+                            onClick={() => openNotifiedModal(job)}
+                          >
+                            แจ้งศูนย์นครแล้ว
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleNotRequired(job)}
+                            disabled={actionDisabled}
+                          >
+                            {actionDisabled
+                              ? "กำลังบันทึก..."
+                              : "ไม่ต้องแจ้งศูนย์นคร"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {isDocGenerated ? (
+                            job.doc_url ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={actionButtonVariant(
+                                  isPrimaryAction("create_doc")
+                                )}
+                                className="w-full"
+                                onClick={() => {
+                                  if (job.doc_url) {
+                                    window.open(
+                                      job.doc_url,
+                                      "_blank",
+                                      "noopener,noreferrer"
+                                    );
+                                    return;
+                                  }
+                                  openDocModal(job);
+                                }}
+                              >
+                                พิมพ์เอกสาร
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => openDocModal(job)}
+                              >
+                                ดาวน์โหลดเอกสารอีกครั้ง
+                              </Button>
+                            )
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={actionButtonVariant(
+                                isPrimaryAction("create_doc")
+                              )}
+                              className="w-full"
+                              onClick={() => openDocModal(job)}
+                              disabled={actionDisabled || isDocGenerating}
+                            >
+                              {isDocGenerating
+                                ? "กำลังสร้าง..."
+                                : "สร้างเอกสารดับไฟ"}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      {showSocialButton ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={actionButtonVariant(
+                            isPrimaryAction("wait_approval")
+                          )}
+                          className="w-full"
+                          onClick={() => setSocialJob(job)}
+                        >
+                          {socialStatus === "POSTED"
+                            ? "Posted แล้วสื่อ Social"
+                            : "รออนุมัติ"}
+                        </Button>
+                      ) : null}
+                      {showNoticeButton ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={actionButtonVariant(
+                            isPrimaryAction("notify_outage_letter")
+                          )}
+                          className="w-full"
+                          onClick={() => setNoticeJob(job)}
+                        >
+                          {noticeStatus === "SCHEDULED"
+                            ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                            : "แจ้งหนังสือดับไฟ"}
+                        </Button>
+                      ) : null}
+                      {canCloseJob ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={actionButtonVariant(
+                            isPrimaryAction("close_job")
+                          )}
+                          className="w-full"
+                          onClick={() => openCloseModal(job)}
+                        >
+                          ปิดงาน
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </section>
+
+      <Modal
         isOpen={Boolean(selectedJob)}
         title="แจ้งศูนย์นครแล้ว"
         onClose={closeModal}
@@ -923,11 +953,10 @@ export default function JobsPage() {
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             วันที่แจ้งศูนย์นคร
-            <input
+            <Input
               type="date"
               value={notifiedDate}
               onChange={(event) => setNotifiedDate(event.target.value)}
-              className={inputBase}
               required
             />
             {modalErrors.date ? (
@@ -936,11 +965,10 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             เลขที่บันทึก
-            <input
+            <Input
               type="text"
               value={memoNo}
               onChange={(event) => setMemoNo(event.target.value)}
-              className={inputBase}
               required
             />
             {modalErrors.memoNo ? (
@@ -953,26 +981,21 @@ export default function JobsPage() {
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={closeModal}
-              className={secondaryBtn}
-            >
+            <Button type="button" variant="secondary" onClick={closeModal}>
               ยกเลิก
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleSubmitNotified}
               disabled={modalSaving}
-              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {modalSaving ? "กำลังบันทึก..." : "ตกลง"}
-            </button>
+            </Button>
           </div>
         </div>
-        </Modal>
+      </Modal>
 
-        <Modal
+      <Modal
         isOpen={Boolean(docJob)}
         title="สร้างเอกสารดับไฟ"
         onClose={closeDocModal}
@@ -980,7 +1003,7 @@ export default function JobsPage() {
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             หนังสือลงวันที่
-            <input
+            <Input
               type="date"
               value={docForm.doc_issue_date}
               onChange={(event) =>
@@ -989,7 +1012,6 @@ export default function JobsPage() {
                   doc_issue_date: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.doc_issue_date ? (
@@ -1000,7 +1022,7 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             ดับไฟเพื่อ
-            <input
+            <Input
               type="text"
               value={docForm.doc_purpose}
               onChange={(event) =>
@@ -1009,7 +1031,6 @@ export default function JobsPage() {
                   doc_purpose: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.doc_purpose ? (
@@ -1020,7 +1041,7 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             บริเวณที่ดับ
-            <input
+            <Input
               type="text"
               value={docForm.doc_area_title}
               onChange={(event) =>
@@ -1029,7 +1050,6 @@ export default function JobsPage() {
                   doc_area_title: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.doc_area_title ? (
@@ -1040,7 +1060,7 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             เวลาเริ่มดับไฟ
-            <input
+            <Input
               type="time"
               value={docForm.doc_time_start}
               onChange={(event) =>
@@ -1049,7 +1069,6 @@ export default function JobsPage() {
                   doc_time_start: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.doc_time_start ? (
@@ -1060,7 +1079,7 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             เวลาจ่ายไฟ
-            <input
+            <Input
               type="time"
               value={docForm.doc_time_end}
               onChange={(event) =>
@@ -1069,7 +1088,6 @@ export default function JobsPage() {
                   doc_time_end: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.doc_time_end ? (
@@ -1089,7 +1107,7 @@ export default function JobsPage() {
                 }))
               }
               rows={3}
-              className={inputBase}
+              className={textareaStyles}
               required
             />
             {docErrors.doc_area_detail ? (
@@ -1100,7 +1118,7 @@ export default function JobsPage() {
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             ลิ้ง google map
-            <input
+            <Input
               type="url"
               value={docForm.map_link}
               onChange={(event) =>
@@ -1109,7 +1127,6 @@ export default function JobsPage() {
                   map_link: event.target.value
                 }))
               }
-              className={inputBase}
               required
             />
             {docErrors.map_link ? (
@@ -1124,33 +1141,28 @@ export default function JobsPage() {
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={closeDocModal}
-              className={secondaryBtn}
-            >
+            <Button type="button" variant="secondary" onClick={closeDocModal}>
               ยกเลิก
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleCreateDoc}
               disabled={docSaving}
-              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {docSaving ? "กำลังสร้าง..." : "สร้าง"}
-            </button>
+            </Button>
           </div>
         </div>
-        </Modal>
+      </Modal>
 
-        <SocialPostPreviewModal
+      <SocialPostPreviewModal
         job={socialJob}
         isOpen={Boolean(socialJob)}
         onClose={closeSocialModal}
         onJobUpdate={handleSocialJobUpdate}
       />
 
-        <NoticeScheduleModal
+      <NoticeScheduleModal
         job={noticeJob}
         open={Boolean(noticeJob)}
         onOpenChange={(nextOpen) => {
@@ -1161,7 +1173,7 @@ export default function JobsPage() {
         onJobUpdate={handleNoticeJobUpdate}
       />
 
-        <Modal
+      <Modal
         isOpen={Boolean(closeJob)}
         title="ยืนยันปิดงาน?"
         onClose={() => setCloseJob(null)}
@@ -1177,25 +1189,23 @@ export default function JobsPage() {
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-3">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => setCloseJob(null)}
-              className={secondaryBtn}
             >
               ยกเลิก
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleCloseJob}
               disabled={closeSaving}
-              className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
-            </button>
+            </Button>
           </div>
         </div>
-        </Modal>
-      </div>
+      </Modal>
     </div>
   );
 }

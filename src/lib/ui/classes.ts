@@ -1,15 +1,15 @@
 import type { UrgencyColor } from "@/lib/dateUtils";
 
-export const pageBg = "min-h-screen bg-slate-50";
+export const pageBg = "min-h-screen bg-[#fafafa]";
 
 export const cardBase =
-  "rounded-2xl border border-slate-200/60 bg-white/80 shadow-sm transition hover:shadow-md";
+  "rounded-2xl border border-slate-200/70 bg-white shadow-sm transition hover:shadow-md";
 
 export const primaryPurpleBtn =
-  "text-white bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 " +
-  "shadow-[0_10px_24px_rgba(124,58,237,0.25)] " +
+  "text-white bg-gradient-to-r from-fuchsia-500 via-purple-500 to-pink-500 " +
+  "shadow-[0_16px_30px_rgba(236,72,153,0.25)] " +
   "hover:brightness-110 active:scale-[0.98] " +
-  "focus-visible:ring-violet-300";
+  "focus-visible:ring-fuchsia-300";
 
 
 export const purpleBadge =
@@ -17,17 +17,17 @@ export const purpleBadge =
 
 
 export const primaryBtn =
-  `inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${primaryPurpleBtn}`;
+  `inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${primaryPurpleBtn}`;
 
 export const secondaryBtn =
-  "inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100/60 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-200 focus-visible:ring-offset-2";
 
 export const ghostBtn =
-  "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-200 focus-visible:ring-offset-2";
 
 export const inputBase =
   "rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm outline-none transition " +
-  "focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-200";
+  "focus:border-fuchsia-400 focus-visible:ring-2 focus-visible:ring-fuchsia-200";
 
 
 export const linkBase =

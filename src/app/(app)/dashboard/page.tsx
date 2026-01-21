@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Badge from "@/components/ui/Badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/Card";
 const STEP_ORDER = [
   "DRAFT",
   "DOC_READY",
@@ -106,63 +114,73 @@ export default function DashboardPage() {
   }, [jobs]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+    <div className="space-y-8">
+      <header className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+          Overview
+        </p>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
           Dashboard
         </h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="text-sm text-slate-600">
           ติดตามสถานะงานแต่ละรายการและงานที่ต้องทำต่อ
         </p>
-      </div>
+      </header>
       {jobsError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-          {jobsError}
-        </div>
+        <Card className="border-rose-200 bg-rose-50/70">
+          <CardContent className="py-4 text-sm text-rose-700">
+            {jobsError}
+          </CardContent>
+        </Card>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Pipeline
-          </h2>
-          <p className="text-sm text-slate-500">
-            งานที่ยังต้องดำเนินการตามขั้นตอน
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-4">
-          {STEP_ORDER.map((step) => (
-            <div
-              key={step}
-              className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/40 p-4"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  {STEP_LABELS[step]}
-                </p>
-              </div>
-              <div className="mt-4 space-y-2">
-                {isLoadingJobs ? (
-                  <p className="text-xs text-slate-400">กำลังโหลด...</p>
-                ) : pipelineJobs[step]?.length ? (
-                  pipelineJobs[step].map((job) => (
-                    <Link
-                      key={job.id}
-                      href={`/job/${job.id}`}
-                      className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm transition hover:border-slate-300"
-                    >
-                      {job.equipment_code ?? "—"}
-                    </Link>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-400">ไม่มีงาน</p>
-                )}
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Pipeline</CardTitle>
+              <CardDescription>
+                งานที่ยังต้องดำเนินการตามขั้นตอน
+              </CardDescription>
             </div>
-          ))}
-        </div>
-      </section>
+            <Badge variant="accent">Live</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-4">
+            {STEP_ORDER.map((step) => (
+              <div
+                key={step}
+                className="flex flex-col rounded-2xl border border-slate-200/70 bg-white/80 p-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                    {STEP_LABELS[step]}
+                  </p>
+                  <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" />
+                </div>
+                <div className="mt-4 space-y-2">
+                  {isLoadingJobs ? (
+                    <p className="text-xs text-slate-400">กำลังโหลด...</p>
+                  ) : pipelineJobs[step]?.length ? (
+                    pipelineJobs[step].map((job) => (
+                      <Link
+                        key={job.id}
+                        href={`/job/${job.id}`}
+                        className="block rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                      >
+                        {job.equipment_code ?? "—"}
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400">ไม่มีงาน</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
