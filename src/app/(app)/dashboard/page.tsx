@@ -1,4 +1,50 @@
-export default function DashboardPage() {
+type DashboardSummary = {
+  activeJobs: number;
+  pendingApproval: number;
+  scheduledNotices: number;
+};
+
+async function getDashboardSummary() {
+  try {
+    const response = await fetch("/api/dashboard/summary", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to load dashboard summary");
+    }
+
+    const data = (await response.json()) as DashboardSummary;
+    return { data, error: null };
+  } catch (error) {
+    console.error("Failed to load dashboard summary", error);
+    return {
+      data: null,
+      error: "ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่"
+    };
+  }
+}
+
+export default async function DashboardPage() {
+  const { data, error } = await getDashboardSummary();
+  const cards = [
+    {
+      title: "Active Jobs",
+      value: data ? data.activeJobs.toLocaleString("en-US") : "-",
+      description: "งานที่กำลังดำเนินการ"
+    },
+    {
+      title: "Pending Approval",
+      value: data ? data.pendingApproval.toLocaleString("en-US") : "-",
+      description: "รายการรอการอนุมัติ"
+    },
+    {
+      title: "Scheduled Notices",
+      value: data ? data.scheduledNotices.toLocaleString("en-US") : "-",
+      description: "หนังสือแจ้งที่ตั้งเวลาไว้"
+    }
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -12,24 +58,13 @@ export default function DashboardPage() {
           สรุปภาพรวมงานล่าสุดและสถานะที่ต้องติดตาม
         </p>
       </div>
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+          {error}
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {[
-          {
-            title: "Active Jobs",
-            value: "12",
-            description: "งานที่กำลังดำเนินการ"
-          },
-          {
-            title: "Pending Approval",
-            value: "3",
-            description: "รายการรอการอนุมัติ"
-          },
-          {
-            title: "Scheduled Notices",
-            value: "5",
-            description: "หนังสือแจ้งที่ตั้งเวลาไว้"
-          }
-        ].map((card) => (
+        {cards.map((card) => (
           <div
             key={card.title}
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
