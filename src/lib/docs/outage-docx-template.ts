@@ -283,7 +283,7 @@ export async function generateOutageDocxBuffer({
       throw new Error("QR buffer empty");
     }
     imageBuffer = buffer;
-    console.info(`QR bytes: ${imageBuffer.length}`);
+    console.info(`QR bytes: ${buffer.length}`);
   } catch (error) {
     console.warn("Failed to generate QR code, falling back to text.", error);
   }

@@ -1,0 +1,1 @@
+{"version":1,"functions":{"/api/auth/session":{},"/api/docs/create":{},"/api/jobs/notice-schedule":{},"/api/jobs/social-post":{},"/api/jobs/[id]/delete":{},"/api/jobs/social-pending":{},"/api/jobs/[id]/close":{}}}
