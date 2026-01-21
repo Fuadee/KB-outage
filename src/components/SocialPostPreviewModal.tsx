@@ -127,7 +127,6 @@ export default function SocialPostPreviewModal({
           <MapActionButtons
             googleUrl={job?.map_link}
             myMapUrl={job?.mymaps_url}
-            variant="compact"
           />
         </div>
         <div className="flex flex-wrap justify-end gap-3">

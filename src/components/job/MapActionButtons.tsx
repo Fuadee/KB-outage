@@ -42,12 +42,24 @@ export default function MapActionButtons({
 
   if (!googleMap && !myMap) return null;
 
-  const iconClasses = "h-4 w-4";
+  const iconClasses = "h-4 w-4 text-purple-600";
   const baseClasses =
     "flex items-center justify-center gap-2 w-full md:w-auto rounded-2xl md:rounded-xl py-3 md:py-2 px-4 md:px-3 text-sm md:text-xs font-semibold md:font-medium transition-all duration-200 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 relative z-10 select-none";
 
-  const primaryClasses = `${baseClasses} text-white bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 shadow-md hover:brightness-110 md:from-purple-500 md:via-violet-500 md:to-purple-600 md:shadow-sm`;
-  const twinPrimaryClasses = `${baseClasses} text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 shadow-md hover:brightness-110 md:from-violet-500 md:via-purple-500 md:to-indigo-500 md:shadow-sm`;
+  const mapButtonClasses = `${baseClasses}
+  bg-white
+  border border-purple-200/80
+  shadow-sm md:shadow-none
+  hover:bg-purple-50/60 hover:border-purple-300/80
+`;
+
+
+
+
+
+const primaryClasses = mapButtonClasses;
+const twinPrimaryClasses = mapButtonClasses;
+
 
   const hasBoth = Boolean(googleMap && myMap);
   const wrapperClassName = className ? ` ${className}` : "";
@@ -70,7 +82,10 @@ export default function MapActionButtons({
       className={isPrimary ? primaryClasses : twinPrimaryClasses}
     >
       {icon}
-      <span>{label}</span>
+      <span className="bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700 bg-clip-text text-transparent">
+  {label}
+</span>
+
     </a>
   );
 
@@ -79,7 +94,7 @@ export default function MapActionButtons({
       {googleMap
         ? renderButton(
             googleMap,
-            "เปิด Google Map",
+            "Google Map",
             <MapPin className={iconClasses} aria-hidden="true" />,
             true
           )
@@ -87,7 +102,7 @@ export default function MapActionButtons({
       {myMap
         ? renderButton(
             myMap,
-            "เปิด My Map",
+            "My Map",
             <Route className={iconClasses} aria-hidden="true" />,
             !googleMap
           )
