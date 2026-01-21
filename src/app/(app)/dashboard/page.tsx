@@ -1,7 +1,13 @@
 type DashboardSummary = {
+  ok: true;
   activeJobs: number;
   pendingApproval: number;
   scheduledNotices: number;
+};
+
+type DashboardSummaryError = {
+  ok: false;
+  error: string;
 };
 
 async function getDashboardSummary() {
@@ -14,7 +20,14 @@ async function getDashboardSummary() {
       throw new Error("Failed to load dashboard summary");
     }
 
-    const data = (await response.json()) as DashboardSummary;
+    const data = (await response.json()) as
+      | DashboardSummary
+      | DashboardSummaryError;
+
+    if (!data.ok) {
+      return { data: null, error: data.error };
+    }
+
     return { data, error: null };
   } catch (error) {
     console.error("Failed to load dashboard summary", error);
