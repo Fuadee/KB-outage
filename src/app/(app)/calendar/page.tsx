@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const statusOrder = ["Draft", "Doc", "Posted", "Notice", "Done"] as const;
@@ -219,23 +222,23 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+    <div className="space-y-8">
+      <header className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
           Schedule
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
           Calendar
         </h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="text-sm text-slate-600">
           ภาพรวมปฏิทินงานและการติดตามเอกสารในเดือนนี้
         </p>
-      </div>
+      </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
               Month view
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-900">
@@ -243,128 +246,136 @@ export default function CalendarPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={handlePreviousMonth}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               Previous
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={handleNextMonth}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               Next
-            </button>
+            </Button>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Total outages this month
-          </p>
-          <p className="mt-3 text-2xl font-semibold text-slate-900">
-            {monthlyTotals.total}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
-            รายการที่ถูกบันทึกไว้ในเดือนนี้
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Posted & notice
-          </p>
-          <p className="mt-3 text-2xl font-semibold text-slate-900">
-            {monthlyTotals.posted + monthlyTotals.notice}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
-            งานที่มีประกาศหรือโพสต์แล้วในเดือนนี้
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Completed</p>
-          <p className="mt-3 text-2xl font-semibold text-slate-900">
-            {monthlyTotals.done}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
-            งานที่ปิดสำเร็จแล้ว
-          </p>
-        </div>
+        <Card>
+          <CardContent className="space-y-2 py-5">
+            <p className="text-sm font-medium text-slate-500">
+              Total outages this month
+            </p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {monthlyTotals.total}
+            </p>
+            <p className="text-sm text-slate-500">
+              รายการที่ถูกบันทึกไว้ในเดือนนี้
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-2 py-5">
+            <p className="text-sm font-medium text-slate-500">
+              Posted & notice
+            </p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {monthlyTotals.posted + monthlyTotals.notice}
+            </p>
+            <p className="text-sm text-slate-500">
+              งานที่มีประกาศหรือโพสต์แล้วในเดือนนี้
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-2 py-5">
+            <p className="text-sm font-medium text-slate-500">Completed</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {monthlyTotals.done}
+            </p>
+            <p className="text-sm text-slate-500">
+              งานที่ปิดสำเร็จแล้ว
+            </p>
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {dayLabels.map((label) => (
-            <div key={label} className="px-2">
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 grid grid-cols-7 gap-3">
-          {daysInGrid.map((date) => {
-            const dateKey = formatDateKey(date);
-            const daySummary = summaryByDate.get(dateKey);
-            const isCurrent = isSameMonth(date, currentMonth);
-            const isSelected = selectedDate
-              ? isSameDate(date, selectedDate)
-              : false;
+      <Card>
+        <CardContent className="py-6">
+          <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {dayLabels.map((label) => (
+              <div key={label} className="px-2">
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-7 gap-3">
+            {daysInGrid.map((date) => {
+              const dateKey = formatDateKey(date);
+              const daySummary = summaryByDate.get(dateKey);
+              const isCurrent = isSameMonth(date, currentMonth);
+              const isSelected = selectedDate
+                ? isSameDate(date, selectedDate)
+                : false;
 
-            return (
-              <button
-                type="button"
-                key={dateKey}
-                onClick={() => handleDayClick(date)}
-                className={`flex min-h-[120px] flex-col gap-2 rounded-2xl border px-3 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50/60 ${
-                  isSelected
-                    ? "border-slate-400 bg-slate-50"
-                    : "border-slate-200 bg-white"
-                } ${isCurrent ? "" : "text-slate-400"}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">
-                    {date.getDate()}
-                  </span>
-                  {daySummary?.total ? (
-                    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">
-                      {daySummary.total}
+              return (
+                <button
+                  type="button"
+                  key={dateKey}
+                  onClick={() => handleDayClick(date)}
+                  className={`flex min-h-[120px] flex-col gap-2 rounded-2xl border px-3 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50/60 ${
+                    isSelected
+                      ? "border-slate-400 bg-slate-50"
+                      : "border-slate-200/70 bg-white"
+                  } ${isCurrent ? "" : "text-slate-400"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">
+                      {date.getDate()}
                     </span>
-                  ) : null}
-                </div>
-                {loadingSummary ? (
-                  <div className="mt-2 h-12 rounded-xl bg-slate-100" />
-                ) : summaryError ? (
-                  <p className="text-xs text-rose-500">โหลดไม่สำเร็จ</p>
-                ) : daySummary ? (
-                  <div className="flex flex-wrap gap-2">
-                    {statusOrder.map((status) => {
-                      const count = daySummary.byStatus[status];
-                      if (!count) return null;
-                      return (
-                        <span
-                          key={`${dateKey}-${status}`}
-                          className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"
-                        >
-                          <span
-                            className={`h-2 w-2 rounded-full ${
-                              statusStyles[status].dot
-                            }`}
-                          />
-                          {status} {count}
-                        </span>
-                      );
-                    })}
+                    {daySummary?.total ? (
+                      <Badge variant="neutral">{daySummary.total}</Badge>
+                    ) : null}
                   </div>
-                ) : (
-                  <p className="text-xs text-slate-400">ไม่มีงาน</p>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
+                  {loadingSummary ? (
+                    <div className="mt-2 h-12 rounded-xl bg-slate-100" />
+                  ) : summaryError ? (
+                    <p className="text-xs text-rose-500">โหลดไม่สำเร็จ</p>
+                  ) : daySummary ? (
+                    <div className="flex flex-wrap gap-2">
+                      {statusOrder.map((status) => {
+                        const count = daySummary.byStatus[status];
+                        if (!count) return null;
+                        return (
+                          <span
+                            key={`${dateKey}-${status}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                          >
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                statusStyles[status].dot
+                              }`}
+                            />
+                            {status} {count}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">ไม่มีงาน</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {drawerOpen ? (
         <div className="fixed inset-0 z-50 flex justify-end">
@@ -391,13 +402,14 @@ export default function CalendarPage() {
                     : ""}
                 </h2>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={closeDrawer}
-                className="text-sm text-slate-500 hover:text-slate-700"
               >
                 ปิด
-              </button>
+              </Button>
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
               {dayLoading ? (
@@ -427,7 +439,7 @@ export default function CalendarPage() {
                       <Link
                         key={job.id}
                         href={`/job/${job.id}`}
-                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
+                        className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
                       >
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-semibold text-slate-900">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import MapActionButtons from "@/components/job/MapActionButtons";
+import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
 import {
   buildSocialPostText,
@@ -118,33 +119,32 @@ export default function SocialPostPreviewModal({
             {toastMessage}
           </div>
         ) : null}
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+        <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3 text-sm text-slate-700">
           <p className="whitespace-pre-wrap leading-relaxed">
             {previewText || "-"}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="rounded-xl border border-slate-200/70 bg-white p-3">
           <MapActionButtons
             googleUrl={job?.map_link}
             myMapUrl={job?.mymaps_url}
           />
         </div>
         <div className="flex flex-wrap justify-end gap-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => void handleCopy(true)}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
           >
             คัดลอกข้อความ
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handlePost}
             disabled={isPosting || !previewText}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isPosting ? "กำลังโพสต์..." : "Post ลงสื่อ social"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -18,41 +18,45 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   const renderNav = () => (
-    <div className="flex h-full flex-col bg-white px-4 py-6">
-      <div className="flex items-center gap-2 px-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
+    <div className="flex h-full flex-col bg-white/80 px-5 py-6 backdrop-blur-xl">
+      <div className="flex items-center gap-3 px-2">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-500 via-purple-500 to-pink-500 text-sm font-semibold text-white shadow-md">
           KB
         </div>
         <div>
           <p className="text-sm font-semibold text-slate-900">KB Outage</p>
-          <p className="text-xs text-slate-500">Operations</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            Operations
+          </p>
         </div>
       </div>
-      <nav className="mt-8 flex-1 space-y-1">
+      <nav className="mt-8 flex-1 space-y-2">
         {navItems.map((item) => {
           const isActive =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+            pathname === item.href ||
+            pathname.startsWith(`${item.href}/`) ||
+            (item.href === "/jobs" && pathname.startsWith("/job/"));
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
+              className={`flex items-center justify-between rounded-full px-4 py-2 text-sm font-medium transition ${
                 isActive
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
               }`}
               onClick={onClose}
             >
               <span>{item.label}</span>
               {isActive ? (
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" />
               ) : null}
             </Link>
           );
         })}
       </nav>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-        Premium console layout • v1
+      <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 text-xs text-slate-500 shadow-sm">
+        Premium console layout • v2
       </div>
     </div>
   );
@@ -71,14 +75,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           onClick={onClose}
         />
         <aside
-          className={`absolute left-0 top-0 h-full w-64 transform bg-white shadow-xl transition-transform ${
+          className={`absolute left-0 top-0 h-full w-72 transform bg-white shadow-xl transition-transform ${
             isOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
           {renderNav()}
         </aside>
       </div>
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-slate-200 lg:bg-white">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-slate-200/70 lg:bg-white/80 lg:backdrop-blur-xl">
         {renderNav()}
       </aside>
     </>
