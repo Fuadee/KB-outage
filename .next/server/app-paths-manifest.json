@@ -1,15 +1,5 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/login/page": "app/login/page.js",
   "/job/[id]/page": "app/job/[id]/page.js",
-  "/page": "app/page.js",
-  "/api/auth/session/route": "app/api/auth/session/route.js",
-  "/new/page": "app/new/page.js",
-  "/api/jobs/[id]/close/route": "app/api/jobs/[id]/close/route.js",
-  "/api/docs/create/route": "app/api/docs/create/route.js",
-  "/api/jobs/[id]/delete/route": "app/api/jobs/[id]/delete/route.js",
-  "/api/jobs/social-pending/route": "app/api/jobs/social-pending/route.js",
-  "/api/jobs/notice-schedule/route": "app/api/jobs/notice-schedule/route.js",
-  "/api/jobs/social-post/route": "app/api/jobs/social-post/route.js"
+  "/api/auth/session/route": "app/api/auth/session/route.js"
 }

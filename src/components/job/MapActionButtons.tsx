@@ -44,7 +44,8 @@ export default function MapActionButtons({
 
   const iconClasses = "h-4 w-4 text-purple-600";
   const baseClasses =
-    "flex items-center justify-center gap-2 w-full md:w-auto rounded-2xl md:rounded-xl py-3 md:py-2 px-4 md:px-3 text-sm md:text-xs font-semibold md:font-medium transition-all duration-200 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 relative z-10 select-none";
+  "flex items-center justify-center gap-2 w-full md:w-auto rounded-2xl md:rounded-xl py-3 md:py-2 px-4 md:px-3 text-xs md:text-[11px] font-semibold md:font-medium transition-all duration-200 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 relative z-10 select-none";
+
 
   const mapButtonClasses = `${baseClasses}
   bg-white
@@ -82,9 +83,10 @@ const twinPrimaryClasses = mapButtonClasses;
       className={isPrimary ? primaryClasses : twinPrimaryClasses}
     >
       {icon}
-      <span className="bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700 bg-clip-text text-transparent">
+    <span className="whitespace-nowrap bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700 bg-clip-text text-transparent">
   {label}
 </span>
+
 
     </a>
   );
