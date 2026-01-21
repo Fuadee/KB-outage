@@ -30,17 +30,23 @@ export default async function DashboardPage() {
   const cards = [
     {
       title: "Active Jobs",
-      value: data ? data.activeJobs.toLocaleString("en-US") : "-",
+      value: data
+        ? (data.activeJobs ?? 0).toLocaleString("en-US")
+        : "0",
       description: "งานที่กำลังดำเนินการ"
     },
     {
       title: "Pending Approval",
-      value: data ? data.pendingApproval.toLocaleString("en-US") : "-",
+      value: data
+        ? (data.pendingApproval ?? 0).toLocaleString("en-US")
+        : "0",
       description: "รายการรอการอนุมัติ"
     },
     {
       title: "Scheduled Notices",
-      value: data ? data.scheduledNotices.toLocaleString("en-US") : "-",
+      value: data
+        ? (data.scheduledNotices ?? 0).toLocaleString("en-US")
+        : "0",
       description: "หนังสือแจ้งที่ตั้งเวลาไว้"
     }
   ];
