@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import ExternalMapLink from "@/components/ExternalMapLink";
+import MapActionButtons from "@/components/job/MapActionButtons";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SegmentedFilter from "@/components/SegmentedFilter";
@@ -705,95 +705,104 @@ export default function DashboardPage() {
                 >
                   <div className={`w-2 ${status.strip}`} />
                   <div className="flex w-full flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-                    <Link
-                      href={`/job/${job.id}`}
-                      className="flex min-w-[240px] flex-1 flex-col gap-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-slate-500">
-                            {parseLocalDate(job.outage_date).toLocaleDateString(
-                              "th-TH",
-                              {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric"
-                              }
-                            )}
-                          </span>
-                          <span className={`text-sm font-medium ${status.text}`}>
-                            {urgency.label}
-                          </span>
-                        </div>
-                        <StatusBadge status={urgency.color} label={urgency.color} />
-                      </div>
-                      {isClosed ? (
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                            ปิดแล้ว
-                          </span>
-                          <span>
-                            ปิดเมื่อ{" "}
-                            {job.closed_at
-                              ? new Date(job.closed_at).toLocaleString("th-TH", {
+                    <div className="flex min-w-[240px] flex-1 flex-col gap-4">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/job/${job.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            router.push(`/job/${job.id}`);
+                          }
+                        }}
+                        className="cursor-pointer space-y-4 rounded-2xl outline-none transition focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm text-slate-500">
+                              {parseLocalDate(job.outage_date).toLocaleDateString(
+                                "th-TH",
+                                {
                                   year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit"
-                                })
-                              : "-"}
-                          </span>
-                        </div>
-                      ) : null}
-                      <div className="space-y-1">
-                        <p className="text-lg font-semibold tracking-tight text-slate-900">
-                          {job.equipment_code}
-                        </p>
-                        <p className="text-sm text-slate-600">
-                          {job.note?.trim() || "ไม่มีหมายเหตุ"}
-                        </p>
-                      </div>
-                      <div className="grid gap-3 text-xs text-slate-500 sm:grid-cols-2">
-                        <div className="flex flex-col gap-1">
-                          <span>ลิ้ง Google Map</span>
-                          <ExternalMapLink
-                            url={job.map_link ?? undefined}
-                            label="เปิด Google Map"
+                                  month: "long",
+                                  day: "numeric"
+                                }
+                              )}
+                            </span>
+                            <span
+                              className={`text-sm font-medium ${status.text}`}
+                            >
+                              {urgency.label}
+                            </span>
+                          </div>
+                          <StatusBadge
+                            status={urgency.color}
+                            label={urgency.color}
                           />
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <span>ลิ้ง My Map</span>
-                          <ExternalMapLink url={job.mymaps_url ?? undefined} />
-                        </div>
-                      </div>
-                      {(isNotified || isNotRequired) && (
-                        <div className="text-sm text-slate-600">
-                          {isNotified ? (
-                            <>
-                              แจ้งศูนย์นครแล้ว:{" "}
-                              <span className="font-medium text-slate-800">
-                                {job.nakhon_notified_date
-                                  ? parseLocalDate(
-                                      job.nakhon_notified_date
-                                    ).toLocaleDateString("th-TH", {
+                        {isClosed ? (
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                              ปิดแล้ว
+                            </span>
+                            <span>
+                              ปิดเมื่อ{" "}
+                              {job.closed_at
+                                ? new Date(job.closed_at).toLocaleString(
+                                    "th-TH",
+                                    {
                                       year: "numeric",
                                       month: "short",
-                                      day: "numeric"
-                                    })
-                                  : "-"}
-                              </span>{" "}
-                              | เลขที่บันทึก:{" "}
-                              <span className="font-medium text-slate-800">
-                                {job.nakhon_memo_no ?? "-"}
-                              </span>
-                            </>
-                          ) : (
-                            <span>ไม่ต้องแจ้งศูนย์นคร</span>
-                          )}
+                                      day: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit"
+                                    }
+                                  )
+                                : "-"}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="space-y-1">
+                          <p className="text-lg font-semibold tracking-tight text-slate-900">
+                            {job.equipment_code}
+                          </p>
+                          <p className="text-sm text-slate-600">
+                            {job.note?.trim() || "ไม่มีหมายเหตุ"}
+                          </p>
                         </div>
-                      )}
-                    </Link>
+                        {(isNotified || isNotRequired) && (
+                          <div className="text-sm text-slate-600">
+                            {isNotified ? (
+                              <>
+                                แจ้งศูนย์นครแล้ว:{" "}
+                                <span className="font-medium text-slate-800">
+                                  {job.nakhon_notified_date
+                                    ? parseLocalDate(
+                                        job.nakhon_notified_date
+                                      ).toLocaleDateString("th-TH", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric"
+                                      })
+                                    : "-"}
+                                </span>{" "}
+                                | เลขที่บันทึก:{" "}
+                                <span className="font-medium text-slate-800">
+                                  {job.nakhon_memo_no ?? "-"}
+                                </span>
+                              </>
+                            ) : (
+                              <span>ไม่ต้องแจ้งศูนย์นคร</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <MapActionButtons
+                        googleUrl={job.map_link}
+                        myMapUrl={job.mymaps_url}
+                      />
+                    </div>
 
                     {!isClosed ? (
                       <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px]">

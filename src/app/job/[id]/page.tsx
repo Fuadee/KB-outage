@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import ExternalMapLink from "@/components/ExternalMapLink";
+import MapActionButtons from "@/components/job/MapActionButtons";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import Modal from "@/components/Modal";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
@@ -256,19 +256,11 @@ export default function JobDetailPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-700">ลิงก์แผนที่</h2>
-        <div className="mt-3 grid gap-3">
-          <div className="flex flex-col gap-1 text-xs text-slate-500">
-            <span>ลิ้ง Google Map</span>
-            <ExternalMapLink
-              url={job?.map_link ?? undefined}
-              label="เปิด Google Map"
-            />
-          </div>
-          <div className="flex flex-col gap-1 text-xs text-slate-500">
-            <span>ลิ้ง My Map</span>
-            <ExternalMapLink url={job?.mymaps_url ?? undefined} />
-          </div>
-        </div>
+        <MapActionButtons
+          googleUrl={job?.map_link}
+          myMapUrl={job?.mymaps_url}
+          className="mt-3"
+        />
       </div>
 
       <form
