@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
-import ExternalMapLink from "./ExternalMapLink";
+import MapActionButtons from "@/components/job/MapActionButtons";
 import type { OutageJob } from "@/lib/jobsRepo";
 import {
   buildSocialPostText,
@@ -124,13 +124,11 @@ export default function SocialPostPreviewModal({
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="flex flex-col gap-1 text-xs text-slate-500">
-            <span>ลิ้ง Google Map</span>
-            <ExternalMapLink
-              url={job?.map_link ?? undefined}
-              label="เปิด Google Map"
-            />
-          </div>
+          <MapActionButtons
+            googleUrl={job?.map_link}
+            myMapUrl={job?.mymaps_url}
+            variant="compact"
+          />
         </div>
         <div className="flex flex-wrap justify-end gap-3">
           <button
