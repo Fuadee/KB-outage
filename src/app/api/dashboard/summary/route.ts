@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const PENDING_APPROVAL_STATUSES = ["PENDING"];
-const SCHEDULED_NOTICE_STATUSES = ["NOTICE_SCHEDULED", "NOTICE_SENT"];
+const PENDING_APPROVAL_STATUSES = ["PENDING", "WAITING_APPROVAL"];
+const SCHEDULED_NOTICE_STATUS = "SCHEDULED";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -37,110 +37,112 @@ function logQueryError(target: QueryTarget, message: string) {
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient();
-    const currentDate = new Date().toISOString().slice(0, 10);
-
     const [
-      activeJobsResult,
+      activeJobsClosedResult,
+      activeJobsNullResult,
       pendingApprovalResult,
-      noticeDateColumnResult
+      scheduledNoticeStatusResult,
+      scheduledNoticeDateFallbackResult
     ] = await Promise.all([
       supabase
         .from("outage_jobs")
         .select("id", { count: "exact", head: true })
-        .gte("outage_date", currentDate),
+        .eq("is_closed", false),
       supabase
         .from("outage_jobs")
         .select("id", { count: "exact", head: true })
-        .in("nakhon_status", PENDING_APPROVAL_STATUSES),
+        .is("is_closed", null),
       supabase
-        .from("information_schema.columns")
-        .select("column_name", { count: "exact", head: true })
-        .eq("table_schema", "public")
-        .eq("table_name", "outage_jobs")
-        .eq("column_name", "notice_date")
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("social_status", PENDING_APPROVAL_STATUSES),
+      supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("notice_status", SCHEDULED_NOTICE_STATUS),
+      supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .is("notice_status", null)
+        .not("notice_date", "is", null)
     ]);
 
-    if (activeJobsResult.error) {
+    if (activeJobsClosedResult.error) {
       logQueryError(
         {
           table: "outage_jobs",
           columns: ["id"],
-          filters: { outage_date: `>= ${currentDate}` }
+          filters: { is_closed: "false" }
         },
-        activeJobsResult.error.message
+        activeJobsClosedResult.error.message
       );
-      throw new Error(activeJobsResult.error.message);
+      throw new Error(activeJobsClosedResult.error.message);
+    }
+    if (activeJobsNullResult.error) {
+      logQueryError(
+        {
+          table: "outage_jobs",
+          columns: ["id"],
+          filters: { is_closed: "null" }
+        },
+        activeJobsNullResult.error.message
+      );
+      throw new Error(activeJobsNullResult.error.message);
     }
     if (pendingApprovalResult.error) {
       logQueryError(
         {
           table: "outage_jobs",
           columns: ["id"],
-          filters: { nakhon_status: PENDING_APPROVAL_STATUSES }
+          filters: { social_status: PENDING_APPROVAL_STATUSES }
         },
         pendingApprovalResult.error.message
       );
       throw new Error(pendingApprovalResult.error.message);
     }
-    if (noticeDateColumnResult.error) {
+    if (scheduledNoticeStatusResult.error) {
       logQueryError(
         {
-          table: "information_schema.columns",
-          columns: ["column_name"],
-          filters: {
-            table_schema: "public",
-            table_name: "outage_jobs",
-            column_name: "notice_date"
-          }
+          table: "outage_jobs",
+          columns: ["id"],
+          filters: { notice_status: SCHEDULED_NOTICE_STATUS }
         },
-        noticeDateColumnResult.error.message
+        scheduledNoticeStatusResult.error.message
       );
-      throw new Error(noticeDateColumnResult.error.message);
+      throw new Error(scheduledNoticeStatusResult.error.message);
+    }
+    if (scheduledNoticeDateFallbackResult.error) {
+      logQueryError(
+        {
+          table: "outage_jobs",
+          columns: ["id"],
+          filters: { notice_status: "null", notice_date: "is not null" }
+        },
+        scheduledNoticeDateFallbackResult.error.message
+      );
+      throw new Error(scheduledNoticeDateFallbackResult.error.message);
     }
 
-    let scheduledNotices = 0;
-    if ((noticeDateColumnResult.count ?? 0) > 0) {
-      const noticeDateResult = await supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .not("notice_date", "is", null);
-
-      if (noticeDateResult.error) {
-        logQueryError(
-          {
-            table: "outage_jobs",
-            columns: ["id"],
-            filters: { notice_date: "is not null" }
-          },
-          noticeDateResult.error.message
-        );
-        throw new Error(noticeDateResult.error.message);
-      }
-
-      scheduledNotices = noticeDateResult.count ?? 0;
-    } else {
-      const noticeStatusResult = await supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .in("nakhon_status", SCHEDULED_NOTICE_STATUSES);
-
-      if (!noticeStatusResult.error) {
-        scheduledNotices = noticeStatusResult.count ?? 0;
-      }
-    }
+    const activeJobs =
+      (activeJobsClosedResult.count ?? 0) +
+      (activeJobsNullResult.count ?? 0);
+    const pendingApproval = pendingApprovalResult.count ?? 0;
+    const scheduledNotices =
+      (scheduledNoticeStatusResult.count ?? 0) +
+      (scheduledNoticeDateFallbackResult.count ?? 0);
 
     if (IS_DEV) {
       console.debug("Dashboard summary counts", {
-        currentDate,
-        activeJobs: activeJobsResult.count ?? 0,
-        pendingApproval: pendingApprovalResult.count ?? 0,
+        activeJobs,
+        pendingApproval,
         scheduledNotices
       });
     }
 
     return NextResponse.json({
-      activeJobs: activeJobsResult.count ?? 0,
-      pendingApproval: pendingApprovalResult.count ?? 0,
+      ok: true,
+      activeJobs,
+      pendingApproval,
       scheduledNotices
     });
   } catch (error) {
