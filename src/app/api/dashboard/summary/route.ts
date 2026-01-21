@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getNextAction } from "@/lib/dashboard";
 
 export const runtime = "nodejs";
-
-const PENDING_APPROVAL_STATUSES = ["PENDING", "WAITING_APPROVAL"];
-const SCHEDULED_NOTICE_STATUS = "SCHEDULED";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const IS_DEV = process.env.NODE_ENV !== "production";
-
-type QueryTarget = {
-  table: string;
-  columns: string[];
-  filters?: Record<string, string | string[]>;
-};
 
 function createSupabaseServerClient() {
   if (!SUPABASE_URL) {
@@ -27,123 +19,40 @@ function createSupabaseServerClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
-function logQueryError(target: QueryTarget, message: string) {
-  console.error("Dashboard summary query failed", {
-    message,
-    target
-  });
-}
-
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient();
-    const [
-      activeJobsClosedResult,
-      activeJobsNullResult,
-      pendingApprovalResult,
-      scheduledNoticeStatusResult,
-      scheduledNoticeDateFallbackResult
-    ] = await Promise.all([
-      supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("is_closed", false),
-      supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .is("is_closed", null),
-      supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .in("social_status", PENDING_APPROVAL_STATUSES),
-      supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("notice_status", SCHEDULED_NOTICE_STATUS),
-      supabase
-        .from("outage_jobs")
-        .select("id", { count: "exact", head: true })
-        .is("notice_status", null)
-        .not("notice_date", "is", null)
-    ]);
+    const { data, error } = await supabase
+      .from("outage_jobs")
+      .select(
+        [
+          "id",
+          "doc_status",
+          "social_status",
+          "notice_status",
+          "notice_date",
+          "nakhon_status",
+          "nakhon_notified_date",
+          "is_closed"
+        ].join(",")
+      );
 
-    if (activeJobsClosedResult.error) {
-      logQueryError(
-        {
-          table: "outage_jobs",
-          columns: ["id"],
-          filters: { is_closed: "false" }
-        },
-        activeJobsClosedResult.error.message
-      );
-      throw new Error(activeJobsClosedResult.error.message);
-    }
-    if (activeJobsNullResult.error) {
-      logQueryError(
-        {
-          table: "outage_jobs",
-          columns: ["id"],
-          filters: { is_closed: "null" }
-        },
-        activeJobsNullResult.error.message
-      );
-      throw new Error(activeJobsNullResult.error.message);
-    }
-    if (pendingApprovalResult.error) {
-      logQueryError(
-        {
-          table: "outage_jobs",
-          columns: ["id"],
-          filters: { social_status: PENDING_APPROVAL_STATUSES }
-        },
-        pendingApprovalResult.error.message
-      );
-      throw new Error(pendingApprovalResult.error.message);
-    }
-    if (scheduledNoticeStatusResult.error) {
-      logQueryError(
-        {
-          table: "outage_jobs",
-          columns: ["id"],
-          filters: { notice_status: SCHEDULED_NOTICE_STATUS }
-        },
-        scheduledNoticeStatusResult.error.message
-      );
-      throw new Error(scheduledNoticeStatusResult.error.message);
-    }
-    if (scheduledNoticeDateFallbackResult.error) {
-      logQueryError(
-        {
-          table: "outage_jobs",
-          columns: ["id"],
-          filters: { notice_status: "null", notice_date: "is not null" }
-        },
-        scheduledNoticeDateFallbackResult.error.message
-      );
-      throw new Error(scheduledNoticeDateFallbackResult.error.message);
+    if (error) {
+      throw new Error(error.message);
     }
 
-    const activeJobs =
-      (activeJobsClosedResult.count ?? 0) +
-      (activeJobsNullResult.count ?? 0);
-    const pendingApproval = pendingApprovalResult.count ?? 0;
-    const scheduledNotices =
-      (scheduledNoticeStatusResult.count ?? 0) +
-      (scheduledNoticeDateFallbackResult.count ?? 0);
-
-    if (IS_DEV) {
-      console.debug("Dashboard summary counts", {
-        activeJobs,
-        pendingApproval,
-        scheduledNotices
-      });
-    }
+    const jobs = data ?? [];
+    const openCount = jobs.filter((job) => !job.is_closed).length;
+    const closedCount = jobs.filter((job) => job.is_closed).length;
+    const actionRequiredCount = jobs.filter(
+      (job) => getNextAction(job) !== "ครบแล้ว"
+    ).length;
 
     return NextResponse.json({
       ok: true,
-      activeJobs,
-      pendingApproval,
-      scheduledNotices
+      openCount,
+      closedCount,
+      actionRequiredCount
     });
   } catch (error) {
     console.error("Dashboard summary failed", error);
