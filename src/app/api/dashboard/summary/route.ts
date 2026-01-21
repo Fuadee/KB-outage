@@ -41,14 +41,17 @@ export async function GET() {
       throw new Error(error.message);
     }
 
-    const jobs = data ?? [];
-    const openCount = jobs.filter((job) => !job.is_closed).length;
-    const closedCount = jobs.filter((job) => job.is_closed).length;
-    const actionRequiredCount = jobs.filter((job) => {
-      if (job.is_closed) return false;
-      const nextAction = getNextAction(job);
-      return nextAction !== "ครบแล้ว" && nextAction !== "ปิดงาน";
-    }).length;
+    const jobs = (Array.isArray(data) ? data : []) as Array<Record<string, any>>;
+
+const openCount = jobs.filter((job) => !job?.is_closed).length;
+const closedCount = jobs.filter((job) => !!job?.is_closed).length;
+
+const actionRequiredCount = jobs.filter((job) => {
+  if (job?.is_closed) return false;
+  const nextAction = getNextAction(job as any);
+  return nextAction !== "ครบแล้ว" && nextAction !== "ปิดงาน";
+}).length;
+
 
     return NextResponse.json({
       ok: true,

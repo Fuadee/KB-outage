@@ -66,7 +66,8 @@ export async function GET(request: Request) {
           "created_at"
         ].join(",")
       )
-      .order("outage_date", { ascending: false, nullsLast: true })
+      .order("outage_date is null", { ascending: true })
+      .order("outage_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -84,11 +85,19 @@ export async function GET(request: Request) {
       throw new Error(error.message);
     }
 
-    const jobs = (data ?? []).map((job) => ({
-      ...job,
-      step: getDashboardStep(job),
-      next_action: getNextAction(job)
-    }));
+  const jobs = (data ?? []).map((job) => {
+  const base =
+    job && typeof job === "object"
+      ? (job as Record<string, any>)
+      : ({} as Record<string, any>);
+
+  return {
+    ...base,
+    step: getDashboardStep(base as any),
+    next_action: getNextAction(base as any),
+  };
+});
+
 
     return NextResponse.json({ ok: true, jobs });
   } catch (error) {

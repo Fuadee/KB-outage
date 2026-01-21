@@ -37,8 +37,8 @@ type JobStatusSource = {
   notice_status: string | null;
   is_closed: boolean | null;
 };
-
-function deriveJobStatus(job: JobStatusSource) {
+type DerivedStatus = "Done" | "Notice" | "Posted" | "Doc" | "Draft";
+function deriveJobStatus(job: JobStatusSource): DerivedStatus {
   if (job.is_closed) return "Done";
   if ((job.notice_status ?? "NONE") === "SCHEDULED") return "Notice";
   if ((job.social_status ?? "DRAFT") === "POSTED") return "Posted";
@@ -82,22 +82,36 @@ export async function GET(request: Request) {
     }
 
     const summaryMap = new Map<
-      string,
-      { date: string; total: number; byStatus: Record<string, number> }
-    >();
+  string,
+  { date: string; total: number; byStatus: Record<DerivedStatus, number> }
+>();
 
     (data ?? []).forEach((job) => {
       const date = job.outage_date;
       if (!date) return;
+
+
       const status = deriveJobStatus(job);
-      const existing = summaryMap.get(date) ?? {
-        date,
-        total: 0,
-        byStatus: {}
-      };
-      existing.total += 1;
-      existing.byStatus[status] = (existing.byStatus[status] ?? 0) + 1;
-      summaryMap.set(date, existing);
+
+type SummaryRow = {
+  date: string;
+  total: number;
+  byStatus: Record<DerivedStatus, number>;
+};
+
+const existing: SummaryRow =
+  summaryMap.get(date) ??
+  ({
+    date,
+    total: 0,
+    byStatus: {} as Record<DerivedStatus, number>
+  } satisfies SummaryRow);
+
+existing.total += 1;
+existing.byStatus[status] = (existing.byStatus[status] ?? 0) + 1;
+
+summaryMap.set(date, existing);
+
     });
 
     const summary = Array.from(summaryMap.values()).sort((a, b) =>
