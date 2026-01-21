@@ -66,8 +66,9 @@ export async function GET(request: Request) {
           "created_at"
         ].join(",")
       )
-      .order("outage_date is null", { ascending: true })
-      .order("outage_date", { ascending: false })
+      .order("outage_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+
       .order("created_at", { ascending: false })
       .limit(limit);
 

@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       if (!date) return;
 
 
-      const status = deriveJobStatus(job);
+const status = deriveJobStatus(job);
 
 type SummaryRow = {
   date: string;
