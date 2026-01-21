@@ -11,6 +11,12 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+type QueryTarget = {
+  table: string;
+  columns: string[];
+  filters?: Record<string, string | string[]>;
+};
+
 function createSupabaseServerClient() {
   if (!SUPABASE_URL) {
     throw new Error("Missing SUPABASE_URL env var.");
@@ -19,6 +25,13 @@ function createSupabaseServerClient() {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var.");
   }
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function logQueryError(target: QueryTarget, message: string) {
+  console.error("Dashboard summary query failed", {
+    message,
+    target
+  });
 }
 
 export async function GET() {
@@ -48,12 +61,40 @@ export async function GET() {
     ]);
 
     if (activeJobsResult.error) {
+      logQueryError(
+        {
+          table: "outage_jobs",
+          columns: ["id"],
+          filters: { outage_date: `>= ${currentDate}` }
+        },
+        activeJobsResult.error.message
+      );
       throw new Error(activeJobsResult.error.message);
     }
     if (pendingApprovalResult.error) {
+      logQueryError(
+        {
+          table: "outage_jobs",
+          columns: ["id"],
+          filters: { nakhon_status: PENDING_APPROVAL_STATUSES }
+        },
+        pendingApprovalResult.error.message
+      );
       throw new Error(pendingApprovalResult.error.message);
     }
     if (noticeDateColumnResult.error) {
+      logQueryError(
+        {
+          table: "information_schema.columns",
+          columns: ["column_name"],
+          filters: {
+            table_schema: "public",
+            table_name: "outage_jobs",
+            column_name: "notice_date"
+          }
+        },
+        noticeDateColumnResult.error.message
+      );
       throw new Error(noticeDateColumnResult.error.message);
     }
 
@@ -65,6 +106,14 @@ export async function GET() {
         .not("notice_date", "is", null);
 
       if (noticeDateResult.error) {
+        logQueryError(
+          {
+            table: "outage_jobs",
+            columns: ["id"],
+            filters: { notice_date: "is not null" }
+          },
+          noticeDateResult.error.message
+        );
         throw new Error(noticeDateResult.error.message);
       }
 

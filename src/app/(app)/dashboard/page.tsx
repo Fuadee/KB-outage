@@ -27,26 +27,27 @@ async function getDashboardSummary() {
 
 export default async function DashboardPage() {
   const { data, error } = await getDashboardSummary();
+  const hasFallback = !data;
   const cards = [
     {
       title: "Active Jobs",
       value: data
         ? (data.activeJobs ?? 0).toLocaleString("en-US")
-        : "0",
+        : "—",
       description: "งานที่กำลังดำเนินการ"
     },
     {
       title: "Pending Approval",
       value: data
         ? (data.pendingApproval ?? 0).toLocaleString("en-US")
-        : "0",
+        : "—",
       description: "รายการรอการอนุมัติ"
     },
     {
       title: "Scheduled Notices",
       value: data
         ? (data.scheduledNotices ?? 0).toLocaleString("en-US")
-        : "0",
+        : "—",
       description: "หนังสือแจ้งที่ตั้งเวลาไว้"
     }
   ];
@@ -67,6 +68,11 @@ export default async function DashboardPage() {
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
           {error}
+        </div>
+      ) : null}
+      {hasFallback ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+          แสดงผลแบบ fallback เนื่องจากไม่สามารถโหลดข้อมูลได้
         </div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
