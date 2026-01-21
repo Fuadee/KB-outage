@@ -3,9 +3,13 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+const PENDING_APPROVAL_STATUSES = ["PENDING"];
+const SCHEDULED_NOTICE_STATUSES = ["NOTICE_SCHEDULED", "NOTICE_SENT"];
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const IS_DEV = process.env.NODE_ENV !== "production";
 
 function createSupabaseServerClient() {
   if (!SUPABASE_URL) {
@@ -20,24 +24,28 @@ function createSupabaseServerClient() {
 export async function GET() {
   try {
     const supabase = createSupabaseServerClient();
+    const currentDate = new Date().toISOString().slice(0, 10);
 
-    const [activeJobsResult, pendingApprovalResult, scheduledNoticesResult] =
-      await Promise.all([
-        // `status != done` maps to `is_closed` in `outage_jobs`.
-        supabase
-          .from("outage_jobs")
-          .select("id", { count: "exact", head: true })
-          .or("is_closed.is.null,is_closed.eq.false"),
-        // `status = pending` maps to `social_status = PENDING_APPROVAL`.
-        supabase
-          .from("outage_jobs")
-          .select("id", { count: "exact", head: true })
-          .eq("social_status", "PENDING_APPROVAL"),
-        supabase
-          .from("outage_jobs")
-          .select("id", { count: "exact", head: true })
-          .not("notice_date", "is", null)
-      ]);
+    const [
+      activeJobsResult,
+      pendingApprovalResult,
+      noticeDateColumnResult
+    ] = await Promise.all([
+      supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .gte("outage_date", currentDate),
+      supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("nakhon_status", PENDING_APPROVAL_STATUSES),
+      supabase
+        .from("information_schema.columns")
+        .select("column_name", { count: "exact", head: true })
+        .eq("table_schema", "public")
+        .eq("table_name", "outage_jobs")
+        .eq("column_name", "notice_date")
+    ]);
 
     if (activeJobsResult.error) {
       throw new Error(activeJobsResult.error.message);
@@ -45,19 +53,58 @@ export async function GET() {
     if (pendingApprovalResult.error) {
       throw new Error(pendingApprovalResult.error.message);
     }
-    if (scheduledNoticesResult.error) {
-      throw new Error(scheduledNoticesResult.error.message);
+    if (noticeDateColumnResult.error) {
+      throw new Error(noticeDateColumnResult.error.message);
+    }
+
+    let scheduledNotices = 0;
+    if ((noticeDateColumnResult.count ?? 0) > 0) {
+      const noticeDateResult = await supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .not("notice_date", "is", null);
+
+      if (noticeDateResult.error) {
+        throw new Error(noticeDateResult.error.message);
+      }
+
+      scheduledNotices = noticeDateResult.count ?? 0;
+    } else {
+      const noticeStatusResult = await supabase
+        .from("outage_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("nakhon_status", SCHEDULED_NOTICE_STATUSES);
+
+      if (!noticeStatusResult.error) {
+        scheduledNotices = noticeStatusResult.count ?? 0;
+      }
+    }
+
+    if (IS_DEV) {
+      console.debug("Dashboard summary counts", {
+        currentDate,
+        activeJobs: activeJobsResult.count ?? 0,
+        pendingApproval: pendingApprovalResult.count ?? 0,
+        scheduledNotices
+      });
     }
 
     return NextResponse.json({
       activeJobs: activeJobsResult.count ?? 0,
       pendingApproval: pendingApprovalResult.count ?? 0,
-      scheduledNotices: scheduledNoticesResult.count ?? 0
+      scheduledNotices
     });
   } catch (error) {
     console.error("Dashboard summary failed", error);
+    const message =
+      error instanceof Error ? error.message : "Unexpected error";
     return NextResponse.json(
-      { ok: false, error: "ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่" },
+      {
+        ok: false,
+        error: IS_DEV
+          ? message
+          : "ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่"
+      },
       { status: 500 }
     );
   }
