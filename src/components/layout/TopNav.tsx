@@ -8,7 +8,8 @@ interface TopNavProps {
 
 const titleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
-  "/jobs": "Jobs"
+  "/jobs": "Jobs",
+  "/calendar": "Calendar"
 };
 
 const getTitle = (pathname: string) => {

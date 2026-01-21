@@ -10,7 +10,8 @@ interface SidebarProps {
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
-  { label: "Jobs", href: "/jobs" }
+  { label: "Jobs", href: "/jobs" },
+  { label: "Calendar", href: "/calendar" }
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
