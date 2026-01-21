@@ -339,9 +339,9 @@ export default function CalendarPage() {
                     <span className="text-sm font-semibold">
                       {date.getDate()}
                     </span>
-                    {daySummary?.total ? (
+                    {/* {daySummary?.total ? (
                       <Badge variant="neutral">{daySummary.total}</Badge>
-                    ) : null}
+                    ) : null} */}
                   </div>
                   {loadingSummary ? (
                     <div className="mt-2 h-12 rounded-xl bg-slate-100" />

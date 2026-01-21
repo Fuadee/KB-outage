@@ -1,22 +1,9 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/job/[id]/page": "app/job/[id]/page.js",
-  "/login/page": "app/login/page.js",
-  "/new/page": "app/new/page.js",
-  "/page": "app/page.js",
-  "/api/dashboard/summary/route": "app/api/dashboard/summary/route.js",
   "/api/dashboard/jobs/route": "app/api/dashboard/jobs/route.js",
-  "/api/auth/session/route": "app/api/auth/session/route.js",
-  "/api/docs/create/route": "app/api/docs/create/route.js",
-  "/api/jobs/[id]/delete/route": "app/api/jobs/[id]/delete/route.js",
-  "/api/debug/schema/route": "app/api/debug/schema/route.js",
-  "/api/jobs/[id]/close/route": "app/api/jobs/[id]/close/route.js",
   "/api/jobs/calendar/route": "app/api/jobs/calendar/route.js",
-  "/api/jobs/social-pending/route": "app/api/jobs/social-pending/route.js",
-  "/api/jobs/notice-schedule/route": "app/api/jobs/notice-schedule/route.js",
-  "/api/jobs/social-post/route": "app/api/jobs/social-post/route.js",
-  "/api/jobs/route": "app/api/jobs/route.js",
-  "/(app)/jobs/page": "app/(app)/jobs/page.js",
+  "/page": "app/page.js",
+  "/api/auth/session/route": "app/api/auth/session/route.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
   "/(app)/calendar/page": "app/(app)/calendar/page.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
+  "/(app)/jobs/page": "app/(app)/jobs/page.js"
 }
