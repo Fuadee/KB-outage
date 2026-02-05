@@ -114,15 +114,15 @@ export default function DashboardPage() {
   }, [jobs]);
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-3">
+    <div className="space-y-6">
+      <header className="space-y-2 pb-1">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
           Overview
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
           Dashboard
         </h1>
-        <p className="text-sm text-slate-200/80">
+        <p className="text-sm text-slate-600">
           ติดตามสถานะงานแต่ละรายการและงานที่ต้องทำต่อ
         </p>
       </header>
