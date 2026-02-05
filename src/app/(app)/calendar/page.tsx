@@ -212,18 +212,6 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-          Schedule
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">
-          Calendar
-        </h1>
-        <p className="text-sm text-slate-600">
-          ภาพรวมปฏิทินงานและการติดตามเอกสารในเดือนนี้
-        </p>
-      </header>
-
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
