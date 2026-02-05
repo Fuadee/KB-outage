@@ -80,68 +80,70 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
-        <div className="mb-6 space-y-2">
-          <h1 className="text-2xl font-semibold text-slate-900">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-b from-slate-50 to-slate-200 px-6 py-12">
+      <div className="w-full max-w-md rounded-3xl border border-black/10 bg-[#3b3f4a] p-6 shadow-2xl md:max-w-3xl md:p-12">
+        <div className="mx-auto max-w-lg">
+          <div className="mb-8 space-y-2 text-center">
+            <h1 className="text-3xl font-extrabold text-white md:text-4xl">
             เข้าสู่ระบบ
-          </h1>
-          <p className="text-sm text-slate-500">
+            </h1>
+            <p className="text-sm text-slate-200/80">
             จัดการงานดับไฟได้ทันทีด้วยบัญชีของคุณ
-          </p>
-        </div>
+            </p>
+          </div>
 
-        <form onSubmit={handleSignIn} className="space-y-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            อีเมล
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-slate-400"
-              required
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            รหัสผ่าน
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-slate-400"
-              required
-            />
-          </label>
+          <form onSubmit={handleSignIn} className="space-y-5">
+            <label className="flex flex-col gap-2 text-left text-sm font-medium text-white">
+              อีเมล
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                className="rounded-2xl border border-transparent bg-[#e7f0ff] px-4 py-3.5 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-left text-sm font-medium text-white">
+              รหัสผ่าน
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                className="rounded-2xl border border-transparent bg-[#e7f0ff] px-4 py-3.5 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </label>
 
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
+            {error ? (
+              <div className="rounded-xl border border-red-300/80 bg-red-100 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+            {info ? (
+              <div className="rounded-xl border border-emerald-300/80 bg-emerald-100 px-3 py-2 text-sm text-emerald-700">
+                {info}
+              </div>
+            ) : null}
+
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={loading}
+                className="h-[50px] w-full rounded-2xl bg-[linear-gradient(90deg,#f97316_0%,#ec4899_33%,#8b5cf6_66%,#4f46e5_100%)] px-4 text-sm font-semibold text-white shadow-lg transition hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+              </button>
             </div>
-          ) : null}
-          {info ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {info}
-            </div>
-          ) : null}
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-          </button>
-        </form>
-
-        <div className="mt-4 flex flex-col gap-3 text-center text-sm text-slate-500">
-          <span>หรือ</span>
+          <div className="mt-3 text-center text-sm text-slate-200/80">หรือ</div>
           <button
             type="button"
             onClick={handleSignUp}
             disabled={loading}
-            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-3 h-[50px] w-full rounded-2xl border border-black/10 bg-white px-4 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-100 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
           >
             สมัครด้วยอีเมลนี้
           </button>
