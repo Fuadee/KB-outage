@@ -1,5 +1,12 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Noto_Sans_Thai } from "next/font/google";
+
+const noto = Noto_Sans_Thai({
+  subsets: ["thai"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: "Krabi Outage Tracker",
@@ -11,13 +18,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th">
-      <body>
-        <div className="min-h-screen">
-          <main className="mx-auto flex w-full max-w-5xl flex-col px-4 py-8">
-            {children}
-          </main>
-        </div>
-      </body>
+      <body className={`${noto.className} antialiased`}>{children}</body>
     </html>
   );
 }
