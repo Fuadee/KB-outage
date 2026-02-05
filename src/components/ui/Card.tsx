@@ -1,12 +1,13 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import { cardDark, subtitleText, titleText } from "@/lib/theme";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...props}
       className={cn(
-        "rounded-2xl border border-slate-200/70 bg-white shadow-sm",
+        cardDark,
         className
       )}
     />
@@ -29,7 +30,7 @@ export function CardTitle({
   return (
     <h3
       {...props}
-      className={cn("text-lg font-semibold tracking-tight text-slate-900", className)}
+      className={cn(titleText, className)}
     />
   );
 }
@@ -39,7 +40,7 @@ export function CardDescription({
   ...props
 }: HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p {...props} className={cn("text-sm text-slate-600", className)} />
+    <p {...props} className={cn(subtitleText, className)} />
   );
 }
 

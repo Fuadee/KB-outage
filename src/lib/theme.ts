@@ -1,0 +1,22 @@
+export const appBg =
+  "min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900";
+
+export const cardDark =
+  "w-full rounded-3xl bg-[#3b3f4a] shadow-[0_35px_90px_-60px_rgba(0,0,0,0.65)]";
+
+export const inputLight =
+  "w-full rounded-2xl bg-[#e7f0ff] px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500/80 outline-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-violet-400";
+
+export const btnPrimaryGradient =
+  "inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#f97316] via-[#ec4899] to-[#4f46e5] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2";
+
+export const btnSecondaryLight =
+  "inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 ring-1 ring-black/10 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2";
+
+export const dividerRow = "my-3 flex items-center gap-3 text-xs text-slate-300/70";
+
+export const labelText = "text-xs font-semibold text-slate-100/90";
+
+export const titleText = "text-2xl font-extrabold text-white";
+
+export const subtitleText = "mt-1 text-sm text-slate-200/80";
