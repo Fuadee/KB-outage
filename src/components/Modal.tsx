@@ -1,4 +1,6 @@
 import { ReactNode } from "react";
+import { cardDark, titleText } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 type ModalProps = {
   isOpen: boolean;
@@ -17,15 +19,15 @@ export default function Modal({ isOpen, title, onClose, children }: ModalProps) 
         onClick={onClose}
         role="presentation"
       />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-slate-200/70 bg-white p-6 shadow-xl">
+      <div className={cn("relative z-10 max-w-lg p-6", cardDark)}>
         <div className="flex items-start justify-between gap-4">
           {title ? (
-            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            <h2 className={cn("text-xl", titleText)}>{title}</h2>
           ) : null}
           <button
             type="button"
             onClick={onClose}
-            className="text-sm font-medium text-slate-500 hover:text-slate-700"
+            className="text-sm font-medium text-slate-200/80 hover:text-white"
           >
             ปิด
           </button>

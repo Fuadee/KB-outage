@@ -25,6 +25,7 @@ import {
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
+import { inputLight } from "@/lib/theme";
 import {
   getJobUrgency,
   getUrgencyStyles,
@@ -103,8 +104,7 @@ const actionLabelMap: Record<ActionKey, string> = {
 
 const actionButtonVariant = (isPrimary: boolean) =>
   isPrimary ? "primary" : "secondary";
-const textareaStyles =
-  "w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-200";
+const textareaStyles = `${inputLight} min-h-[96px]`;
 
 export default function JobsPage() {
   const router = useRouter();
@@ -602,7 +602,7 @@ export default function JobsPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex w-full max-w-md flex-col gap-2">
-              <label className="text-sm font-medium text-slate-600">
+              <label className="text-sm font-medium text-slate-200/80">
                 ค้นหาอุปกรณ์
               </label>
               <Input
@@ -745,7 +745,7 @@ export default function JobsPage() {
                         />
                       </div>
                       {isClosed ? (
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-200/80">
                           <Badge variant="neutral">ปิดแล้ว</Badge>
                           <span>
                             ปิดเมื่อ{" "}
@@ -765,15 +765,15 @@ export default function JobsPage() {
                         </div>
                       ) : null}
                       <div className="space-y-1">
-                        <p className="text-lg font-semibold tracking-tight text-slate-900">
+                        <p className="text-lg font-semibold tracking-tight text-white">
                           {job.equipment_code}
                         </p>
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-slate-200/80">
                           {job.note?.trim() || "ไม่มีหมายเหตุ"}
                         </p>
                       </div>
                       {(isNotified || isNotRequired) && (
-                        <div className="text-sm text-slate-600">
+                        <div className="text-sm text-slate-200/80">
                           {isNotified ? (
                             <>
                               แจ้งศูนย์นครแล้ว:{" "}
@@ -1179,7 +1179,7 @@ export default function JobsPage() {
         onClose={() => setCloseJob(null)}
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-200/80">
             ปิดงานแล้วจะถูกย้ายไปที่ &quot;งานที่ปิดแล้ว&quot;
             และไม่สามารถแก้ไขได้
           </p>

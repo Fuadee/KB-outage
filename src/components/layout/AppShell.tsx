@@ -3,6 +3,7 @@
 import { ReactNode, useState } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import TopNav from "@/components/layout/TopNav";
+import { appBg } from "@/lib/theme";
 
 interface AppShellProps {
   children: ReactNode;
@@ -12,7 +13,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-slate-900">
+    <div className={appBg}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex min-h-screen flex-col lg:pl-72">
         <TopNav onMenuClick={() => setSidebarOpen(true)} />

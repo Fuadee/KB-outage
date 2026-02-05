@@ -227,7 +227,7 @@ export default function CalendarPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
           Schedule
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-3xl font-semibold tracking-tight text-white">
           Calendar
         </h1>
         <p className="text-sm text-slate-600">
@@ -241,7 +241,7 @@ export default function CalendarPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
               Month view
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            <h2 className="mt-2 text-2xl font-semibold text-white">
               {monthLabel}
             </h2>
           </div>
@@ -272,7 +272,7 @@ export default function CalendarPage() {
             <p className="text-sm font-medium text-slate-500">
               Total outages this month
             </p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-white">
               {monthlyTotals.total}
             </p>
             <p className="text-sm text-slate-500">
@@ -285,7 +285,7 @@ export default function CalendarPage() {
             <p className="text-sm font-medium text-slate-500">
               Posted & notice
             </p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-white">
               {monthlyTotals.posted + monthlyTotals.notice}
             </p>
             <p className="text-sm text-slate-500">
@@ -296,7 +296,7 @@ export default function CalendarPage() {
         <Card>
           <CardContent className="space-y-2 py-5">
             <p className="text-sm font-medium text-slate-500">Completed</p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-white">
               {monthlyTotals.done}
             </p>
             <p className="text-sm text-slate-500">
@@ -391,7 +391,7 @@ export default function CalendarPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Daily outages
                 </p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">
+                <h2 className="mt-2 text-xl font-semibold text-white">
                   {selectedDate
                     ? selectedDate.toLocaleDateString("en-US", {
                         weekday: "long",

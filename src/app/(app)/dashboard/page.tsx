@@ -119,10 +119,10 @@ export default function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
           Overview
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-3xl font-semibold tracking-tight text-white">
           Dashboard
         </h1>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-200/80">
           ติดตามสถานะงานแต่ละรายการและงานที่ต้องทำต่อ
         </p>
       </header>

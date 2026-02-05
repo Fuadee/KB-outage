@@ -18,9 +18,9 @@ import {
 import Input from "@/components/ui/Input";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
+import { inputLight } from "@/lib/theme";
 
-const textareaStyles =
-  "w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-200";
+const textareaStyles = `${inputLight} min-h-[96px]`;
 
 export default function JobDetailPage() {
   const router = useRouter();
@@ -210,16 +210,16 @@ export default function JobDetailPage() {
         </p>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
               {isClosed ? "รายละเอียดงาน" : "แก้ไขงาน"}
             </h1>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-200/80">
               {isClosed
                 ? "งานนี้ถูกปิดแล้วและไม่สามารถแก้ไขได้"
                 : "ปรับปรุงรายละเอียดหรือลบงานนี้ออกจากระบบ"}
             </p>
             {isClosed ? (
-              <div className="text-sm text-slate-600">
+              <div className="text-sm text-slate-200/80">
                 ปิดเมื่อ{" "}
                 <span className="font-medium text-slate-800">
                   {job?.closed_at
@@ -425,7 +425,7 @@ export default function JobDetailPage() {
         onClose={() => setCloseOpen(false)}
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-200/80">
             ปิดงานแล้วจะถูกย้ายไปที่ &quot;งานที่ปิดแล้ว&quot;
             และไม่สามารถแก้ไขได้
           </p>

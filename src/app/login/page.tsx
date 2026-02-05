@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { syncSession } from "@/lib/supabase/client";
+import {
+  appBg,
+  btnPrimaryGradient,
+  btnSecondaryLight,
+  cardDark,
+  dividerRow,
+  inputLight,
+  labelText,
+  subtitleText,
+  titleText
+} from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,33 +92,33 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-200 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl bg-[#3b3f4a] p-6 shadow-2xl sm:p-7">
+    <div className={cn(appBg, "min-h-screen flex items-center justify-center px-4 py-10")}>
+      <div className={cn(cardDark, "max-w-md p-6 shadow-2xl sm:p-7")}>
         <div className="mb-6 space-y-2 text-center">
-          <h1 className="text-2xl font-extrabold text-white">เข้าสู่ระบบ</h1>
-          <p className="text-sm text-slate-200/80">จัดการงานดับไฟได้ทันทีด้วยบัญชีของคุณ</p>
+          <h1 className={titleText}>เข้าสู่ระบบ</h1>
+          <p className={cn(subtitleText, "mt-0")}>จัดการงานดับไฟได้ทันทีด้วยบัญชีของคุณ</p>
         </div>
 
         <form onSubmit={handleSignIn} className="space-y-4">
-          <label className="flex flex-col gap-2 text-left text-xs font-semibold text-slate-100/90">
+          <label className={cn("flex flex-col gap-2 text-left", labelText)}>
               อีเมล
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@example.com"
-                className="rounded-2xl border border-transparent bg-[#e7f0ff] px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500"
+                className={cn(inputLight, "text-slate-800 shadow-sm transition focus:ring-indigo-500")}
                 required
               />
             </label>
-            <label className="flex flex-col gap-2 text-left text-xs font-semibold text-slate-100/90">
+            <label className={cn("flex flex-col gap-2 text-left", labelText)}>
               รหัสผ่าน
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="••••••••"
-                className="rounded-2xl border border-transparent bg-[#e7f0ff] px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500"
+                className={cn(inputLight, "text-slate-800 shadow-sm transition focus:ring-indigo-500")}
                 required
               />
             </label>
@@ -126,14 +138,14 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-xl bg-[linear-gradient(90deg,#f97316_0%,#ec4899_33%,#8b5cf6_66%,#4f46e5_100%)] px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+                className={cn(btnPrimaryGradient, "rounded-xl bg-[linear-gradient(90deg,#f97316_0%,#ec4899_33%,#8b5cf6_66%,#4f46e5_100%)] shadow-lg hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70")}
               >
                 {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
               </button>
             </div>
         </form>
 
-        <div className="my-3 flex items-center gap-3">
+        <div className={dividerRow}>
           <div className="h-px flex-1 bg-white/10" />
           <span className="text-xs text-slate-300/70">หรือ</span>
           <div className="h-px flex-1 bg-white/10" />
@@ -142,7 +154,7 @@ export default function LoginPage() {
           type="button"
           onClick={handleSignUp}
           disabled={loading}
-          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-100 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+          className={cn(btnSecondaryLight, "rounded-xl font-medium text-slate-800 shadow-sm hover:bg-slate-100 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70")}
         >
           สมัครด้วยอีเมลนี้
         </button>
