@@ -127,17 +127,6 @@ export default function CalendarPage() {
     });
   }, [currentMonth]);
 
-  const monthlyTotals = useMemo(() => {
-    const totals = { total: 0, done: 0, notice: 0, posted: 0 };
-    summary.forEach((item) => {
-      totals.total += item.total;
-      totals.done += item.byStatus.Done ?? 0;
-      totals.notice += item.byStatus.Notice ?? 0;
-      totals.posted += item.byStatus.Posted ?? 0;
-    });
-    return totals;
-  }, [summary]);
-
   useEffect(() => {
     const fetchSummary = async () => {
       setLoadingSummary(true);
@@ -222,7 +211,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
           Schedule
@@ -265,46 +254,6 @@ export default function CalendarPage() {
           </div>
         </CardContent>
       </Card>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardContent className="space-y-2 py-5">
-            <p className="text-sm font-medium text-slate-500">
-              Total outages this month
-            </p>
-            <p className="text-2xl font-semibold text-white">
-              {monthlyTotals.total}
-            </p>
-            <p className="text-sm text-slate-500">
-              รายการที่ถูกบันทึกไว้ในเดือนนี้
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-2 py-5">
-            <p className="text-sm font-medium text-slate-500">
-              Posted & notice
-            </p>
-            <p className="text-2xl font-semibold text-white">
-              {monthlyTotals.posted + monthlyTotals.notice}
-            </p>
-            <p className="text-sm text-slate-500">
-              งานที่มีประกาศหรือโพสต์แล้วในเดือนนี้
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-2 py-5">
-            <p className="text-sm font-medium text-slate-500">Completed</p>
-            <p className="text-2xl font-semibold text-white">
-              {monthlyTotals.done}
-            </p>
-            <p className="text-sm text-slate-500">
-              งานที่ปิดสำเร็จแล้ว
-            </p>
-          </CardContent>
-        </Card>
-      </section>
 
       <Card>
         <CardContent className="py-6">
