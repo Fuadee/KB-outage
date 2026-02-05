@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { brandBadge, navItem, navItemActive, sidebarBase } from "@/lib/theme";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -18,44 +20,45 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   const renderNav = () => (
-    <div className="flex h-full flex-col bg-white/80 px-5 py-6 backdrop-blur-xl">
-      <div className="flex items-center gap-3 px-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-500 via-purple-500 to-pink-500 text-sm font-semibold text-white shadow-md">
-          KB
+    <div className={cn("flex h-full flex-col", sidebarBase)}>
+      <div className="flex items-center gap-3 px-1">
+        <div className={brandBadge}>
+          <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-900">
+            KB
+          </div>
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-900">KB Outage</p>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+          <p className="text-sm font-semibold text-white">KB Outage</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-200/70">
             Operations
           </p>
         </div>
       </div>
-      <nav className="mt-8 flex-1 space-y-2">
+
+      <nav className="mt-8 flex-1 space-y-1.5">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
             pathname.startsWith(`${item.href}/`) ||
             (item.href === "/jobs" && pathname.startsWith("/job/"));
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-between rounded-full px-4 py-2 text-sm font-medium transition ${
-                isActive
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
-              }`}
+              className={cn(navItem, isActive && navItemActive)}
               onClick={onClose}
             >
               <span>{item.label}</span>
               {isActive ? (
-                <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" />
+                <span className="h-2 w-2 rounded-full bg-white/80" />
               ) : null}
             </Link>
           );
         })}
       </nav>
-      <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 text-xs text-slate-500 shadow-sm">
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">
         Premium console layout • v2
       </div>
     </div>
@@ -64,25 +67,29 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 transition lg:hidden ${
+        className={cn(
+          "fixed inset-0 z-40 transition lg:hidden",
           isOpen ? "pointer-events-auto" : "pointer-events-none"
-        }`}
+        )}
       >
         <div
-          className={`absolute inset-0 bg-slate-900/40 transition-opacity ${
+          className={cn(
+            "absolute inset-0 bg-slate-900/40 transition-opacity",
             isOpen ? "opacity-100" : "opacity-0"
-          }`}
+          )}
           onClick={onClose}
         />
         <aside
-          className={`absolute left-0 top-0 h-full w-72 transform bg-white shadow-xl transition-transform ${
-            isOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={cn(
+            "absolute left-4 top-4 h-[calc(100%-2rem)] transform transition-transform",
+            isOpen ? "translate-x-0" : "-translate-x-[120%]"
+          )}
         >
           {renderNav()}
         </aside>
       </div>
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-slate-200/70 lg:bg-white/80 lg:backdrop-blur-xl">
+
+      <aside className="hidden lg:fixed lg:inset-y-4 lg:left-4 lg:flex lg:flex-col">
         {renderNav()}
       </aside>
     </>

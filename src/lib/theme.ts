@@ -20,3 +20,18 @@ export const labelText = "text-xs font-semibold text-slate-100/90";
 export const titleText = "text-2xl font-extrabold text-white";
 
 export const subtitleText = "mt-1 text-sm text-slate-200/80";
+
+export const sidebarBase =
+  "w-72 rounded-3xl bg-[#3b3f4a] p-5 text-white ring-1 ring-black/10 shadow-[0_35px_90px_-60px_rgba(0,0,0,0.75)]";
+
+export const navItem =
+  "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-slate-200/80 transition hover:bg-white/5 hover:text-white";
+
+export const navItemActive =
+  "bg-gradient-to-r from-[#f97316] via-[#ec4899] to-[#4f46e5] text-white font-semibold shadow-sm";
+
+export const topbarBase =
+  "sticky top-0 z-30 h-16 border-b border-slate-200/60 bg-white/60 backdrop-blur";
+
+export const brandBadge =
+  "flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-[#f97316] via-[#ec4899] to-[#4f46e5] p-[2px] shadow-sm";
