@@ -10,12 +10,12 @@ import {
   btnSecondaryLight,
   cardDark,
   dividerRow,
-  inputLight,
   labelText,
   subtitleText,
   titleText
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import Input from "@/components/ui/Input";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -102,23 +102,23 @@ export default function LoginPage() {
         <form onSubmit={handleSignIn} className="space-y-4">
           <label className={cn("flex flex-col gap-2 text-left", labelText)}>
               อีเมล
-              <input
+              <Input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@example.com"
-                className={cn(inputLight, "text-slate-800 shadow-sm transition focus:ring-indigo-500")}
+                className="focus-visible:ring-indigo-500"
                 required
               />
             </label>
             <label className={cn("flex flex-col gap-2 text-left", labelText)}>
               รหัสผ่าน
-              <input
+              <Input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="••••••••"
-                className={cn(inputLight, "text-slate-800 shadow-sm transition focus:ring-indigo-500")}
+                className="focus-visible:ring-indigo-500"
                 required
               />
             </label>

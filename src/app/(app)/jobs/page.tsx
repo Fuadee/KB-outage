@@ -1022,7 +1022,7 @@ export default function JobsPage() {
         onClose={closeModal}
       >
         <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             วันที่แจ้งศูนย์นคร
             <Input
               type="date"
@@ -1034,7 +1034,7 @@ export default function JobsPage() {
               <span className="text-xs text-red-600">{modalErrors.date}</span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             เลขที่บันทึก
             <Input
               type="text"
@@ -1072,7 +1072,7 @@ export default function JobsPage() {
         onClose={closeDocModal}
       >
         <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             หนังสือลงวันที่
             <Input
               type="date"
@@ -1091,7 +1091,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             ดับไฟเพื่อ
             <Input
               type="text"
@@ -1110,7 +1110,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             บริเวณที่ดับ
             <Input
               type="text"
@@ -1129,7 +1129,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             เวลาเริ่มดับไฟ
             <Input
               type="time"
@@ -1148,7 +1148,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             เวลาจ่ายไฟ
             <Input
               type="time"
@@ -1167,7 +1167,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             รายละเอียดพื้นที่ดับไฟ
             <textarea
               value={docForm.doc_area_detail}
@@ -1187,7 +1187,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
             ลิ้ง google map
             <Input
               type="url"

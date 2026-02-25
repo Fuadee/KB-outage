@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .input-light[type="date"] {
+    color: rgb(15 23 42);
+    -webkit-text-fill-color: rgb(15 23 42);
+  }
+}
