@@ -143,7 +143,7 @@ export default function NoticeScheduleModal({
             {toastMessage}
           </div>
         ) : null}
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
           วันที่จะไปดำเนินการแจ้ง
           <Input
             type="date"
@@ -155,7 +155,7 @@ export default function NoticeScheduleModal({
             <span className="text-xs text-red-600">{errors.noticeDate}</span>
           ) : null}
         </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
           ผู้แจ้ง
           <Input
             type="text"
@@ -167,7 +167,7 @@ export default function NoticeScheduleModal({
             <span className="text-xs text-red-600">{errors.noticeBy}</span>
           ) : null}
         </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
           ลิ้ง my map
           <Input
             type="url"

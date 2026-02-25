@@ -294,7 +294,7 @@ export default function JobDetailPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className="flex flex-col gap-6">
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
                 วันที่ดับไฟ
                 <Input
                   type="date"
@@ -304,7 +304,7 @@ export default function JobDetailPage() {
                   required
                 />
               </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
                 รหัสอุปกรณ์
                 <Input
                   type="text"
@@ -314,7 +314,7 @@ export default function JobDetailPage() {
                   required
                 />
               </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
                 หมายเหตุเพิ่มเติม
                 <textarea
                   value={note}
@@ -350,7 +350,7 @@ export default function JobDetailPage() {
                 ) : null}
                 <Link
                   href="/"
-                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-200/90 shadow-sm transition hover:bg-slate-100"
                 >
                   กลับ
                 </Link>
