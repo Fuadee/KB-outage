@@ -1,9 +1,4 @@
 {
-  "/api/dashboard/jobs/route": "app/api/dashboard/jobs/route.js",
-  "/api/jobs/calendar/route": "app/api/jobs/calendar/route.js",
-  "/page": "app/page.js",
   "/api/auth/session/route": "app/api/auth/session/route.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
-  "/(app)/calendar/page": "app/(app)/calendar/page.js",
   "/(app)/jobs/page": "app/(app)/jobs/page.js"
 }
