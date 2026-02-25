@@ -305,7 +305,13 @@ export default function CalendarPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400">ไม่มีงาน</p>
+                    <div
+                      className="min-h-[16px]"
+                      title="ไม่มีงาน"
+                      aria-label="ไม่มีงาน"
+                    >
+                      <span className="sr-only">ไม่มีงาน</span>
+                    </div>
                   )}
                 </button>
               );
