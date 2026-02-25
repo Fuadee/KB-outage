@@ -49,6 +49,18 @@ function isPayloadValid(payload: Partial<DocPayload>) {
   );
 }
 
+function toAsciiFilename(value: string) {
+  return value.replace(/[^\x20-\x7E]/g, "_");
+}
+
+function buildContentDisposition(asciiName: string, utf8Name?: string) {
+  if (!utf8Name) return `attachment; filename="${asciiName}"`;
+  const encoded = encodeURIComponent(utf8Name)
+    .replace(/['()]/g, escape)
+    .replace(/\*/g, "%2A");
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
+}
+
 export async function POST(request: Request) {
   let jobId: string | number | undefined;
   try {
@@ -162,20 +174,30 @@ export async function POST(request: Request) {
       throw new Error(finalizeError.message);
     }
 
-    const asciiName = `outage-doc-${job.equipment_code ?? "JOB"}-${
-      job.outage_date ?? ""
-    }.docx`;
+    const asciiName = toAsciiFilename(
+      `outage-doc-${job.equipment_code ?? "JOB"}-${job.outage_date ?? ""}.docx`
+    );
     const thaiName = `เอกสารดับไฟ-${job.equipment_code ?? "JOB"}-${
       job.outage_date ?? ""
     }.docx`;
-    const encodedThai = encodeURIComponent(thaiName);
+    const contentDisposition = buildContentDisposition(asciiName, thaiName);
 
-    return new Response(bytes, {
+    if (process.env.NODE_ENV !== "production") {
+      const hasOnlyAsciiOrPercentEncoding = /^[\x20-\x7E]+$/.test(
+        contentDisposition
+      );
+      console.info("Docs create Content-Disposition:", contentDisposition, {
+        hasOnlyAsciiOrPercentEncoding
+      });
+    }
+
+    return new NextResponse(bytes, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedThai}`
+        "Content-Disposition": contentDisposition,
+        "Cache-Control": "no-store"
       }
     });
   } catch (error) {
