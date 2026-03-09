@@ -73,7 +73,7 @@ async function fetchReminderJobs(
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const withStatus = await supabase
-    .from("jobs")
+    .from("outage_jobs")
     .select("id,equipment_code,outage_date,status")
     .eq("outage_date", targetDate)
     .is("line_reminder_sent_at", null);
@@ -90,7 +90,7 @@ async function fetchReminderJobs(
   }
 
   const withoutStatus = await supabase
-    .from("jobs")
+    .from("outage_jobs")
     .select("id,equipment_code,outage_date")
     .eq("outage_date", targetDate)
     .is("line_reminder_sent_at", null);
@@ -192,7 +192,7 @@ export async function POST() {
       }
 
       const { error: updateError } = await supabase
-        .from("jobs")
+        .from("outage_jobs")
         .update({ line_reminder_sent_at: new Date().toISOString() })
         .eq("id", job.id);
 
