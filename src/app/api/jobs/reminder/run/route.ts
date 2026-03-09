@@ -150,7 +150,7 @@ async function pushLineMessage(token: string, to: string, text: string) {
   };
 }
 
-export async function POST() {
+async function runReminder() {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   const targetId = process.env.LINE_DEFAULT_TARGET_ID;
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -174,6 +174,11 @@ export async function POST() {
     );
   }
 
+  const lineToken = token as string;
+  const lineTargetId = targetId as string;
+  const lineSupabaseUrl = supabaseUrl as string;
+  const lineServiceRoleKey = serviceRoleKey as string;
+
   const summary: Summary = {
     ok: true,
     targetDateUsed: "",
@@ -188,9 +193,10 @@ export async function POST() {
   try {
     const targetDate = getTargetDateInBangkok(5);
     summary.targetDateUsed = targetDate;
+
     const { jobs, statusFieldExists } = await fetchReminderJobs(
-      supabaseUrl!,
-      serviceRoleKey!
+      lineSupabaseUrl,
+      lineServiceRoleKey
     );
 
     summary.totalRowsChecked = jobs.length;
@@ -207,7 +213,7 @@ export async function POST() {
 
     summary.matched = matchedJobs.length;
 
-    const supabase = createClient(supabaseUrl!, serviceRoleKey!);
+    const supabase = createClient(lineSupabaseUrl, lineServiceRoleKey);
 
     for (const job of matchedJobs) {
       const normalizedStatus = (job.status ?? "").toLowerCase().trim();
@@ -221,7 +227,7 @@ export async function POST() {
 
       const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา 5 วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
 
-      const lineResult = await pushLineMessage(token!, targetId!, lineText);
+      const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
 
       if (!lineResult.ok) {
         summary.errors.push({
@@ -250,6 +256,7 @@ export async function POST() {
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+
     return NextResponse.json(
       {
         ...summary,
@@ -259,4 +266,12 @@ export async function POST() {
       { status: 500 }
     );
   }
+}
+
+export async function GET() {
+  return runReminder();
+}
+
+export async function POST() {
+  return runReminder();
 }
