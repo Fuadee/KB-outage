@@ -7,14 +7,18 @@ type ReminderJob = {
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
+  line_reminder_sent_at: string | null;
   status?: string | null;
 };
 
 type Summary = {
   ok: boolean;
+  targetDateUsed: string;
+  totalRowsChecked: number;
   matched: number;
   sent: number;
   skipped: number;
+  sampleRows: ReminderJob[];
   errors: Array<{ id?: number | string; error: string }>;
 };
 
@@ -65,8 +69,29 @@ function getTargetDateInBangkok(daysFromToday: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function normalizeDateOnly(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const dateOnly = trimmed.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    return dateOnly;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const yyyy = parsed.getUTCFullYear();
+  const mm = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 async function fetchReminderJobs(
-  targetDate: string,
   supabaseUrl: string,
   serviceRoleKey: string
 ): Promise<{ jobs: ReminderJob[]; statusFieldExists: boolean }> {
@@ -74,9 +99,9 @@ async function fetchReminderJobs(
 
   const withStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,status")
-    .eq("outage_date", targetDate)
-    .is("line_reminder_sent_at", null);
+    .select("id,equipment_code,outage_date,line_reminder_sent_at,status")
+    .order("outage_date", { ascending: true })
+    .limit(20);
 
   if (!withStatus.error) {
     return {
@@ -91,9 +116,9 @@ async function fetchReminderJobs(
 
   const withoutStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date")
-    .eq("outage_date", targetDate)
-    .is("line_reminder_sent_at", null);
+    .select("id,equipment_code,outage_date,line_reminder_sent_at")
+    .order("outage_date", { ascending: true })
+    .limit(20);
 
   if (withoutStatus.error) {
     throw new Error(withoutStatus.error.message);
@@ -151,25 +176,40 @@ export async function POST() {
 
   const summary: Summary = {
     ok: true,
+    targetDateUsed: "",
+    totalRowsChecked: 0,
     matched: 0,
     sent: 0,
     skipped: 0,
+    sampleRows: [],
     errors: [],
   };
 
   try {
     const targetDate = getTargetDateInBangkok(5);
+    summary.targetDateUsed = targetDate;
     const { jobs, statusFieldExists } = await fetchReminderJobs(
-      targetDate,
       supabaseUrl!,
       serviceRoleKey!
     );
 
-    summary.matched = jobs.length;
+    summary.totalRowsChecked = jobs.length;
+    summary.sampleRows = jobs.slice(0, 10);
+
+    const matchedJobs = jobs.filter((job) => {
+      if (job.line_reminder_sent_at) {
+        return false;
+      }
+
+      const normalizedOutageDate = normalizeDateOnly(job.outage_date);
+      return normalizedOutageDate === targetDate;
+    });
+
+    summary.matched = matchedJobs.length;
 
     const supabase = createClient(supabaseUrl!, serviceRoleKey!);
 
-    for (const job of jobs) {
+    for (const job of matchedJobs) {
       const normalizedStatus = (job.status ?? "").toLowerCase().trim();
       if (
         statusFieldExists &&
