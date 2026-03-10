@@ -1,5 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  BANGKOK_TIMEZONE,
+  REMINDER_LEAD_DAYS,
+  computeTargetOutageDate,
+  getReminderSkipReason,
+  normalizeDateOnly,
+} from "@/lib/reminder";
 
 export const runtime = "nodejs";
 
@@ -9,6 +16,7 @@ type ReminderJob = {
   outage_date: string | null;
   line_reminder_sent_at: string | null;
   status?: string | null;
+  is_closed?: boolean | null;
 };
 
 type Summary = {
@@ -20,6 +28,20 @@ type Summary = {
   skipped: number;
   sampleRows: ReminderJob[];
   errors: Array<{ id?: number | string; error: string }>;
+  diagnostics: {
+    triggerSource: "cron-or-get" | "manual-post";
+    timezone: string;
+    serverTimeUtc: string;
+    bangkokDateTime: string;
+    requestedDateOverride: string | null;
+    env: {
+      hasLineToken: boolean;
+      hasLineTargetId: boolean;
+      hasSupabaseUrl: boolean;
+      hasSupabaseServiceRoleKey: boolean;
+    };
+    skipReasons: Record<string, number>;
+  };
 };
 
 const THAI_SHORT_MONTHS = [
@@ -48,60 +70,19 @@ function formatThaiDateBE(dateText: string | null | undefined): string {
   return `${d} ${month} ${buddhistYear}`;
 }
 
-function getTargetDateInBangkok(daysFromToday: number): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-
-  const year = Number(parts.find((part) => part.type === "year")?.value ?? "0");
-  const month = Number(parts.find((part) => part.type === "month")?.value ?? "0");
-  const day = Number(parts.find((part) => part.type === "day")?.value ?? "0");
-
-  const bangkokMidnightUtc = new Date(Date.UTC(year, month - 1, day));
-  bangkokMidnightUtc.setUTCDate(bangkokMidnightUtc.getUTCDate() + daysFromToday);
-
-  const yyyy = bangkokMidnightUtc.getUTCFullYear();
-  const mm = String(bangkokMidnightUtc.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(bangkokMidnightUtc.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function normalizeDateOnly(value: string | null | undefined): string | null {
-  if (!value) return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const dateOnly = trimmed.slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-    return dateOnly;
-  }
-
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  const yyyy = parsed.getUTCFullYear();
-  const mm = String(parsed.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(parsed.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 async function fetchReminderJobs(
   supabaseUrl: string,
-  serviceRoleKey: string
+  serviceRoleKey: string,
+  targetDate: string
 ): Promise<{ jobs: ReminderJob[]; statusFieldExists: boolean }> {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const withStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_reminder_sent_at,status")
-    .order("outage_date", { ascending: true })
-    .limit(20);
+    .select("id,equipment_code,outage_date,line_reminder_sent_at,status,is_closed")
+    .eq("outage_date", targetDate)
+    .is("line_reminder_sent_at", null)
+    .order("outage_date", { ascending: true });
 
   if (!withStatus.error) {
     return {
@@ -110,15 +91,16 @@ async function fetchReminderJobs(
     };
   }
 
-  if (!/status/i.test(withStatus.error.message)) {
+  if (!/status|is_closed/i.test(withStatus.error.message)) {
     throw new Error(withStatus.error.message);
   }
 
   const withoutStatus = await supabase
     .from("outage_jobs")
     .select("id,equipment_code,outage_date,line_reminder_sent_at")
-    .order("outage_date", { ascending: true })
-    .limit(20);
+    .eq("outage_date", targetDate)
+    .is("line_reminder_sent_at", null)
+    .order("outage_date", { ascending: true });
 
   if (withoutStatus.error) {
     throw new Error(withoutStatus.error.message);
@@ -150,11 +132,48 @@ async function pushLineMessage(token: string, to: string, text: string) {
   };
 }
 
-async function runReminder() {
+async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "manual-post") {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   const targetId = process.env.LINE_DEFAULT_TARGET_ID;
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const queryOverride = req.nextUrl.searchParams.get("date");
+  const bodyOverride =
+    triggerSource === "manual-post"
+      ? normalizeDateOnly(String((await req.json().catch(() => ({})))?.date ?? ""))
+      : null;
+  const requestedDateOverride = normalizeDateOnly(queryOverride) ?? bodyOverride;
+
+  const summary: Summary = {
+    ok: true,
+    targetDateUsed: "",
+    totalRowsChecked: 0,
+    matched: 0,
+    sent: 0,
+    skipped: 0,
+    sampleRows: [],
+    errors: [],
+    diagnostics: {
+      triggerSource,
+      timezone: BANGKOK_TIMEZONE,
+      serverTimeUtc: new Date().toISOString(),
+      bangkokDateTime: new Intl.DateTimeFormat("sv-SE", {
+        timeZone: BANGKOK_TIMEZONE,
+        hourCycle: "h23",
+        dateStyle: "short",
+        timeStyle: "medium",
+      }).format(new Date()),
+      requestedDateOverride,
+      env: {
+        hasLineToken: Boolean(token),
+        hasLineTargetId: Boolean(targetId),
+        hasSupabaseUrl: Boolean(supabaseUrl),
+        hasSupabaseServiceRoleKey: Boolean(serviceRoleKey),
+      },
+      skipReasons: {},
+    },
+  };
 
   const missing = [
     !token && "LINE_CHANNEL_ACCESS_TOKEN",
@@ -166,6 +185,7 @@ async function runReminder() {
   if (missing.length > 0) {
     return NextResponse.json(
       {
+        ...summary,
         ok: false,
         error: "Missing required env variables",
         missing,
@@ -179,80 +199,83 @@ async function runReminder() {
   const lineSupabaseUrl = supabaseUrl as string;
   const lineServiceRoleKey = serviceRoleKey as string;
 
-  const summary: Summary = {
-    ok: true,
-    targetDateUsed: "",
-    totalRowsChecked: 0,
-    matched: 0,
-    sent: 0,
-    skipped: 0,
-    sampleRows: [],
-    errors: [],
+  const addSkipReason = (reason: string) => {
+    summary.skipped += 1;
+    summary.diagnostics.skipReasons[reason] =
+      (summary.diagnostics.skipReasons[reason] ?? 0) + 1;
   };
 
   try {
-    const targetDate = getTargetDateInBangkok(5);
+    const targetDate = computeTargetOutageDate({
+      leadDays: REMINDER_LEAD_DAYS,
+      timezone: BANGKOK_TIMEZONE,
+      overrideDate: requestedDateOverride,
+    });
     summary.targetDateUsed = targetDate;
 
     const { jobs, statusFieldExists } = await fetchReminderJobs(
       lineSupabaseUrl,
-      lineServiceRoleKey
+      lineServiceRoleKey,
+      targetDate
     );
 
     summary.totalRowsChecked = jobs.length;
     summary.sampleRows = jobs.slice(0, 10);
 
     const matchedJobs = jobs.filter((job) => {
-      if (job.line_reminder_sent_at) {
-        return false;
-      }
-
-      const normalizedOutageDate = normalizeDateOnly(job.outage_date);
-      return normalizedOutageDate === targetDate;
+      const reason = getReminderSkipReason(job, targetDate, statusFieldExists);
+      return reason === null;
     });
 
     summary.matched = matchedJobs.length;
 
     const supabase = createClient(lineSupabaseUrl, lineServiceRoleKey);
 
-    for (const job of matchedJobs) {
-      const normalizedStatus = (job.status ?? "").toLowerCase().trim();
-      if (
-        statusFieldExists &&
-        (normalizedStatus === "closed" || normalizedStatus === "done")
-      ) {
-        summary.skipped += 1;
+    for (const job of jobs) {
+      const skipReason = getReminderSkipReason(job, targetDate, statusFieldExists);
+      if (skipReason) {
+        addSkipReason(skipReason);
         continue;
       }
 
       const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา 5 วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
 
       const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
+      console.log("[reminder] LINE push", {
+        jobId: job.id,
+        ok: lineResult.ok,
+        status: lineResult.status,
+        responseSnippet: lineResult.body.slice(0, 300),
+      });
 
       if (!lineResult.ok) {
         summary.errors.push({
           id: job.id,
           error: `LINE push failed (${lineResult.status}): ${lineResult.body}`,
         });
+        addSkipReason("line_push_failed");
         continue;
       }
 
       const { error: updateError } = await supabase
         .from("outage_jobs")
         .update({ line_reminder_sent_at: new Date().toISOString() })
-        .eq("id", job.id);
+        .eq("id", job.id)
+        .is("line_reminder_sent_at", null);
 
       if (updateError) {
         summary.errors.push({
           id: job.id,
           error: `Failed to update line_reminder_sent_at: ${updateError.message}`,
         });
+        addSkipReason("update_sent_at_failed");
         continue;
       }
 
       summary.sent += 1;
     }
 
+    console.log("[reminder] summary", summary);
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -268,10 +291,10 @@ async function runReminder() {
   }
 }
 
-export async function GET() {
-  return runReminder();
+export async function GET(req: NextRequest) {
+  return runReminder(req, "cron-or-get");
 }
 
-export async function POST() {
-  return runReminder();
+export async function POST(req: NextRequest) {
+  return runReminder(req, "manual-post");
 }

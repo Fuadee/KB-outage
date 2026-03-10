@@ -4,8 +4,8 @@
 This project uses Vercel Cron to trigger the outage reminder endpoint automatically every day.
 
 - Cron path: `/api/jobs/reminder/run`
-- The API route runs the existing reminder logic against `outage_jobs`
-- It checks jobs where outage date is **today + 5 days (Asia/Bangkok)**
+- The API route runs reminder logic against `outage_jobs`
+- It computes target date as **today + 5 days** using **Asia/Bangkok**
 - It sends LINE reminders only when `line_reminder_sent_at` is `null`
 
 ## Why the schedule is `0 1 * * *`
@@ -21,7 +21,20 @@ After deployment, you can test the endpoint directly:
 - `GET /api/jobs/reminder/run`
 - `POST /api/jobs/reminder/run`
 
-Both methods run the same reminder logic and return the same debug JSON summary.
+Manual date override for verification:
+
+- `GET /api/jobs/reminder/run?date=2026-03-14`
+- `POST /api/jobs/reminder/run` with body `{ "date": "2026-03-14" }`
+
+## Debug output
+The endpoint returns diagnostic fields to help troubleshooting:
+
+- `diagnostics.serverTimeUtc`
+- `diagnostics.bangkokDateTime`
+- `diagnostics.timezone`
+- `diagnostics.requestedDateOverride`
+- `diagnostics.skipReasons`
+- `errors[]` with per-job failure details
 
 ## Important notes
 - Vercel Cron runs only after the project is deployed to Vercel.
