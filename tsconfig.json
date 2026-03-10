@@ -31,7 +31,8 @@
       "googleapis": [
         "src/stubs/googleapis"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",
