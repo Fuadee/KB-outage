@@ -10,7 +10,7 @@
 Vercel cron ใช้ UTC:
 
 - `/api/jobs/reminder/run` → `0 1 * * *` (ประมาณ 08:00 ไทย)
-- `/api/jobs/reminder/same-day/run` → `30 7 * * *` (ประมาณ 14:30 ไทย)
+- `/api/jobs/reminder/same-day/run` → `0 1 * * *` (ประมาณ 08:00 ไทย)
 
 > ข้อจำกัด Vercel Hobby: งาน cron อาจคลาดเคลื่อนระดับชั่วโมงได้ จึงเน้น “ถูกวัน” มากกว่า “ตรงนาที”
 

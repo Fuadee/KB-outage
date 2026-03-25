@@ -76,7 +76,7 @@ const defaultSettings: ReminderSettings = {
   lead_reminder_days: 5,
   lead_reminder_time: "08:00",
   same_day_reminder_enabled: true,
-  same_day_reminder_time: "14:30",
+  same_day_reminder_time: "08:00",
 };
 
 function formatBangkokDateTime(dateText: string | null): string {

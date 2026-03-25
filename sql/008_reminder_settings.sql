@@ -5,7 +5,7 @@ create table if not exists public.reminder_settings (
   lead_reminder_days integer not null default 5,
   lead_reminder_time text not null default '08:00',
   same_day_reminder_enabled boolean not null default true,
-  same_day_reminder_time text not null default '14:30',
+  same_day_reminder_time text not null default '08:00',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint reminder_settings_timezone_check check (timezone = 'Asia/Bangkok'),
@@ -28,7 +28,7 @@ insert into public.reminder_settings (
   same_day_reminder_enabled,
   same_day_reminder_time
 )
-values (1, 'Asia/Bangkok', true, 5, '08:00', true, '14:30')
+values (1, 'Asia/Bangkok', true, 5, '08:00', true, '08:00')
 on conflict (id) do nothing;
 
 alter table public.reminder_settings enable row level security;
