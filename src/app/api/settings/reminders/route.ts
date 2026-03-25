@@ -6,6 +6,7 @@ import {
 } from "@/lib/reminderSettings";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -29,6 +30,12 @@ export async function PUT(request: Request) {
 
   try {
     const payload = await request.json().catch(() => null);
+    console.log("reminder-settings-save-payload", {
+      method: "PUT",
+      fields: payload && typeof payload === "object" ? Object.keys(payload as Record<string, unknown>) : [],
+      same_day_reminder_time: (payload as Record<string, unknown> | null)?.same_day_reminder_time ?? null,
+      lead_reminder_time: (payload as Record<string, unknown> | null)?.lead_reminder_time ?? null,
+    });
     const validation = validateReminderSettingsInput(payload, "partial");
 
     if (!validation.ok) {
@@ -41,11 +48,17 @@ export async function PUT(request: Request) {
       return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
     }
 
+    const settingsBefore = await getReminderSettings();
     const settings = await updateReminderSettings(validation.value);
     console.log("reminder-settings-save-success", {
       method: "PUT",
       id: settings.id,
       timezone: settings.timezone,
+      changedFields: {
+        lead_reminder_time: { before: settingsBefore.lead_reminder_time, after: settings.lead_reminder_time },
+        same_day_reminder_time: { before: settingsBefore.same_day_reminder_time, after: settings.same_day_reminder_time },
+        lead_reminder_days: { before: settingsBefore.lead_reminder_days, after: settings.lead_reminder_days },
+      },
     });
     console.log("reminder-settings-save-end", { method: "PUT", ok: true });
 

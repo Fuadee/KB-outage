@@ -19,7 +19,8 @@ import {
 } from "./reminder.ts";
 
 import { buildPreviewSection } from "./reminderPreview.ts";
-import { validateReminderSettingsInput } from "./reminderSettings.ts";
+import { buildReminderPreview } from "./reminderPreview.ts";
+import { updateReminderSettings, validateReminderSettingsInput } from "./reminderSettings.ts";
 
 test("today 2026-03-14 should target outage_date 2026-03-19", () => {
   const now = new Date("2026-03-14T02:00:00+07:00");
@@ -288,4 +289,141 @@ test("computeNextScheduledRunAt returns same day when time not passed", () => {
   });
 
   assert.equal(next, "2026-03-25T08:00:00+07:00");
+});
+
+type MockState = {
+  reminderSettings: Record<string, unknown>;
+  outageJobs: Array<Record<string, unknown>>;
+};
+
+function createMockSupabase(state: MockState) {
+  return {
+    from(table: string) {
+      const query: Record<string, unknown> = { table, operation: "select", filters: {} };
+      return {
+        select() {
+          query.operation = query.operation === "update" ? "update-select" : "select";
+          return this;
+        },
+        insert(row: Record<string, unknown>) {
+          if (table === "reminder_settings") {
+            state.reminderSettings = { ...row };
+          }
+          query.operation = "insert";
+          return this;
+        },
+        update(row: Record<string, unknown>) {
+          query.operation = "update";
+          query.updateRow = row;
+          return this;
+        },
+        eq(field: string, value: unknown) {
+          (query.filters as Record<string, unknown>)[field] = value;
+          return this;
+        },
+        order() {
+          if (table !== "outage_jobs") return Promise.resolve({ data: [], error: null });
+          const targetDate = (query.filters as Record<string, unknown>).outage_date;
+          const data = state.outageJobs.filter((job) => job.outage_date === targetDate);
+          return Promise.resolve({ data, error: null });
+        },
+        maybeSingle() {
+          if (table !== "reminder_settings") return Promise.resolve({ data: null, error: null });
+          const id = (query.filters as Record<string, unknown>).id;
+          const row = state.reminderSettings.id === id ? state.reminderSettings : null;
+          return Promise.resolve({ data: row, error: null });
+        },
+        single() {
+          if (table !== "reminder_settings") return Promise.resolve({ data: null, error: null });
+          if (query.operation === "update-select" || query.operation === "update") {
+            state.reminderSettings = {
+              ...state.reminderSettings,
+              ...(query.updateRow as Record<string, unknown>),
+            };
+          }
+          return Promise.resolve({ data: state.reminderSettings, error: null });
+        },
+      };
+    },
+  };
+}
+
+test("save settings persists same_day_reminder_time to DB layer", async () => {
+  const state: MockState = {
+    reminderSettings: {
+      id: 1,
+      timezone: "Asia/Bangkok",
+      lead_reminder_enabled: true,
+      lead_reminder_days: 5,
+      lead_reminder_time: "08:00",
+      same_day_reminder_enabled: true,
+      same_day_reminder_time: "08:00",
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+    outageJobs: [],
+  };
+  const supabase = createMockSupabase(state);
+  const saved = await updateReminderSettings({ same_day_reminder_time: "09:45" }, supabase as never);
+  assert.equal(saved.same_day_reminder_time, "09:45");
+  assert.equal(state.reminderSettings.same_day_reminder_time, "09:45");
+});
+
+test("preview/system status/same-day section use same_day_reminder_time from DB", async () => {
+  const state: MockState = {
+    reminderSettings: {
+      id: 1,
+      timezone: "Asia/Bangkok",
+      lead_reminder_enabled: true,
+      lead_reminder_days: 5,
+      lead_reminder_time: "08:00",
+      same_day_reminder_enabled: true,
+      same_day_reminder_time: "09:45",
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+    outageJobs: [
+      {
+        id: 1001,
+        equipment_code: "TR-1001",
+        outage_date: "2026-03-25",
+        line_reminder_sent_at: null,
+        line_same_day_reminder_sent_at: null,
+        status: "open",
+        is_closed: false,
+      },
+    ],
+  };
+  const preview = await buildReminderPreview({
+    supabase: createMockSupabase(state) as never,
+    now: new Date("2026-03-25T07:10:00+07:00"),
+    previewDate: "2026-03-25",
+  });
+
+  assert.equal(preview.settingsDebug.same_day_reminder_time_from_db, "09:45");
+  assert.equal(preview.systemStatus.sameDayReminderScheduleTime, "09:45");
+  assert.equal(preview.sameDayPreview.scheduleTime, "09:45");
+  assert.equal(preview.sameDayPreview.items[0]?.plannedNotifyTime, "09:45");
+  assert.equal(preview.systemStatus.nextSameDayRunAt, "2026-03-25T09:45:00+07:00");
+});
+
+test("no active hardcoded 14:30 in reminder settings/preview flow", () => {
+  const settingsPage = readFileSync(
+    new URL("../app/(app)/settings/reminders/page.tsx", import.meta.url),
+    "utf8"
+  );
+  const settingsApi = readFileSync(
+    new URL("../app/api/settings/reminders/route.ts", import.meta.url),
+    "utf8"
+  );
+  const previewApi = readFileSync(
+    new URL("../app/api/settings/reminders/preview/route.ts", import.meta.url),
+    "utf8"
+  );
+  const previewHelper = readFileSync(new URL("./reminderPreview.ts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(settingsPage, /14:30/);
+  assert.doesNotMatch(settingsApi, /14:30/);
+  assert.doesNotMatch(previewApi, /14:30/);
+  assert.doesNotMatch(previewHelper, /14:30/);
 });

@@ -4,6 +4,7 @@ import { normalizeDateOnly } from "@/lib/reminder";
 import { buildReminderPreview } from "@/lib/reminderPreview";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function createServiceRoleClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -36,6 +37,13 @@ export async function GET(request: NextRequest) {
       previewDate,
     });
 
+    console.log("reminder-preview-settings-resolved", {
+      previewDate,
+      lead_reminder_time_from_db: preview.settingsDebug.lead_reminder_time_from_db,
+      same_day_reminder_time_from_db: preview.settingsDebug.same_day_reminder_time_from_db,
+      source: preview.settingsDebug.source,
+    });
+
     console.log("reminder-preview-lead-query-end", {
       targetDate: preview.leadPreview.targetDate,
       matched: preview.leadPreview.matched,
@@ -57,7 +65,11 @@ export async function GET(request: NextRequest) {
       nextSameDayRunAt: preview.systemStatus.nextSameDayRunAt,
     });
 
-    return NextResponse.json(preview);
+    return NextResponse.json(preview, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.log("reminder-preview-end", { ok: false, error: message, previewDate });
