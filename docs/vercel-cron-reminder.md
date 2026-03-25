@@ -1,76 +1,70 @@
-# Vercel Cron + Reminder Settings (LINE)
+# Vercel Cron + Reminder Settings (LINE) — Hobby Plan
 
-## Reminder Settings คืออะไร
-ระบบนี้ทำให้ผู้ใช้ตั้งค่าเวลาแจ้งเตือนจากหน้าเว็บได้ โดยไม่ต้องแก้เวลา cron ใน `vercel.json` ทุกครั้ง
+## สรุประบบใหม่
+ระบบ Reminder ถูกปรับให้รองรับ **Vercel Hobby** โดยใช้ cron trigger แบบ **วันละครั้งต่อ route** เท่านั้น และไม่พึ่งพา logic เวลาแบบนาทีเป๊ะจาก DB อีกต่อไป
 
-- Lead reminder (แจ้งเตือนล่วงหน้า)
-  - เปิด/ปิดได้
-  - กำหนดจำนวนวันล่วงหน้าได้
-  - กำหนดเวลาได้ (HH:mm)
-- Same-day reminder (แจ้งเตือนวันจริง)
-  - เปิด/ปิดได้
-  - กำหนดเวลาได้ (HH:mm)
+- Lead reminder route: `/api/jobs/reminder/run`
+- Same-day reminder route: `/api/jobs/reminder/same-day/run`
 
-> ทุกเวลาอิง `Asia/Bangkok`
+## Cron schedule (UTC)
+Vercel cron ใช้ UTC:
 
-## สถาปัตยกรรมใหม่
-Vercel Cron เปลี่ยนเป็นวิ่งถี่คงที่ทุก 5 นาที แล้ว route จะเป็นคนเช็ค schedule จาก DB เอง
+- `/api/jobs/reminder/run` → `0 1 * * *` (ประมาณ 08:00 ไทย)
+- `/api/jobs/reminder/same-day/run` → `30 7 * * *` (ประมาณ 14:30 ไทย)
 
-1. cron เรียก endpoint ทุก 5 นาที
-2. endpoint โหลด `reminder_settings` จาก DB
-3. endpoint ตรวจเวลาไทยว่าตรงกับ `HH:mm` ที่ตั้งไว้หรือไม่ (window 5 นาที)
-4. ถ้ายังไม่ถึงเวลา จะ `skip` และตอบเหตุผล (`skipped because not scheduled time`)
-5. ถ้าตรงเวลา ค่อยทำ flow เดิม (query งาน + ส่ง LINE + update sent flag)
+> ข้อจำกัด Vercel Hobby: งาน cron อาจคลาดเคลื่อนระดับชั่วโมงได้ จึงเน้น “ถูกวัน” มากกว่า “ตรงนาที”
 
-แนวทางนี้ทำให้เปลี่ยนเวลาได้จาก UI ทันที โดยไม่แตะ cron runtime
+## Business logic ที่คงไว้
 
-## Cron schedule ใหม่ (UTC)
-Vercel cron ใช้ UTC และตอนนี้ตั้งคงที่ไว้แบบถี่:
+### 1) Lead reminder
+- targetDate = วันนี้ตามเวลา Bangkok + lead_reminder_days
+- query เฉพาะงาน `outage_date = targetDate`
+- query เฉพาะงานที่ `line_reminder_sent_at IS NULL`
+- skip งาน closed/done
+- ส่ง LINE
+- update `line_reminder_sent_at`
 
-- `/api/jobs/reminder/run` → `*/5 * * * *`
-- `/api/jobs/reminder/same-day/run` → `*/5 * * * *`
+### 2) Same-day reminder
+- targetDate = วันนี้ตามเวลา Bangkok
+- query เฉพาะงาน `outage_date = targetDate`
+- query เฉพาะงานที่ `line_same_day_reminder_sent_at IS NULL` (ยกเว้น forceSend)
+- skip งาน closed/done
+- ส่ง LINE
+- update `line_same_day_reminder_sent_at`
 
-## Settings API
-- `GET /api/settings/reminders`
-  - อ่านค่าปัจจุบัน (get-or-create default row)
-- `PUT /api/settings/reminders`
-  - บันทึกค่าใหม่พร้อม validation
+## Reminder settings ที่ยังใช้
+ยังคงใช้ settings จากตาราง `reminder_settings` เฉพาะ:
+- `lead_reminder_enabled`
+- `lead_reminder_days`
+- `same_day_reminder_enabled`
+- `timezone` (ต้องเป็น `Asia/Bangkok`)
 
-Validation หลัก:
-- `timezone` ต้องเป็น `Asia/Bangkok`
-- `lead_reminder_days` ต้องเป็นจำนวนเต็มช่วง `0..30`
-- เวลา (`lead_reminder_time`, `same_day_reminder_time`) ต้องรูปแบบ `HH:mm`
+**หมายเหตุ:** field เวลา `lead_reminder_time` / `same_day_reminder_time` ยังคงเก็บใน DB ได้เพื่อ backward compatibility แต่ route ไม่ใช้ตัดสินใจส่งแล้ว
 
-## หน้าเว็บสำหรับผู้ใช้
-หน้า: `/settings/reminders`
+## Observability logs
+แต่ละ route จะมี log หลัก:
+- `reminder-route-start`
+- `reminder-target-date`
+- `reminder-total-rows`
+- `reminder-sent-count`
+- `reminder-skipped-count`
+- `reminder-route-end`
 
-มี 2 ส่วน:
-- แจ้งเตือนล่วงหน้า: toggle + จำนวนวัน + เวลา
-- แจ้งเตือนวันจริง: toggle + เวลา
+## Manual testing
 
-พร้อมปุ่มบันทึก, loading state, success/error feedback
+1) Lead reminder (manual GET)
+- `GET /api/jobs/reminder/run?date=YYYY-MM-DD`
 
-## Debug เมื่อ cron วิ่งแต่ไม่ส่ง LINE
-ให้ดู response และ logs ต่อไปนี้:
+2) Same-day reminder (manual GET)
+- `GET /api/jobs/reminder/same-day/run?date=YYYY-MM-DD`
 
-### Response field ที่สำคัญ
-- `skippedBySchedule`
-- `reason`
-- `diagnostics.scheduleGate.enabled`
-- `diagnostics.scheduleGate.configuredTime`
-- `diagnostics.scheduleGate.nowWithinWindow`
-- `targetDateUsed`, `skipReasons`, `errors`
+3) Dry run (ไม่ส่งจริง)
+- `GET /api/jobs/reminder/same-day/run?date=YYYY-MM-DD&dryRun=1`
 
-### Log keys
-- `reminder-settings-load-start`
-- `reminder-settings-load-end`
-- `reminder-schedule-check`
-- `reminder-schedule-skip-not-time-yet`
-- `reminder-schedule-match`
+4) Force send (manual POST)
+- `POST /api/jobs/reminder/same-day/run` body: `{ "date": "YYYY-MM-DD", "forceSend": 1 }`
 
-## หมายเหตุสำคัญ
-- การกันส่งซ้ำยังใช้ sent flag ต่อรายการงานเหมือนเดิม:
-  - lead: `line_reminder_sent_at`
-  - same-day: `line_same_day_reminder_sent_at`
-- settings เป็นแค่ schedule gate ว่ารอบนี้ควร “เริ่มส่งหรือยัง”
-- สามารถทดสอบ manual override date ได้เหมือนเดิมผ่าน query/body `date`
+## ข้อจำกัดสำคัญบน Hobby
+- ไม่รองรับ realtime reminder แบบนาทีเป๊ะ
+- ไม่รองรับ polling ทุก 5 นาที
+- ไม่ควรผูก UX ว่าตั้งเวลาเองได้แบบทันทีแล้ว backend จะยิงตรงนาที

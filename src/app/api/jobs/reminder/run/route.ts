@@ -5,7 +5,6 @@ import {
   computeTargetOutageDate,
   formatThaiDateBE,
   getReminderSkipReason,
-  isWithinScheduledWindowBangkok,
   normalizeDateOnly,
 } from "@/lib/reminder";
 import { getReminderSettings } from "@/lib/reminderSettings";
@@ -43,11 +42,8 @@ type Summary = {
       hasSupabaseServiceRoleKey: boolean;
     };
     skipReasons: Record<string, number>;
-    scheduleGate: {
-      enabled: boolean;
-      configuredTime: string;
-      nowWithinWindow: boolean;
-    };
+    leadReminderEnabled: boolean;
+    leadReminderDays: number;
   };
 };
 
@@ -153,13 +149,17 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         hasSupabaseServiceRoleKey: Boolean(serviceRoleKey),
       },
       skipReasons: {},
-      scheduleGate: {
-        enabled: true,
-        configuredTime: "",
-        nowWithinWindow: false,
-      },
+      leadReminderEnabled: true,
+      leadReminderDays: 5,
     },
   };
+
+  console.log("reminder-route-start", {
+    route: "lead-reminder",
+    triggerSource,
+    method: req.method,
+    requestedDateOverride,
+  });
 
   const missing = [
     !token && "LINE_CHANNEL_ACCESS_TOKEN",
@@ -192,33 +192,16 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   };
 
   try {
-    console.log("reminder-settings-load-start", { route: "lead-reminder" });
     const settings = await getReminderSettings();
-    console.log("reminder-settings-load-end", {
-      route: "lead-reminder",
-      timezone: settings.timezone,
-      leadReminderEnabled: settings.lead_reminder_enabled,
-      leadReminderDays: settings.lead_reminder_days,
-      leadReminderTime: settings.lead_reminder_time,
-    });
-    const now = new Date();
-    const nowWithinWindow = isWithinScheduledWindowBangkok(now, settings.lead_reminder_time);
-    summary.diagnostics.scheduleGate = {
-      enabled: settings.lead_reminder_enabled,
-      configuredTime: settings.lead_reminder_time,
-      nowWithinWindow,
-    };
-    console.log("reminder-schedule-check", {
-      route: "lead-reminder",
-      enabled: settings.lead_reminder_enabled,
-      configuredTime: settings.lead_reminder_time,
-      nowWithinWindow,
-    });
+    summary.diagnostics.leadReminderEnabled = settings.lead_reminder_enabled;
+    summary.diagnostics.leadReminderDays = settings.lead_reminder_days;
 
     if (!settings.lead_reminder_enabled) {
-      console.log("reminder-schedule-skip-not-time-yet", {
+      console.log("reminder-route-end", {
         route: "lead-reminder",
         reason: "lead_reminder_disabled",
+        sent: 0,
+        skipped: 0,
       });
       return NextResponse.json({
         ...summary,
@@ -226,24 +209,6 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         reason: "lead_reminder_disabled",
       });
     }
-
-    if (!requestedDateOverride && !nowWithinWindow) {
-      console.log("reminder-schedule-skip-not-time-yet", {
-        route: "lead-reminder",
-        configuredTime: settings.lead_reminder_time,
-      });
-      return NextResponse.json({
-        ...summary,
-        skippedBySchedule: true,
-        reason: "skipped because not scheduled time",
-      });
-    }
-
-    console.log("reminder-schedule-match", {
-      route: "lead-reminder",
-      configuredTime: settings.lead_reminder_time,
-      override: Boolean(requestedDateOverride),
-    });
 
     const targetDate = computeTargetOutageDate({
       leadDays: settings.lead_reminder_days,
@@ -251,6 +216,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       overrideDate: requestedDateOverride,
     });
     summary.targetDateUsed = targetDate;
+    console.log("reminder-target-date", { route: "lead-reminder", targetDate });
 
     const { jobs, statusFieldExists } = await fetchReminderJobs(
       lineSupabaseUrl,
@@ -260,6 +226,11 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
 
     summary.totalRowsChecked = jobs.length;
     summary.sampleRows = jobs.slice(0, 10);
+    console.log("reminder-total-rows", {
+      route: "lead-reminder",
+      targetDate,
+      totalRows: jobs.length,
+    });
 
     const matchedJobs = jobs.filter((job) => {
       const reason = getReminderSkipReason(job, targetDate, statusFieldExists);
@@ -280,13 +251,6 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา ${settings.lead_reminder_days} วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
 
       const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
-      console.log("[reminder] LINE push", {
-        jobId: job.id,
-        ok: lineResult.ok,
-        status: lineResult.status,
-        responseSnippet: lineResult.body.slice(0, 300),
-      });
-
       if (!lineResult.ok) {
         summary.errors.push({
           id: job.id,
@@ -314,10 +278,31 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       summary.sent += 1;
     }
 
-    console.log("[reminder] summary", summary);
+    console.log("reminder-sent-count", { route: "lead-reminder", sent: summary.sent });
+    console.log("reminder-skipped-count", {
+      route: "lead-reminder",
+      skipped: summary.skipped,
+      skipReasons: summary.diagnostics.skipReasons,
+    });
+    console.log("reminder-route-end", {
+      route: "lead-reminder",
+      ok: summary.ok,
+      targetDate: summary.targetDateUsed,
+      sent: summary.sent,
+      skipped: summary.skipped,
+      totalRows: summary.totalRowsChecked,
+    });
+
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.log("reminder-route-end", {
+      route: "lead-reminder",
+      ok: false,
+      error: message,
+      sent: summary.sent,
+      skipped: summary.skipped,
+    });
 
     return NextResponse.json(
       {
