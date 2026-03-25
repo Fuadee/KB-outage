@@ -4,11 +4,13 @@ import {
   BANGKOK_TIMEZONE,
   computeBangkokTodayDateOnly,
   formatSameDayReminderMessage,
+  getReminderMissingEnvKeys,
   getReminderRuntimeReadiness,
   getSameDayReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
 import { getReminderSettings } from "@/lib/reminderSettings";
+import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -206,13 +208,31 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
     forceSendRequested,
   });
 
+  if (triggerSource === "manual-post") {
+    const { accessToken } = getAuthTokens();
+    if (!accessToken) {
+      return NextResponse.json(
+        { ...summary, ok: false, error: "UNAUTHENTICATED" },
+        { status: 401 }
+      );
+    }
+
+    const authClient = createServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ...summary, ok: false, error: "UNAUTHENTICATED" },
+        { status: 401 }
+      );
+    }
+  }
+
   const runtimeReadiness = getReminderRuntimeReadiness();
-  const missing = [
-    !runtimeReadiness.hasLineToken && "LINE_CHANNEL_ACCESS_TOKEN",
-    !runtimeReadiness.hasLineTargetId && "LINE_DEFAULT_TARGET_ID",
-    !runtimeReadiness.hasSupabaseUrl && "SUPABASE_URL",
-    !runtimeReadiness.hasSupabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
-  ].filter(Boolean) as string[];
+  const missing = getReminderMissingEnvKeys(runtimeReadiness);
 
   if (missing.length > 0) {
     return NextResponse.json(
