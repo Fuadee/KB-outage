@@ -10,6 +10,7 @@ import {
   formatLeadReminderMessage,
   formatPlannedNotifyThaiDateTime,
   formatSameDayReminderMessage,
+  getReminderRuntimeReadiness,
   getReminderSkipReason,
   getSameDayReminderSkipReason,
   normalizeDateOnly,
@@ -57,10 +58,13 @@ export type ReminderPreviewSection = {
 
 export type ReminderSystemStatus = {
   isSystemReady: boolean;
+  timezone: string;
   hasLineToken: boolean;
   hasLineTargetId: boolean;
   hasSupabaseUrl: boolean;
   hasSupabaseServiceRoleKey: boolean;
+  routeLeadReady: boolean;
+  routeSameDayReady: boolean;
   leadReminderScheduleTime: string;
   sameDayReminderScheduleTime: string;
   nextLeadRunAt: string | null;
@@ -256,10 +260,7 @@ function buildSystemStatus(options: {
   sameDayReminderScheduleTime: string;
   now?: Date;
 }): ReminderSystemStatus {
-  const hasLineToken = Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN);
-  const hasLineTargetId = Boolean(process.env.LINE_TARGET_USER_ID || process.env.LINE_TARGET_GROUP_ID);
-  const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL);
-  const hasSupabaseServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const runtimeReadiness = getReminderRuntimeReadiness();
 
   const nextLeadRunAt = computeNextScheduledRunAt({
     now: options.now,
@@ -273,12 +274,14 @@ function buildSystemStatus(options: {
   });
 
   return {
-    isSystemReady:
-      hasLineToken && hasLineTargetId && hasSupabaseUrl && hasSupabaseServiceRoleKey,
-    hasLineToken,
-    hasLineTargetId,
-    hasSupabaseUrl,
-    hasSupabaseServiceRoleKey,
+    isSystemReady: runtimeReadiness.isSystemReady,
+    timezone: runtimeReadiness.timezone,
+    hasLineToken: runtimeReadiness.hasLineToken,
+    hasLineTargetId: runtimeReadiness.hasLineTargetId,
+    hasSupabaseUrl: runtimeReadiness.hasSupabaseUrl,
+    hasSupabaseServiceRoleKey: runtimeReadiness.hasSupabaseServiceRoleKey,
+    routeLeadReady: runtimeReadiness.routeLeadReady,
+    routeSameDayReady: runtimeReadiness.routeSameDayReady,
     leadReminderScheduleTime: options.leadReminderScheduleTime,
     sameDayReminderScheduleTime: options.sameDayReminderScheduleTime,
     nextLeadRunAt,
