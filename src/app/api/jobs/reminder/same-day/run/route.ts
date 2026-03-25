@@ -4,6 +4,7 @@ import {
   BANGKOK_TIMEZONE,
   computeBangkokTodayDateOnly,
   formatSameDayReminderMessage,
+  getReminderRuntimeReadiness,
   getSameDayReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
@@ -205,11 +206,12 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
     forceSendRequested,
   });
 
+  const runtimeReadiness = getReminderRuntimeReadiness();
   const missing = [
-    !token && "LINE_CHANNEL_ACCESS_TOKEN",
-    !targetId && "LINE_DEFAULT_TARGET_ID",
-    !supabaseUrl && "SUPABASE_URL",
-    !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+    !runtimeReadiness.hasLineToken && "LINE_CHANNEL_ACCESS_TOKEN",
+    !runtimeReadiness.hasLineTargetId && "LINE_DEFAULT_TARGET_ID",
+    !runtimeReadiness.hasSupabaseUrl && "SUPABASE_URL",
+    !runtimeReadiness.hasSupabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
   ].filter(Boolean) as string[];
 
   if (missing.length > 0) {

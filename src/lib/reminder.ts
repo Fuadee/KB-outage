@@ -268,3 +268,33 @@ export function formatSameDayReminderMessage(input: {
 }): string {
   return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n📢 กรุณาดำเนินการแจ้งผู้ใช้ไฟฟ้า\nและเตรียมความพร้อมก่อนดำเนินการ`;
 }
+
+export type ReminderRuntimeReadiness = {
+  timezone: string;
+  hasLineToken: boolean;
+  hasLineTargetId: boolean;
+  hasSupabaseUrl: boolean;
+  hasSupabaseServiceRoleKey: boolean;
+  routeLeadReady: boolean;
+  routeSameDayReady: boolean;
+  isSystemReady: boolean;
+};
+
+export function getReminderRuntimeReadiness(): ReminderRuntimeReadiness {
+  const hasLineToken = Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN);
+  const hasLineTargetId = Boolean(process.env.LINE_DEFAULT_TARGET_ID);
+  const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL);
+  const hasSupabaseServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const routeReady = hasLineToken && hasLineTargetId && hasSupabaseUrl && hasSupabaseServiceRoleKey;
+
+  return {
+    timezone: BANGKOK_TIMEZONE,
+    hasLineToken,
+    hasLineTargetId,
+    hasSupabaseUrl,
+    hasSupabaseServiceRoleKey,
+    routeLeadReady: routeReady,
+    routeSameDayReady: routeReady,
+    isSystemReady: routeReady,
+  };
+}
