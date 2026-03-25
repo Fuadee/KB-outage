@@ -17,6 +17,19 @@ type ReminderSettings = {
   same_day_reminder_time: string;
 };
 
+type ApiResult<T> = {
+  response: Response;
+  data: T | null;
+  text: string;
+};
+
+type ReminderSettingsApiResponse = {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  settings?: ReminderSettings;
+};
+
 type ReminderReadinessStatus = "disabled" | "scheduled" | "ready_today" | "sent" | "skipped";
 
 type ReminderPreviewItem = {
@@ -93,6 +106,29 @@ const defaultSettings: ReminderSettings = {
   same_day_reminder_enabled: true,
   same_day_reminder_time: "08:00",
 };
+
+async function parseApiResult<T>(response: Response): Promise<ApiResult<T>> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const rawText = await response.text();
+
+  if (!rawText) {
+    return { response, data: null, text: "" };
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      return { response, data: JSON.parse(rawText) as T, text: rawText };
+    } catch {
+      return { response, data: null, text: rawText };
+    }
+  }
+
+  try {
+    return { response, data: JSON.parse(rawText) as T, text: rawText };
+  } catch {
+    return { response, data: null, text: rawText };
+  }
+}
 
 function formatBangkokDateTime(dateText: string | null): string {
   if (!dateText) return "-";
@@ -216,9 +252,12 @@ export default function ReminderSettingsPage() {
 
     try {
       const response = await fetch("/api/settings/reminders/preview", { cache: "no-store" });
-      const body = await response.json();
-      if (!response.ok || !body.ok) {
-        throw new Error(body?.error ?? "โหลด preview ไม่สำเร็จ");
+      const { data, text } = await parseApiResult<ReminderPreviewResponse & { error?: string }>(
+        response
+      );
+      const body = data;
+      if (!response.ok || !body?.ok) {
+        throw new Error(body?.error ?? text ?? "โหลด preview ไม่สำเร็จ");
       }
 
       setPreview(body as ReminderPreviewResponse);
@@ -236,13 +275,14 @@ export default function ReminderSettingsPage() {
 
     fetch("/api/settings/reminders", { cache: "no-store" })
       .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok || !body.ok) {
-          throw new Error(body?.error ?? "โหลดการตั้งค่าไม่สำเร็จ");
+        const { data, text } = await parseApiResult<ReminderSettingsApiResponse>(response);
+        const body = data;
+        if (!response.ok || !body?.ok) {
+          throw new Error(body?.error ?? text ?? "โหลดการตั้งค่าไม่สำเร็จ");
         }
 
         if (!isActive) return;
-        setSettings(body.settings);
+        setSettings(body.settings ?? defaultSettings);
         setError(null);
       })
       .catch((loadError: unknown) => {
@@ -278,18 +318,19 @@ export default function ReminderSettingsPage() {
         body: JSON.stringify(settings),
       });
 
-      const body = await response.json();
-      if (!response.ok || !body.ok) {
-        throw new Error(body?.error ?? "บันทึกการตั้งค่าไม่สำเร็จ");
+      const { data, text } = await parseApiResult<ReminderSettingsApiResponse>(response);
+      const body = data;
+      if (!response.ok || !body?.ok) {
+        throw new Error(body?.error ?? text ?? "บันทึกการตั้งค่าไม่สำเร็จ");
       }
 
-      setSettings(body.settings);
-      setSuccess("บันทึกการตั้งค่าเรียบร้อยแล้ว");
+      setSettings(body.settings ?? settings);
+      setSuccess(body.message ?? "บันทึกการตั้งค่าเรียบร้อยแล้ว");
       await loadPreview();
     } catch (saveError: unknown) {
       const message =
-        saveError instanceof Error ? saveError.message : "บันทึกการตั้งค่าไม่สำเร็จ";
-      setError(message);
+        saveError instanceof Error ? saveError.message : "ไม่สามารถบันทึกการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง";
+      setError(message === "Unexpected end of JSON input" ? "ไม่สามารถอ่านผลลัพธ์จากระบบได้ กรุณาลองใหม่อีกครั้ง" : message);
     } finally {
       setIsSaving(false);
     }
@@ -309,10 +350,11 @@ export default function ReminderSettingsPage() {
         },
         body: JSON.stringify({ dryRun: false }),
       });
-      const body = (await response.json()) as ManualRunResponse;
+      const { data, text } = await parseApiResult<ManualRunResponse>(response);
+      const body = data as ManualRunResponse | null;
 
-      if (!response.ok || !body.ok) {
-        throw new Error(body?.error ?? "รันแจ้งเตือนไม่สำเร็จ");
+      if (!response.ok || !body?.ok) {
+        throw new Error(body?.error ?? text ?? "รันแจ้งเตือนไม่สำเร็จ");
       }
 
       setManualRunAt(new Date().toISOString());
@@ -374,6 +416,20 @@ export default function ReminderSettingsPage() {
                   disabled={isLoading}
                 />
               </label>
+              <label className={cn("flex flex-col gap-2", labelText)}>
+                เวลาแจ้งเตือนล่วงหน้า
+                <Input
+                  type="time"
+                  value={settings.lead_reminder_time}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      lead_reminder_time: event.target.value,
+                    }))
+                  }
+                  disabled={isLoading || isSaving}
+                />
+              </label>
             </div>
 
             <div className="grid gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 sm:grid-cols-2">
@@ -389,6 +445,20 @@ export default function ReminderSettingsPage() {
                   }
                 />
                 เปิดแจ้งเตือนวันจริง
+              </label>
+              <label className={cn("flex flex-col gap-2", labelText)}>
+                เวลาแจ้งเตือนวันจริง
+                <Input
+                  type="time"
+                  value={settings.same_day_reminder_time}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      same_day_reminder_time: event.target.value,
+                    }))
+                  }
+                  disabled={isLoading || isSaving}
+                />
               </label>
             </div>
 
