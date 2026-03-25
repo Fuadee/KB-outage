@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import {
   addDaysToDateOnly,
   computeBangkokTodayDateOnly,
+  computeLeadPlannedNotifyDate,
+  computeNextScheduledRunAt,
+  computeSameDayPlannedNotifyDate,
   computeTargetOutageDate,
+  deriveReminderReadinessStatus,
   formatLeadReminderMessage,
   formatSameDayReminderMessage,
   getReminderSkipReason,
@@ -192,16 +196,22 @@ test("preview section marks reminder_disabled skip reason when section disabled"
   const section = buildPreviewSection({
     enabled: false,
     targetDate: "2026-03-14",
+    scheduleTime: "08:00",
+    nextRunAt: "2026-03-14T08:00:00+07:00",
+    summaryText: "summary",
     jobs: [
       {
         id: 1,
         equipment_code: "TR-001",
-        outage_date: "2026-03-14",
+        outage_date: "2026-03-19",
         line_reminder_sent_at: null,
         line_same_day_reminder_sent_at: null,
       },
     ],
     statusFieldExists: true,
+    todayDate: "2026-03-14",
+    notificationType: "lead",
+    leadDays: 5,
     getSkipReason: () => null,
     formatMessage: () => "preview-message",
   });
@@ -210,6 +220,7 @@ test("preview section marks reminder_disabled skip reason when section disabled"
   assert.equal(section.skipped, 1);
   assert.equal(section.items[0]?.wouldSend, false);
   assert.equal(section.items[0]?.skipReason, "reminder_disabled");
+  assert.equal(section.items[0]?.readinessStatus, "disabled");
 });
 
 test("preview route remains preview-only and avoids side effects", () => {
@@ -222,4 +233,59 @@ test("preview route remains preview-only and avoids side effects", () => {
   assert.doesNotMatch(source, /line_reminder_sent_at/);
   assert.doesNotMatch(source, /line_same_day_reminder_sent_at/);
   assert.doesNotMatch(source, /api\.line\.me/);
+});
+
+
+test("plannedNotifyDate for lead is outage_date minus lead days", () => {
+  assert.equal(computeLeadPlannedNotifyDate("2026-03-31", 5), "2026-03-26");
+});
+
+test("plannedNotifyDate for same-day equals outage_date", () => {
+  assert.equal(computeSameDayPlannedNotifyDate("2026-03-31"), "2026-03-31");
+});
+
+test("readinessStatus is scheduled when planned date is not due yet", () => {
+  const status = deriveReminderReadinessStatus({
+    enabled: true,
+    plannedNotifyDate: "2026-03-26",
+    todayDate: "2026-03-25",
+    isSent: false,
+    skipReason: null,
+  });
+
+  assert.equal(status, "scheduled");
+});
+
+test("readinessStatus is ready_today when planned date is today", () => {
+  const status = deriveReminderReadinessStatus({
+    enabled: true,
+    plannedNotifyDate: "2026-03-26",
+    todayDate: "2026-03-26",
+    isSent: false,
+    skipReason: null,
+  });
+
+  assert.equal(status, "ready_today");
+});
+
+test("readinessStatus is sent when sent flag exists", () => {
+  const status = deriveReminderReadinessStatus({
+    enabled: true,
+    plannedNotifyDate: "2026-03-26",
+    todayDate: "2026-03-26",
+    isSent: true,
+    skipReason: null,
+  });
+
+  assert.equal(status, "sent");
+});
+
+test("computeNextScheduledRunAt returns same day when time not passed", () => {
+  const next = computeNextScheduledRunAt({
+    now: new Date("2026-03-25T07:00:00+07:00"),
+    scheduleTime: "08:00",
+    timezone: "Asia/Bangkok",
+  });
+
+  assert.equal(next, "2026-03-25T08:00:00+07:00");
 });
