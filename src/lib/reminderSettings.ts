@@ -35,7 +35,7 @@ const defaultReminderSettingsInput: ReminderSettingsInput = {
   lead_reminder_days: REMINDER_LEAD_DAYS,
   lead_reminder_time: "08:00",
   same_day_reminder_enabled: true,
-  same_day_reminder_time: "14:30",
+  same_day_reminder_time: "08:00",
 };
 
 export function validateReminderSettingsInput(

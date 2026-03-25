@@ -36,7 +36,7 @@ test("08:00 Asia/Bangkok is detected correctly", () => {
 });
 
 test("parseTimeHHmm validates HH:mm format", () => {
-  assert.deepEqual(parseTimeHHmm("14:30"), { hour: 14, minute: 30 });
+  assert.deepEqual(parseTimeHHmm("08:15"), { hour: 8, minute: 15 });
   assert.equal(parseTimeHHmm("24:10"), null);
   assert.equal(parseTimeHHmm("2:10"), null);
 });
@@ -48,7 +48,7 @@ test("reminder settings default payload is loadable", () => {
   assert.equal(result.value.timezone, "Asia/Bangkok");
   assert.equal(result.value.lead_reminder_days, 5);
   assert.equal(result.value.lead_reminder_time, "08:00");
-  assert.equal(result.value.same_day_reminder_time, "14:30");
+  assert.equal(result.value.same_day_reminder_time, "08:00");
 });
 
 test("reminder settings validate lead_reminder_days bounds", () => {

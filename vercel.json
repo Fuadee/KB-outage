@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/jobs/reminder/same-day/run",
-      "schedule": "30 7 * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
