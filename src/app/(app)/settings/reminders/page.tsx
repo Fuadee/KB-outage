@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
+import { formatThaiDateBE } from "@/lib/reminder";
 import { cn } from "@/lib/utils";
 import { labelText, subtitleText, titleText } from "@/lib/theme";
 
@@ -16,6 +17,37 @@ type ReminderSettings = {
   same_day_reminder_time: string;
 };
 
+type ReminderPreviewItem = {
+  id: number | string;
+  equipment_code: string | null;
+  outage_date: string | null;
+  wouldSend: boolean;
+  skipReason: string | null;
+  messagePreview: string;
+};
+
+type ReminderPreviewSection = {
+  enabled: boolean;
+  targetDate: string;
+  matched: number;
+  eligible: number;
+  skipped: number;
+  items: ReminderPreviewItem[];
+};
+
+type ReminderPreviewResponse = {
+  ok: true;
+  generatedAt: string;
+  timezone: string;
+  settings: {
+    lead_reminder_enabled: boolean;
+    lead_reminder_days: number;
+    same_day_reminder_enabled: boolean;
+  };
+  leadPreview: ReminderPreviewSection;
+  sameDayPreview: ReminderPreviewSection;
+};
+
 const defaultSettings: ReminderSettings = {
   timezone: "Asia/Bangkok",
   lead_reminder_enabled: true,
@@ -25,12 +57,94 @@ const defaultSettings: ReminderSettings = {
   same_day_reminder_time: "14:30",
 };
 
+function PreviewSectionCard({
+  title,
+  emptyMessage,
+  section,
+}: {
+  title: string;
+  emptyMessage: string;
+  section: ReminderPreviewSection;
+}) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-slate-900">{title}</p>
+        <p className="text-xs text-slate-500">
+          สถานะ: {section.enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"} · target date: {section.targetDate}
+        </p>
+        <p className="text-xs text-slate-500">
+          matched {section.matched} · eligible {section.eligible} · skipped {section.skipped}
+        </p>
+      </div>
+
+      {section.items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+          {emptyMessage}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {section.items.map((item) => (
+            <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-slate-900">งาน: {item.equipment_code ?? "-"}</span>
+                <span className="text-slate-500">วันที่ดับไฟ: {formatThaiDateBE(item.outage_date)}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 font-medium",
+                    item.wouldSend
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700"
+                  )}
+                >
+                  {item.wouldSend ? "would send" : "skipped"}
+                </span>
+                {!item.wouldSend && item.skipReason ? (
+                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-700">
+                    {item.skipReason}
+                  </span>
+                ) : null}
+              </div>
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-slate-700">
+                {item.messagePreview}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReminderSettingsPage() {
   const [settings, setSettings] = useState<ReminderSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ReminderPreviewResponse | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+  const loadPreview = async () => {
+    setPreviewError(null);
+    setIsPreviewLoading(true);
+
+    try {
+      const response = await fetch("/api/settings/reminders/preview", { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body?.error ?? "โหลด preview ไม่สำเร็จ");
+      }
+
+      setPreview(body as ReminderPreviewResponse);
+    } catch (loadError: unknown) {
+      const message = loadError instanceof Error ? loadError.message : "โหลด preview ไม่สำเร็จ";
+      setPreviewError(message);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -57,6 +171,8 @@ export default function ReminderSettingsPage() {
         if (!isActive) return;
         setIsLoading(false);
       });
+
+    loadPreview();
 
     return () => {
       isActive = false;
@@ -85,6 +201,7 @@ export default function ReminderSettingsPage() {
 
       setSettings(body.settings);
       setSuccess("บันทึกการตั้งค่าเรียบร้อยแล้ว");
+      await loadPreview();
     } catch (saveError: unknown) {
       const message =
         saveError instanceof Error ? saveError.message : "บันทึกการตั้งค่าไม่สำเร็จ";
@@ -141,7 +258,6 @@ export default function ReminderSettingsPage() {
                   disabled={isLoading}
                 />
               </label>
-
             </div>
 
             <div className="grid gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 sm:grid-cols-2">
@@ -158,7 +274,6 @@ export default function ReminderSettingsPage() {
                 />
                 เปิดแจ้งเตือนวันจริง
               </label>
-
             </div>
 
             <p className="text-xs text-slate-500">
@@ -176,12 +291,57 @@ export default function ReminderSettingsPage() {
               </div>
             ) : null}
 
-            <div>
+            <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={isLoading || isSaving} className="w-auto px-5">
                 {isLoading ? "กำลังโหลด..." : isSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isPreviewLoading}
+                onClick={loadPreview}
+                className="w-auto px-5"
+              >
+                {isPreviewLoading ? "กำลังตรวจสอบ..." : "ตรวจสอบรายการแจ้งเตือน"}
+              </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Preview Reminder</CardTitle>
+          <p className="text-sm text-slate-500">ตัวอย่างงานที่ระบบจะส่งแจ้งเตือนจากข้อมูลปัจจุบัน</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {previewError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {previewError}
+            </div>
+          ) : null}
+
+          {preview ? (
+            <>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                generatedAt: {new Date(preview.generatedAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · timezone: {preview.timezone}
+              </div>
+              <PreviewSectionCard
+                title="แจ้งเตือนล่วงหน้า"
+                emptyMessage="วันนี้ไม่มีงานที่เข้าเงื่อนไขแจ้งเตือนล่วงหน้า"
+                section={preview.leadPreview}
+              />
+              <PreviewSectionCard
+                title="แจ้งเตือนวันจริง"
+                emptyMessage="วันนี้ไม่มีงานแจ้งเตือนวันจริง"
+                section={preview.sameDayPreview}
+              />
+            </>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              {isPreviewLoading ? "กำลังคำนวณ preview จากฐานข้อมูล..." : "ยังไม่มีข้อมูล preview"}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

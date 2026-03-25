@@ -185,6 +185,14 @@ export function formatThaiDateBE(dateText: string | null | undefined): string {
   return `${d} ${month} ${buddhistYear}`;
 }
 
+export function formatLeadReminderMessage(input: {
+  equipmentCode?: string | null;
+  outageDate?: string | null;
+  leadDays: number;
+}): string {
+  return `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n⏰ เหลือเวลา ${input.leadDays} วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
+}
+
 export function formatSameDayReminderMessage(input: {
   equipmentCode?: string | null;
   outageDate?: string | null;
