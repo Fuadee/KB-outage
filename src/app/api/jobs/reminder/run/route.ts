@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   BANGKOK_TIMEZONE,
-  REMINDER_LEAD_DAYS,
   computeTargetOutageDate,
   formatThaiDateBE,
   getReminderSkipReason,
+  isWithinScheduledWindowBangkok,
   normalizeDateOnly,
 } from "@/lib/reminder";
+import { getReminderSettings } from "@/lib/reminderSettings";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,11 @@ type Summary = {
       hasSupabaseServiceRoleKey: boolean;
     };
     skipReasons: Record<string, number>;
+    scheduleGate: {
+      enabled: boolean;
+      configuredTime: string;
+      nowWithinWindow: boolean;
+    };
   };
 };
 
@@ -147,6 +153,11 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         hasSupabaseServiceRoleKey: Boolean(serviceRoleKey),
       },
       skipReasons: {},
+      scheduleGate: {
+        enabled: true,
+        configuredTime: "",
+        nowWithinWindow: false,
+      },
     },
   };
 
@@ -181,9 +192,62 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   };
 
   try {
+    console.log("reminder-settings-load-start", { route: "lead-reminder" });
+    const settings = await getReminderSettings();
+    console.log("reminder-settings-load-end", {
+      route: "lead-reminder",
+      timezone: settings.timezone,
+      leadReminderEnabled: settings.lead_reminder_enabled,
+      leadReminderDays: settings.lead_reminder_days,
+      leadReminderTime: settings.lead_reminder_time,
+    });
+    const now = new Date();
+    const nowWithinWindow = isWithinScheduledWindowBangkok(now, settings.lead_reminder_time);
+    summary.diagnostics.scheduleGate = {
+      enabled: settings.lead_reminder_enabled,
+      configuredTime: settings.lead_reminder_time,
+      nowWithinWindow,
+    };
+    console.log("reminder-schedule-check", {
+      route: "lead-reminder",
+      enabled: settings.lead_reminder_enabled,
+      configuredTime: settings.lead_reminder_time,
+      nowWithinWindow,
+    });
+
+    if (!settings.lead_reminder_enabled) {
+      console.log("reminder-schedule-skip-not-time-yet", {
+        route: "lead-reminder",
+        reason: "lead_reminder_disabled",
+      });
+      return NextResponse.json({
+        ...summary,
+        skippedBySchedule: true,
+        reason: "lead_reminder_disabled",
+      });
+    }
+
+    if (!requestedDateOverride && !nowWithinWindow) {
+      console.log("reminder-schedule-skip-not-time-yet", {
+        route: "lead-reminder",
+        configuredTime: settings.lead_reminder_time,
+      });
+      return NextResponse.json({
+        ...summary,
+        skippedBySchedule: true,
+        reason: "skipped because not scheduled time",
+      });
+    }
+
+    console.log("reminder-schedule-match", {
+      route: "lead-reminder",
+      configuredTime: settings.lead_reminder_time,
+      override: Boolean(requestedDateOverride),
+    });
+
     const targetDate = computeTargetOutageDate({
-      leadDays: REMINDER_LEAD_DAYS,
-      timezone: BANGKOK_TIMEZONE,
+      leadDays: settings.lead_reminder_days,
+      timezone: settings.timezone ?? BANGKOK_TIMEZONE,
       overrideDate: requestedDateOverride,
     });
     summary.targetDateUsed = targetDate;
@@ -213,7 +277,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         continue;
       }
 
-      const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา 5 วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
+      const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา ${settings.lead_reminder_days} วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
 
       const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
       console.log("[reminder] LINE push", {

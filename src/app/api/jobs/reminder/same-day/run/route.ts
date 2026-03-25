@@ -5,8 +5,10 @@ import {
   computeBangkokTodayDateOnly,
   formatSameDayReminderMessage,
   getSameDayReminderSkipReason,
+  isWithinScheduledWindowBangkok,
   normalizeDateOnly,
 } from "@/lib/reminder";
+import { getReminderSettings } from "@/lib/reminderSettings";
 
 export const runtime = "nodejs";
 
@@ -48,6 +50,11 @@ type Summary = {
     };
     dryRun: boolean;
     forceSend: boolean;
+    scheduleGate: {
+      enabled: boolean;
+      configuredTime: string;
+      nowWithinWindow: boolean;
+    };
   };
 };
 
@@ -186,6 +193,11 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       },
       dryRun,
       forceSend,
+      scheduleGate: {
+        enabled: true,
+        configuredTime: "",
+        nowWithinWindow: false,
+      },
     },
   };
 
@@ -229,6 +241,58 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
   };
 
   try {
+    console.log("reminder-settings-load-start", { route: "same-day-reminder" });
+    const settings = await getReminderSettings();
+    console.log("reminder-settings-load-end", {
+      route: "same-day-reminder",
+      timezone: settings.timezone,
+      sameDayEnabled: settings.same_day_reminder_enabled,
+      sameDayTime: settings.same_day_reminder_time,
+    });
+
+    const nowWithinWindow = isWithinScheduledWindowBangkok(new Date(), settings.same_day_reminder_time);
+    summary.diagnostics.scheduleGate = {
+      enabled: settings.same_day_reminder_enabled,
+      configuredTime: settings.same_day_reminder_time,
+      nowWithinWindow,
+    };
+    console.log("reminder-schedule-check", {
+      route: "same-day-reminder",
+      enabled: settings.same_day_reminder_enabled,
+      configuredTime: settings.same_day_reminder_time,
+      nowWithinWindow,
+    });
+
+    if (!settings.same_day_reminder_enabled && !forceSend) {
+      console.log("reminder-schedule-skip-not-time-yet", {
+        route: "same-day-reminder",
+        reason: "same_day_reminder_disabled",
+      });
+      return NextResponse.json({
+        ...summary,
+        skippedBySchedule: true,
+        reason: "same_day_reminder_disabled",
+      });
+    }
+
+    if (!requestedDateOverride && !dryRun && !forceSend && !nowWithinWindow) {
+      console.log("reminder-schedule-skip-not-time-yet", {
+        route: "same-day-reminder",
+        configuredTime: settings.same_day_reminder_time,
+      });
+      return NextResponse.json({
+        ...summary,
+        skippedBySchedule: true,
+        reason: "skipped because not scheduled time",
+      });
+    }
+    console.log("reminder-schedule-match", {
+      route: "same-day-reminder",
+      configuredTime: settings.same_day_reminder_time,
+      mode: summary.mode,
+      override: Boolean(requestedDateOverride),
+    });
+
     const targetDate = requestedDateOverride ?? computeBangkokTodayDateOnly();
     summary.targetDateUsed = targetDate;
     console.log("same-day-reminder-target-date", {
