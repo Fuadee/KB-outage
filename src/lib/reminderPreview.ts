@@ -71,6 +71,11 @@ export type ReminderPreviewResponse = {
   ok: true;
   generatedAt: string;
   timezone: string;
+  settingsDebug: {
+    lead_reminder_time_from_db: string;
+    same_day_reminder_time_from_db: string;
+    source: "database";
+  };
   settings: Pick<
     ReminderSettings,
     "lead_reminder_enabled" | "lead_reminder_days" | "same_day_reminder_enabled"
@@ -315,6 +320,11 @@ export async function buildReminderPreview(options: {
     ok: true,
     generatedAt,
     timezone,
+    settingsDebug: {
+      lead_reminder_time_from_db: settings.lead_reminder_time,
+      same_day_reminder_time_from_db: settings.same_day_reminder_time,
+      source: "database",
+    },
     settings: {
       lead_reminder_enabled: settings.lead_reminder_enabled,
       lead_reminder_days: settings.lead_reminder_days,

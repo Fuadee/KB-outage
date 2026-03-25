@@ -63,6 +63,11 @@ type ReminderPreviewResponse = {
   ok: true;
   generatedAt: string;
   timezone: string;
+  settingsDebug: {
+    lead_reminder_time_from_db: string;
+    same_day_reminder_time_from_db: string;
+    source: "database";
+  };
   settings: {
     lead_reminder_enabled: boolean;
     lead_reminder_days: number;
@@ -156,6 +161,10 @@ function SystemStatusCard({ preview }: { preview: ReminderPreviewResponse }) {
         <p>Lead reminder: {status.leadReminderScheduleTime} · รอบถัดไป {formatBangkokDateTime(status.nextLeadRunAt)}</p>
         <p>Same-day reminder: {status.sameDayReminderScheduleTime} · รอบถัดไป {formatBangkokDateTime(status.nextSameDayRunAt)}</p>
       </div>
+      <p className="text-xs text-slate-500">
+        DB debug → lead: {preview.settingsDebug.lead_reminder_time_from_db} · same-day:{" "}
+        {preview.settingsDebug.same_day_reminder_time_from_db} ({preview.settingsDebug.source})
+      </p>
       <div className="flex flex-wrap gap-2 text-xs">
         <span className={cn("rounded-full px-2 py-0.5", status.hasLineToken ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>LINE token</span>
         <span className={cn("rounded-full px-2 py-0.5", status.hasLineTargetId ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>LINE target</span>
