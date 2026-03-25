@@ -101,12 +101,12 @@ export default function ReminderSettingsPage() {
           Settings
         </p>
         <h1 className={cn(titleText, "text-3xl")}>Reminder Settings</h1>
-        <p className={subtitleText}>ตั้งค่าเวลาแจ้งเตือน LINE ได้จากหน้านี้โดยตรง</p>
+        <p className={subtitleText}>ตั้งค่าเปิด/ปิดการแจ้งเตือนและจำนวนวันล่วงหน้า</p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>ตั้งค่าเวลาแจ้งเตือน LINE</CardTitle>
+          <CardTitle>ตั้งค่าการแจ้งเตือน LINE (รายวัน)</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="space-y-6" onSubmit={handleSubmit}>
@@ -142,20 +142,6 @@ export default function ReminderSettingsPage() {
                 />
               </label>
 
-              <label className={cn("flex flex-col gap-2", labelText)}>
-                เวลาแจ้งเตือนล่วงหน้า
-                <Input
-                  type="time"
-                  value={settings.lead_reminder_time}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      lead_reminder_time: event.target.value,
-                    }))
-                  }
-                  disabled={isLoading}
-                />
-              </label>
             </div>
 
             <div className="grid gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 sm:grid-cols-2">
@@ -173,23 +159,11 @@ export default function ReminderSettingsPage() {
                 เปิดแจ้งเตือนวันจริง
               </label>
 
-              <label className={cn("flex flex-col gap-2", labelText)}>
-                เวลาแจ้งเตือนวันจริง
-                <Input
-                  type="time"
-                  value={settings.same_day_reminder_time}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      same_day_reminder_time: event.target.value,
-                    }))
-                  }
-                  disabled={isLoading}
-                />
-              </label>
             </div>
 
-            <p className="text-xs text-slate-500">เวลาทั้งหมดอิงตาม Asia/Bangkok</p>
+            <p className="text-xs text-slate-500">
+              ระบบส่งด้วย Vercel Cron วันละครั้ง (เวลา deploy คงที่) และอิง Asia/Bangkok
+            </p>
 
             {error ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

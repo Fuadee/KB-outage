@@ -1,6 +1,5 @@
 export const BANGKOK_TIMEZONE = "Asia/Bangkok";
 export const REMINDER_LEAD_DAYS = 5;
-export const REMINDER_CRON_WINDOW_MINUTES = 5;
 
 const THAI_SHORT_MONTHS = [
   "ม.ค.",
@@ -87,7 +86,15 @@ export function computeTargetOutageDate(options?: {
 }
 
 export function shouldRunAtBangkokEight(date: Date): boolean {
-  return isWithinScheduledWindowBangkok(date, "08:00", 1);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BANGKOK_TIMEZONE,
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "-1");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "-1");
+  return hour === 8 && minute === 0;
 }
 
 export function parseTimeHHmm(value: string): { hour: number; minute: number } | null {
@@ -111,33 +118,6 @@ export function parseTimeHHmm(value: string): { hour: number; minute: number } |
   }
 
   return { hour, minute };
-}
-
-function getBangkokHourMinute(date: Date): { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: BANGKOK_TIMEZONE,
-    hourCycle: "h23",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).formatToParts(date);
-
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "-1");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "-1");
-  return { hour, minute };
-}
-
-export function isWithinScheduledWindowBangkok(
-  now: Date,
-  scheduledTimeHHmm: string,
-  windowMinutes = REMINDER_CRON_WINDOW_MINUTES
-): boolean {
-  const scheduled = parseTimeHHmm(scheduledTimeHHmm);
-  if (!scheduled) return false;
-
-  const current = getBangkokHourMinute(now);
-  const currentMinutes = current.hour * 60 + current.minute;
-  const scheduledMinutes = scheduled.hour * 60 + scheduled.minute;
-  return currentMinutes >= scheduledMinutes && currentMinutes < scheduledMinutes + windowMinutes;
 }
 
 export type ReminderEligibilityInput = {

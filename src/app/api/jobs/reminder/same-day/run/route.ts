@@ -5,7 +5,6 @@ import {
   computeBangkokTodayDateOnly,
   formatSameDayReminderMessage,
   getSameDayReminderSkipReason,
-  isWithinScheduledWindowBangkok,
   normalizeDateOnly,
 } from "@/lib/reminder";
 import { getReminderSettings } from "@/lib/reminderSettings";
@@ -50,11 +49,7 @@ type Summary = {
     };
     dryRun: boolean;
     forceSend: boolean;
-    scheduleGate: {
-      enabled: boolean;
-      configuredTime: string;
-      nowWithinWindow: boolean;
-    };
+    sameDayReminderEnabled: boolean;
   };
 };
 
@@ -149,7 +144,9 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
     triggerSource === "manual-post"
       ? normalizeDateOnly(String((parsedBody as { date?: string })?.date ?? ""))
       : null;
-  const bodyDryRun = triggerSource === "manual-post" && parseFlag(String((parsedBody as { dryRun?: string | number | boolean })?.dryRun ?? ""));
+  const bodyDryRun =
+    triggerSource === "manual-post" &&
+    parseFlag(String((parsedBody as { dryRun?: string | number | boolean })?.dryRun ?? ""));
   const bodyForceSend =
     triggerSource === "manual-post" &&
     parseFlag(String((parsedBody as { forceSend?: string | number | boolean })?.forceSend ?? ""));
@@ -193,15 +190,12 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       },
       dryRun,
       forceSend,
-      scheduleGate: {
-        enabled: true,
-        configuredTime: "",
-        nowWithinWindow: false,
-      },
+      sameDayReminderEnabled: true,
     },
   };
 
-  console.log("same-day-reminder-route-start", {
+  console.log("reminder-route-start", {
+    route: "same-day-reminder",
     triggerSource,
     method: req.method,
     mode: summary.mode,
@@ -241,32 +235,14 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
   };
 
   try {
-    console.log("reminder-settings-load-start", { route: "same-day-reminder" });
     const settings = await getReminderSettings();
-    console.log("reminder-settings-load-end", {
-      route: "same-day-reminder",
-      timezone: settings.timezone,
-      sameDayEnabled: settings.same_day_reminder_enabled,
-      sameDayTime: settings.same_day_reminder_time,
-    });
-
-    const nowWithinWindow = isWithinScheduledWindowBangkok(new Date(), settings.same_day_reminder_time);
-    summary.diagnostics.scheduleGate = {
-      enabled: settings.same_day_reminder_enabled,
-      configuredTime: settings.same_day_reminder_time,
-      nowWithinWindow,
-    };
-    console.log("reminder-schedule-check", {
-      route: "same-day-reminder",
-      enabled: settings.same_day_reminder_enabled,
-      configuredTime: settings.same_day_reminder_time,
-      nowWithinWindow,
-    });
+    summary.diagnostics.sameDayReminderEnabled = settings.same_day_reminder_enabled;
 
     if (!settings.same_day_reminder_enabled && !forceSend) {
-      console.log("reminder-schedule-skip-not-time-yet", {
+      console.log("reminder-route-end", {
         route: "same-day-reminder",
         reason: "same_day_reminder_disabled",
+        mode: summary.mode,
       });
       return NextResponse.json({
         ...summary,
@@ -274,35 +250,13 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
         reason: "same_day_reminder_disabled",
       });
     }
-
-    if (!requestedDateOverride && !dryRun && !forceSend && !nowWithinWindow) {
-      console.log("reminder-schedule-skip-not-time-yet", {
-        route: "same-day-reminder",
-        configuredTime: settings.same_day_reminder_time,
-      });
-      return NextResponse.json({
-        ...summary,
-        skippedBySchedule: true,
-        reason: "skipped because not scheduled time",
-      });
-    }
-    console.log("reminder-schedule-match", {
-      route: "same-day-reminder",
-      configuredTime: settings.same_day_reminder_time,
-      mode: summary.mode,
-      override: Boolean(requestedDateOverride),
-    });
 
     const targetDate = requestedDateOverride ?? computeBangkokTodayDateOnly();
     summary.targetDateUsed = targetDate;
-    console.log("same-day-reminder-target-date", {
+    console.log("reminder-target-date", {
+      route: "same-day-reminder",
       targetDate,
       mode: summary.mode,
-    });
-
-    console.log("same-day-reminder-query-start", {
-      targetDate,
-      forceSend,
     });
 
     const { jobs, statusFieldExists } = await fetchSameDayReminderJobs(
@@ -311,18 +265,14 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       targetDate,
       forceSend
     );
-    console.log("same-day-reminder-query-end", {
-      targetDate,
-      totalRows: jobs.length,
-      statusFieldExists,
-      forceSend,
-    });
 
     summary.totalRowsChecked = jobs.length;
     summary.sampleRows = jobs.slice(0, 10);
-    console.log("same-day-reminder-total-rows", {
+    console.log("reminder-total-rows", {
+      route: "same-day-reminder",
       targetDate,
       totalRows: jobs.length,
+      forceSend,
     });
 
     const matchedJobs = jobs.filter((job) => {
@@ -342,28 +292,8 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
         : getSameDayReminderSkipReason(job, targetDate, statusFieldExists);
       if (skipReason) {
         addSkipReason(skipReason);
-        console.log("same-day-reminder-row-skip", {
-          id: job.id,
-          reason: skipReason,
-          outage_date: job.outage_date,
-          equipment_code: job.equipment_code,
-          status: job.status ?? null,
-          is_closed: job.is_closed ?? null,
-          line_same_day_reminder_sent_at: job.line_same_day_reminder_sent_at,
-          targetDateUsed: targetDate,
-        });
         continue;
       }
-      console.log("same-day-reminder-row-eligible", {
-        id: job.id,
-        outage_date: job.outage_date,
-        equipment_code: job.equipment_code,
-        status: job.status ?? null,
-        is_closed: job.is_closed ?? null,
-        line_same_day_reminder_sent_at: job.line_same_day_reminder_sent_at,
-        targetDateUsed: targetDate,
-        mode: summary.mode,
-      });
       eligibleCount += 1;
 
       const lineText = formatSameDayReminderMessage({
@@ -377,10 +307,6 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       }
 
       summary.lineSendAttempts += 1;
-      console.log("same-day-reminder-line-send-start", {
-        id: job.id,
-        targetDateUsed: targetDate,
-      });
 
       let lineResult;
       try {
@@ -393,11 +319,6 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
           error: `LINE push threw error: ${message}`,
         });
         addSkipReason("line_push_failed");
-        console.log("same-day-reminder-line-send-failed", {
-          id: job.id,
-          status: "thrown_error",
-          error: message,
-        });
         continue;
       }
 
@@ -408,21 +329,8 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
           error: `LINE push failed (${lineResult.status}): ${lineResult.body}`,
         });
         addSkipReason("line_push_failed");
-        console.log("same-day-reminder-line-send-failed", {
-          id: job.id,
-          status: lineResult.status,
-          responseSnippet: lineResult.body.slice(0, 300),
-        });
         continue;
       }
-      console.log("same-day-reminder-line-send-success", {
-        id: job.id,
-        status: lineResult.status,
-      });
-
-      console.log("same-day-reminder-update-sent-start", {
-        id: job.id,
-      });
 
       const { data: updatedRows, error: updateError } = await supabase
         .from("outage_jobs")
@@ -437,41 +345,47 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
           error: `Failed to update line_same_day_reminder_sent_at: ${updateError.message}`,
         });
         addSkipReason("update_sent_at_failed");
-        console.log("same-day-reminder-update-sent-conflict", {
-          id: job.id,
-          reason: "update_error",
-          error: updateError.message,
-        });
         continue;
       }
 
       if (!updatedRows || updatedRows.length === 0) {
         addSkipReason("update_conflict_or_already_sent");
-        console.log("same-day-reminder-update-sent-conflict", {
-          id: job.id,
-          reason: "no_rows_updated",
-        });
         continue;
       }
 
       summary.updatedRows += updatedRows.length;
       summary.sent += 1;
-      console.log("same-day-reminder-update-sent-success", {
-        id: job.id,
-        updatedRows: updatedRows.length,
-      });
     }
 
     summary.eligible = eligibleCount;
-    console.log("same-day-reminder-route-end", summary);
+
+    console.log("reminder-sent-count", { route: "same-day-reminder", sent: summary.sent });
+    console.log("reminder-skipped-count", {
+      route: "same-day-reminder",
+      skipped: summary.skipped,
+      skipReasons: summary.skipReasons,
+    });
+    console.log("reminder-route-end", {
+      route: "same-day-reminder",
+      ok: summary.ok,
+      mode: summary.mode,
+      targetDate: summary.targetDateUsed,
+      sent: summary.sent,
+      skipped: summary.skipped,
+      totalRows: summary.totalRowsChecked,
+    });
+
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
 
-    console.log("same-day-reminder-route-end", {
-      ...summary,
+    console.log("reminder-route-end", {
+      route: "same-day-reminder",
       ok: false,
       error: message,
+      mode: summary.mode,
+      sent: summary.sent,
+      skipped: summary.skipped,
     });
 
     return NextResponse.json(

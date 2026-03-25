@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/jobs/reminder/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/jobs/reminder/same-day/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "30 7 * * *"
     }
   ]
 }

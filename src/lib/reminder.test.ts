@@ -8,7 +8,6 @@ import {
   formatSameDayReminderMessage,
   getReminderSkipReason,
   getSameDayReminderSkipReason,
-  isWithinScheduledWindowBangkok,
   normalizeDateOnly,
   parseTimeHHmm,
   shouldRunAtBangkokEight,
@@ -33,25 +32,6 @@ test("parseTimeHHmm validates HH:mm format", () => {
   assert.deepEqual(parseTimeHHmm("14:30"), { hour: 14, minute: 30 });
   assert.equal(parseTimeHHmm("24:10"), null);
   assert.equal(parseTimeHHmm("2:10"), null);
-});
-
-test("schedule window allows only configured 5-minute range", () => {
-  assert.equal(
-    isWithinScheduledWindowBangkok(new Date("2026-03-14T14:29:00+07:00"), "14:30"),
-    false
-  );
-  assert.equal(
-    isWithinScheduledWindowBangkok(new Date("2026-03-14T14:30:00+07:00"), "14:30"),
-    true
-  );
-  assert.equal(
-    isWithinScheduledWindowBangkok(new Date("2026-03-14T14:34:00+07:00"), "14:30"),
-    true
-  );
-  assert.equal(
-    isWithinScheduledWindowBangkok(new Date("2026-03-14T14:35:00+07:00"), "14:30"),
-    false
-  );
 });
 
 test("reminder settings default payload is loadable", () => {
@@ -86,7 +66,7 @@ test("same-day reminder route reads settings from DB helper", () => {
     "utf8"
   );
   assert.match(source, /getReminderSettings/);
-  assert.match(source, /same_day_reminder_time/);
+  assert.doesNotMatch(source, /isWithinScheduledWindowBangkok/);
 });
 
 test("normalize and date math are date-only safe", () => {
