@@ -70,6 +70,21 @@ type ReminderPreviewResponse = {
   sameDayPreview: ReminderPreviewSection;
 };
 
+type ManualRunResponse = {
+  ok: boolean;
+  error?: string;
+  targetDateUsed: string;
+  totalRowsChecked: number;
+  matched: number;
+  sent: number;
+  skipped: number;
+  matchedRows: Array<{
+    id: number | string;
+    equipment_code: string | null;
+    outage_date: string | null;
+  }>;
+};
+
 const defaultSettings: ReminderSettings = {
   timezone: "Asia/Bangkok",
   lead_reminder_enabled: true,
@@ -189,6 +204,11 @@ export default function ReminderSettingsPage() {
   const [preview, setPreview] = useState<ReminderPreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isManualRunLoading, setIsManualRunLoading] = useState(false);
+  const [manualRunError, setManualRunError] = useState<string | null>(null);
+  const [manualRunSuccess, setManualRunSuccess] = useState<string | null>(null);
+  const [manualRunResult, setManualRunResult] = useState<ManualRunResponse | null>(null);
+  const [manualRunAt, setManualRunAt] = useState<string | null>(null);
 
   const loadPreview = async () => {
     setPreviewError(null);
@@ -272,6 +292,38 @@ export default function ReminderSettingsPage() {
       setError(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleManualRun = async () => {
+    setManualRunError(null);
+    setManualRunSuccess(null);
+    setManualRunResult(null);
+    setIsManualRunLoading(true);
+
+    try {
+      const response = await fetch("/api/jobs/reminder/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const body = (await response.json()) as ManualRunResponse;
+
+      if (!response.ok || !body.ok) {
+        throw new Error(body?.error ?? "รันแจ้งเตือนไม่สำเร็จ");
+      }
+
+      setManualRunAt(new Date().toISOString());
+      setManualRunResult(body);
+      setManualRunSuccess("รันแจ้งเตือนสำเร็จ");
+      await loadPreview();
+    } catch (runError: unknown) {
+      const message = runError instanceof Error ? runError.message : "รันแจ้งเตือนไม่สำเร็จ";
+      setManualRunError(message);
+    } finally {
+      setIsManualRunLoading(false);
     }
   };
 
@@ -362,13 +414,69 @@ export default function ReminderSettingsPage() {
               <Button
                 type="button"
                 variant="secondary"
-                disabled={isPreviewLoading}
+                disabled={isPreviewLoading || isManualRunLoading}
                 onClick={loadPreview}
                 className="w-auto px-5"
               >
                 {isPreviewLoading ? "กำลังตรวจสอบ..." : "ตรวจสอบรายการแจ้งเตือน"}
               </Button>
             </div>
+
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isManualRunLoading || isPreviewLoading}
+                onClick={handleManualRun}
+                className="w-auto px-5"
+              >
+                {isManualRunLoading ? "กำลังรัน..." : "รันแจ้งเตือนตอนนี้"}
+              </Button>
+              <p className="text-xs text-slate-500">
+                ใช้สำหรับทดสอบการทำงานแบบเดียวกับ cron โดยไม่ต้องรอรอบอัตโนมัติ
+              </p>
+            </div>
+
+            {manualRunError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {manualRunError}
+              </div>
+            ) : null}
+            {manualRunSuccess ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {manualRunSuccess}
+              </div>
+            ) : null}
+            {manualRunResult ? (
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">ผลการรันแจ้งเตือนทันที</p>
+                <div className="grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
+                  <p>จำนวนงานที่ตรวจพบ: {manualRunResult.totalRowsChecked}</p>
+                  <p>จำนวนงานที่เข้าเงื่อนไขแจ้งเตือน: {manualRunResult.matched}</p>
+                  <p>targetDateUsed: {manualRunResult.targetDateUsed || "-"}</p>
+                  <p>เวลาที่รัน: {formatBangkokDateTime(manualRunAt)}</p>
+                  <p>จำนวนที่ส่งแล้ว: {manualRunResult.sent}</p>
+                  <p>จำนวนที่ข้าม: {manualRunResult.skipped}</p>
+                </div>
+
+                {manualRunResult.matchedRows.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
+                    ไม่พบรายการที่ต้องแจ้งเตือนในรอบนี้
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {manualRunResult.matchedRows.map((job) => (
+                      <div key={job.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                        <p>job id: {job.id}</p>
+                        <p>เลขงาน: {job.equipment_code ?? "-"}</p>
+                        <p>วันที่แจ้งเตือน: {manualRunResult.targetDateUsed || "-"}</p>
+                        <p>ประเภท reminder: แจ้งเตือนล่วงหน้า</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </form>
         </CardContent>
       </Card>
