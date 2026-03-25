@@ -12,6 +12,7 @@ const titleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/jobs": "Jobs",
   "/calendar": "Calendar",
+  "/settings/reminders": "Reminder Settings",
   "/job": "Job detail"
 };
 

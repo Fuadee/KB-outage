@@ -1,99 +1,76 @@
-# Vercel Cron for LINE Outage Reminders
+# Vercel Cron + Reminder Settings (LINE)
 
-## What these crons do
-This project uses Vercel Cron to trigger LINE reminder endpoints automatically every day.
+## Reminder Settings คืออะไร
+ระบบนี้ทำให้ผู้ใช้ตั้งค่าเวลาแจ้งเตือนจากหน้าเว็บได้ โดยไม่ต้องแก้เวลา cron ใน `vercel.json` ทุกครั้ง
 
-### 1) 5-day reminder (existing)
-- Cron path: `/api/jobs/reminder/run`
-- Target date logic: **today + 5 days** (Asia/Bangkok)
-- Send condition: `line_reminder_sent_at IS NULL`
-- Send flag update: `line_reminder_sent_at`
+- Lead reminder (แจ้งเตือนล่วงหน้า)
+  - เปิด/ปิดได้
+  - กำหนดจำนวนวันล่วงหน้าได้
+  - กำหนดเวลาได้ (HH:mm)
+- Same-day reminder (แจ้งเตือนวันจริง)
+  - เปิด/ปิดได้
+  - กำหนดเวลาได้ (HH:mm)
 
-### 2) Same-day reminder (new)
-- Cron path: `/api/jobs/reminder/same-day/run`
-- Target date logic: **today** (Asia/Bangkok)
-- Send condition: `line_same_day_reminder_sent_at IS NULL`
-- Send flag update: `line_same_day_reminder_sent_at`
+> ทุกเวลาอิง `Asia/Bangkok`
 
-## Cron schedule conversion (UTC)
-Vercel Cron schedules are interpreted in **UTC**.
+## สถาปัตยกรรมใหม่
+Vercel Cron เปลี่ยนเป็นวิ่งถี่คงที่ทุก 5 นาที แล้ว route จะเป็นคนเช็ค schedule จาก DB เอง
 
-### 5-day reminder at 08:00 Thailand time
-- Schedule: `0 1 * * *`
-- 01:00 UTC = 08:00 Asia/Bangkok (UTC+7)
+1. cron เรียก endpoint ทุก 5 นาที
+2. endpoint โหลด `reminder_settings` จาก DB
+3. endpoint ตรวจเวลาไทยว่าตรงกับ `HH:mm` ที่ตั้งไว้หรือไม่ (window 5 นาที)
+4. ถ้ายังไม่ถึงเวลา จะ `skip` และตอบเหตุผล (`skipped because not scheduled time`)
+5. ถ้าตรงเวลา ค่อยทำ flow เดิม (query งาน + ส่ง LINE + update sent flag)
 
-### Same-day reminder at 14:45 Thailand time
-- Schedule: `45 7 * * *`
-- 07:45 UTC = 14:45 Asia/Bangkok (UTC+7)
+แนวทางนี้ทำให้เปลี่ยนเวลาได้จาก UI ทันที โดยไม่แตะ cron runtime
 
-## Manual test endpoints
-After deployment, you can test each endpoint directly:
+## Cron schedule ใหม่ (UTC)
+Vercel cron ใช้ UTC และตอนนี้ตั้งคงที่ไว้แบบถี่:
 
-### 5-day reminder
-- `GET /api/jobs/reminder/run`
-- `POST /api/jobs/reminder/run`
+- `/api/jobs/reminder/run` → `*/5 * * * *`
+- `/api/jobs/reminder/same-day/run` → `*/5 * * * *`
 
-Manual date override for verification:
-- `GET /api/jobs/reminder/run?date=2026-03-14`
-- `POST /api/jobs/reminder/run` with body `{ "date": "2026-03-14" }`
+## Settings API
+- `GET /api/settings/reminders`
+  - อ่านค่าปัจจุบัน (get-or-create default row)
+- `PUT /api/settings/reminders`
+  - บันทึกค่าใหม่พร้อม validation
 
-### Same-day reminder
-- `GET /api/jobs/reminder/same-day/run`
-- `POST /api/jobs/reminder/same-day/run`
+Validation หลัก:
+- `timezone` ต้องเป็น `Asia/Bangkok`
+- `lead_reminder_days` ต้องเป็นจำนวนเต็มช่วง `0..30`
+- เวลา (`lead_reminder_time`, `same_day_reminder_time`) ต้องรูปแบบ `HH:mm`
 
-Manual date override for verification:
-- `GET /api/jobs/reminder/same-day/run?date=2026-03-14`
-- `POST /api/jobs/reminder/same-day/run` with body `{ "date": "2026-03-14" }`
+## หน้าเว็บสำหรับผู้ใช้
+หน้า: `/settings/reminders`
 
-Manual debug mode (same-day only):
-- Dry-run (query + skip evaluation only, no LINE send, no sent-flag update):
-  - `GET /api/jobs/reminder/same-day/run?date=2026-03-14&dryRun=1`
-- Force-send (manual POST only, explicit opt-in, allows bypassing sent flag):
-  - `POST /api/jobs/reminder/same-day/run?date=2026-03-14&forceSend=1`
-  - Body example: `{ "date": "2026-03-14", "forceSend": true }`
+มี 2 ส่วน:
+- แจ้งเตือนล่วงหน้า: toggle + จำนวนวัน + เวลา
+- แจ้งเตือนวันจริง: toggle + เวลา
 
-## Debug output
-Both endpoints return diagnostic fields to help troubleshooting:
+พร้อมปุ่มบันทึก, loading state, success/error feedback
 
-- `targetDateUsed`
-- `totalRowsChecked`
-- `matched`
-- `sent`
-- `skipped`
-- `sampleRows`
-- `diagnostics.serverTimeUtc`
-- `diagnostics.bangkokDateTime`
-- `diagnostics.timezone`
-- `diagnostics.requestedDateOverride`
-- `diagnostics.skipReasons`
-- `errors[]` with per-job failure details
+## Debug เมื่อ cron วิ่งแต่ไม่ส่ง LINE
+ให้ดู response และ logs ต่อไปนี้:
 
-Same-day endpoint also returns:
-- `mode` (`normal` / `dryRun` / `forceSend`)
-- `eligible`
-- `skipReasons`
-- `lineSendAttempts`
-- `lineSendFailures`
-- `updatedRows`
+### Response field ที่สำคัญ
+- `skippedBySchedule`
+- `reason`
+- `diagnostics.scheduleGate.enabled`
+- `diagnostics.scheduleGate.configuredTime`
+- `diagnostics.scheduleGate.nowWithinWindow`
+- `targetDateUsed`, `skipReasons`, `errors`
 
-## Log keys for same-day debug
-Search these keys in function logs:
-- `same-day-reminder-route-start`
-- `same-day-reminder-target-date`
-- `same-day-reminder-query-start`
-- `same-day-reminder-query-end`
-- `same-day-reminder-total-rows`
-- `same-day-reminder-row-skip`
-- `same-day-reminder-row-eligible`
-- `same-day-reminder-line-send-start`
-- `same-day-reminder-line-send-success`
-- `same-day-reminder-line-send-failed`
-- `same-day-reminder-update-sent-start`
-- `same-day-reminder-update-sent-success`
-- `same-day-reminder-update-sent-conflict`
-- `same-day-reminder-route-end`
+### Log keys
+- `reminder-settings-load-start`
+- `reminder-settings-load-end`
+- `reminder-schedule-check`
+- `reminder-schedule-skip-not-time-yet`
+- `reminder-schedule-match`
 
-## Important notes
-- Vercel Cron runs only after the project is deployed to Vercel.
-- Keep 5-day and same-day sent flags separate to avoid cross-flow interference.
-- Check your Vercel plan limits (Hobby plan may have cron/function usage limits).
+## หมายเหตุสำคัญ
+- การกันส่งซ้ำยังใช้ sent flag ต่อรายการงานเหมือนเดิม:
+  - lead: `line_reminder_sent_at`
+  - same-day: `line_same_day_reminder_sent_at`
+- settings เป็นแค่ schedule gate ว่ารอบนี้ควร “เริ่มส่งหรือยัง”
+- สามารถทดสอบ manual override date ได้เหมือนเดิมผ่าน query/body `date`
