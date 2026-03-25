@@ -369,6 +369,54 @@ test("save settings persists same_day_reminder_time to DB layer", async () => {
   assert.equal(state.reminderSettings.same_day_reminder_time, "09:45");
 });
 
+test("settings page submit payload includes same_day_reminder_time and submit diagnostics", () => {
+  const source = readFileSync(
+    new URL("../app/(app)/settings/reminders/page.tsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /reminder-settings-submit-payload/);
+  assert.match(source, /same_day_reminder_time/);
+  assert.match(source, /JSON\.stringify\(settings\)/);
+});
+
+test("settings save route logs before\/update\/after payload fields for same-day", () => {
+  const source = readFileSync(
+    new URL("../app/api/settings/reminders/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /reminder-settings-save-request-body/);
+  assert.match(source, /reminder-settings-save-update-payload/);
+  assert.match(source, /reminder-settings-save-before-row/);
+  assert.match(source, /reminder-settings-save-after-row/);
+  assert.match(source, /reminder-settings-save-missing-same-day-field/);
+  assert.match(source, /same_day_reminder_time/);
+});
+
+test("settings save route returns updated DB row in response payload", () => {
+  const source = readFileSync(
+    new URL("../app/api/settings/reminders/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /message: "saved"/);
+  assert.match(source, /settings/);
+  assert.match(source, /updateReminderSettings\(validation\.value\)/);
+});
+
+test("PUT save flow and preview flow use same reminder settings helper", () => {
+  const saveRouteSource = readFileSync(
+    new URL("../app/api/settings/reminders/route.ts", import.meta.url),
+    "utf8"
+  );
+  const previewHelperSource = readFileSync(new URL("./reminderPreview.ts", import.meta.url), "utf8");
+
+  assert.match(saveRouteSource, /getReminderSettings/);
+  assert.match(saveRouteSource, /updateReminderSettings/);
+  assert.match(previewHelperSource, /getReminderSettings/);
+});
+
 test("preview/system status/same-day section use same_day_reminder_time from DB", async () => {
   const state: MockState = {
     reminderSettings: {

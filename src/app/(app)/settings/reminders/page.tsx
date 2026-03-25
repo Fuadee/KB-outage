@@ -255,7 +255,7 @@ export default function ReminderSettingsPage() {
   const [manualRunResult, setManualRunResult] = useState<ManualRunResponse | null>(null);
   const [manualRunAt, setManualRunAt] = useState<string | null>(null);
 
-  const loadPreview = async () => {
+  const loadPreview = async (): Promise<ReminderPreviewResponse | null> => {
     setPreviewError(null);
     setIsPreviewLoading(true);
 
@@ -269,10 +269,13 @@ export default function ReminderSettingsPage() {
         throw new Error(body?.error ?? text ?? "โหลด preview ไม่สำเร็จ");
       }
 
-      setPreview(body as ReminderPreviewResponse);
+      const nextPreview = body as ReminderPreviewResponse;
+      setPreview(nextPreview);
+      return nextPreview;
     } catch (loadError: unknown) {
       const message = loadError instanceof Error ? loadError.message : "โหลด preview ไม่สำเร็จ";
       setPreviewError(message);
+      return null;
     } finally {
       setIsPreviewLoading(false);
     }
@@ -319,6 +322,11 @@ export default function ReminderSettingsPage() {
     setIsSaving(true);
 
     try {
+      console.log("reminder-settings-submit-payload", {
+        lead_reminder_time: settings.lead_reminder_time,
+        same_day_reminder_time: settings.same_day_reminder_time,
+        payload: settings,
+      });
       const response = await fetch("/api/settings/reminders", {
         method: "PUT",
         headers: {
@@ -333,9 +341,22 @@ export default function ReminderSettingsPage() {
         throw new Error(body?.error ?? text ?? "บันทึกการตั้งค่าไม่สำเร็จ");
       }
 
-      setSettings(body.settings ?? settings);
-      setSuccess(body.message ?? "บันทึกการตั้งค่าเรียบร้อยแล้ว");
-      await loadPreview();
+      const savedSettings = body.settings ?? settings;
+      setSettings(savedSettings);
+      setSuccess(
+        `${body.message ?? "บันทึกการตั้งค่าเรียบร้อยแล้ว"} · saved same-day time: ${savedSettings.same_day_reminder_time}`
+      );
+      const latestPreview = await loadPreview();
+      if (
+        latestPreview &&
+        latestPreview.settingsDebug.same_day_reminder_time_from_db !== savedSettings.same_day_reminder_time
+      ) {
+        console.warn("reminder-settings-save-preview-mismatch", {
+          response_same_day_reminder_time: savedSettings.same_day_reminder_time,
+          preview_same_day_reminder_time_from_db:
+            latestPreview.settingsDebug.same_day_reminder_time_from_db,
+        });
+      }
     } catch (saveError: unknown) {
       const message =
         saveError instanceof Error ? saveError.message : "ไม่สามารถบันทึกการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง";

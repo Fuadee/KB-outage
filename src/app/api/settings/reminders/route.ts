@@ -30,12 +30,24 @@ export async function PUT(request: Request) {
 
   try {
     const payload = await request.json().catch(() => null);
-    console.log("reminder-settings-save-payload", {
+    const payloadRecord =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : null;
+    console.log("reminder-settings-save-request-body", {
       method: "PUT",
-      fields: payload && typeof payload === "object" ? Object.keys(payload as Record<string, unknown>) : [],
-      same_day_reminder_time: (payload as Record<string, unknown> | null)?.same_day_reminder_time ?? null,
-      lead_reminder_time: (payload as Record<string, unknown> | null)?.lead_reminder_time ?? null,
+      fields: payloadRecord ? Object.keys(payloadRecord) : [],
+      lead_reminder_time: payloadRecord?.lead_reminder_time ?? null,
+      same_day_reminder_time: payloadRecord?.same_day_reminder_time ?? null,
     });
+    if (payloadRecord && !("same_day_reminder_time" in payloadRecord)) {
+      console.log("reminder-settings-save-missing-same-day-field", {
+        method: "PUT",
+        fields: Object.keys(payloadRecord),
+        lead_reminder_time: payloadRecord.lead_reminder_time ?? null,
+        same_day_reminder_time: null,
+      });
+    }
     const validation = validateReminderSettingsInput(payload, "partial");
 
     if (!validation.ok) {
@@ -49,7 +61,21 @@ export async function PUT(request: Request) {
     }
 
     const settingsBefore = await getReminderSettings();
+    console.log("reminder-settings-save-before-row", {
+      id: settingsBefore.id,
+      lead_reminder_time: settingsBefore.lead_reminder_time,
+      same_day_reminder_time: settingsBefore.same_day_reminder_time,
+    });
+    console.log("reminder-settings-save-update-payload", {
+      lead_reminder_time: validation.value.lead_reminder_time ?? null,
+      same_day_reminder_time: validation.value.same_day_reminder_time ?? null,
+    });
     const settings = await updateReminderSettings(validation.value);
+    console.log("reminder-settings-save-after-row", {
+      id: settings.id,
+      lead_reminder_time: settings.lead_reminder_time,
+      same_day_reminder_time: settings.same_day_reminder_time,
+    });
     console.log("reminder-settings-save-success", {
       method: "PUT",
       id: settings.id,
