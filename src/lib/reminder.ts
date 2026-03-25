@@ -120,6 +120,75 @@ export function parseTimeHHmm(value: string): { hour: number; minute: number } |
   return { hour, minute };
 }
 
+
+
+function computeCurrentTimeInTimezone(date: Date, timezone: string): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+
+  return {
+    hour: Number(parts.find((part) => part.type === "hour")?.value ?? "0"),
+    minute: Number(parts.find((part) => part.type === "minute")?.value ?? "0"),
+  };
+}
+
+export function computeLeadPlannedNotifyDate(outageDate: string | null | undefined, leadDays: number): string | null {
+  const normalized = normalizeDateOnly(outageDate);
+  if (!normalized) return null;
+  return addDaysToDateOnly(normalized, -leadDays);
+}
+
+export function computeSameDayPlannedNotifyDate(outageDate: string | null | undefined): string | null {
+  return normalizeDateOnly(outageDate);
+}
+
+export function computeNextScheduledRunAt(options: {
+  now?: Date;
+  scheduleTime: string;
+  timezone?: string;
+}): string | null {
+  const parsed = parseTimeHHmm(options.scheduleTime);
+  if (!parsed) return null;
+
+  const timezone = options.timezone ?? BANGKOK_TIMEZONE;
+  const now = options.now ?? new Date();
+  const today = formatDateInTimezone(now, timezone);
+  const current = computeCurrentTimeInTimezone(now, timezone);
+
+  const isPastOrNow =
+    current.hour > parsed.hour ||
+    (current.hour === parsed.hour && current.minute >= parsed.minute);
+
+  const runDate = isPastOrNow ? addDaysToDateOnly(today, 1) : today;
+
+  return `${runDate}T${options.scheduleTime}:00+07:00`;
+}
+
+export type ReminderReadinessStatus = "disabled" | "scheduled" | "ready_today" | "sent" | "skipped";
+
+export function deriveReminderReadinessStatus(options: {
+  enabled: boolean;
+  plannedNotifyDate: string | null;
+  todayDate: string;
+  isSent: boolean;
+  skipReason: string | null;
+}): ReminderReadinessStatus {
+  if (!options.enabled) return "disabled";
+  if (options.isSent) return "sent";
+  if (options.skipReason) return "skipped";
+  if (!options.plannedNotifyDate) return "skipped";
+  if (options.plannedNotifyDate === options.todayDate) return "ready_today";
+  return "scheduled";
+}
+
+export function formatPlannedNotifyThaiDateTime(dateText: string | null, timeText: string | null): string {
+  if (!dateText || !timeText) return "-";
+  return `${formatThaiDateBE(dateText)} เวลา ${timeText} น.`;
+}
 export type ReminderEligibilityInput = {
   line_reminder_sent_at?: string | null;
   line_same_day_reminder_sent_at?: string | null;

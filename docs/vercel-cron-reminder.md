@@ -73,10 +73,20 @@ Vercel cron ใช้ UTC:
 
 - Endpoint preview: `GET /api/settings/reminders/preview`
 - Optional query: `previewDate=YYYY-MM-DD` (สำหรับ debug/จำลองวันที่)
-- Response จะคืน `leadPreview` และ `sameDayPreview` พร้อมรายการ `items` ที่มี:
-  - `wouldSend`: ถ้าระบบรันตอนนี้งานนี้จะถูกส่งหรือไม่
-  - `skipReason`: เหตุผลที่ข้าม (เช่น `already_sent`, `already_sent_same_day`, `status=closed`, `is_closed=true`, `reminder_disabled`)
-  - `messagePreview`: ข้อความที่ระบบจะส่ง (format เดียวกับ helper จริง)
+- Response ระดับบนมีข้อมูล schedule/system readiness เพิ่มเติม:
+  - `generatedAt`, `timezone`
+  - `systemStatus.isSystemReady`
+  - `systemStatus.hasLineToken`, `hasLineTargetId`, `hasSupabaseUrl`, `hasSupabaseServiceRoleKey`
+  - `systemStatus.leadReminderScheduleTime`, `sameDayReminderScheduleTime`
+  - `systemStatus.nextLeadRunAt`, `nextSameDayRunAt`
+- ทั้ง `leadPreview` และ `sameDayPreview` มี metadata สำหรับอธิบายรอบทำงาน:
+  - `enabled`, `targetDate`, `scheduleTime`, `nextRunAt`, `summaryText`
+  - `matched`, `eligible`, `skipped`
+- แต่ละงานใน `items` มี planned notification schedule:
+  - `notificationType` (`lead` / `same_day`)
+  - `plannedNotifyDate`, `plannedNotifyTime`, `plannedNotifyAt`
+  - `readinessStatus` (`disabled`, `scheduled`, `ready_today`, `sent`, `skipped`)
+  - `readinessReason`, `wouldSend`, `skipReason`, `messagePreview`
 - Preview query ข้อมูลจริงจาก DB แต่เป็น **preview-only**:
   - ไม่เรียก LINE API
   - ไม่อัปเดต `line_reminder_sent_at`

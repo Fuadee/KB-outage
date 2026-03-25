@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
-import { formatThaiDateBE } from "@/lib/reminder";
+import { formatPlannedNotifyThaiDateTime, formatThaiDateBE } from "@/lib/reminder";
 import { cn } from "@/lib/utils";
 import { labelText, subtitleText, titleText } from "@/lib/theme";
 
@@ -17,10 +17,18 @@ type ReminderSettings = {
   same_day_reminder_time: string;
 };
 
+type ReminderReadinessStatus = "disabled" | "scheduled" | "ready_today" | "sent" | "skipped";
+
 type ReminderPreviewItem = {
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
+  notificationType: "lead" | "same_day";
+  plannedNotifyDate: string | null;
+  plannedNotifyTime: string;
+  plannedNotifyAt: string | null;
+  readinessStatus: ReminderReadinessStatus;
+  readinessReason: string;
   wouldSend: boolean;
   skipReason: string | null;
   messagePreview: string;
@@ -29,6 +37,9 @@ type ReminderPreviewItem = {
 type ReminderPreviewSection = {
   enabled: boolean;
   targetDate: string;
+  scheduleTime: string;
+  nextRunAt: string | null;
+  summaryText: string;
   matched: number;
   eligible: number;
   skipped: number;
@@ -44,6 +55,17 @@ type ReminderPreviewResponse = {
     lead_reminder_days: number;
     same_day_reminder_enabled: boolean;
   };
+  systemStatus: {
+    isSystemReady: boolean;
+    hasLineToken: boolean;
+    hasLineTargetId: boolean;
+    hasSupabaseUrl: boolean;
+    hasSupabaseServiceRoleKey: boolean;
+    leadReminderScheduleTime: string;
+    sameDayReminderScheduleTime: string;
+    nextLeadRunAt: string | null;
+    nextSameDayRunAt: string | null;
+  };
   leadPreview: ReminderPreviewSection;
   sameDayPreview: ReminderPreviewSection;
 };
@@ -56,6 +78,42 @@ const defaultSettings: ReminderSettings = {
   same_day_reminder_enabled: true,
   same_day_reminder_time: "14:30",
 };
+
+function formatBangkokDateTime(dateText: string | null): string {
+  if (!dateText) return "-";
+  return new Date(dateText).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+}
+
+function readinessBadgeClass(status: ReminderReadinessStatus): string {
+  if (status === "ready_today") return "bg-emerald-100 text-emerald-700";
+  if (status === "sent") return "bg-sky-100 text-sky-700";
+  if (status === "scheduled") return "bg-amber-100 text-amber-700";
+  if (status === "disabled") return "bg-slate-200 text-slate-700";
+  return "bg-rose-100 text-rose-700";
+}
+
+function SystemStatusCard({ preview }: { preview: ReminderPreviewResponse }) {
+  const status = preview.systemStatus;
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-sm font-semibold text-slate-900">สถานะระบบแจ้งเตือน</p>
+      <p className="text-xs text-slate-600">
+        สถานะรวม: {status.isSystemReady ? "พร้อมส่ง" : "ยังไม่พร้อมส่ง"} · เวลาอ้างอิง: {preview.timezone}
+      </p>
+      <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+        <p>Lead reminder: {status.leadReminderScheduleTime} · รอบถัดไป {formatBangkokDateTime(status.nextLeadRunAt)}</p>
+        <p>Same-day reminder: {status.sameDayReminderScheduleTime} · รอบถัดไป {formatBangkokDateTime(status.nextSameDayRunAt)}</p>
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className={cn("rounded-full px-2 py-0.5", status.hasLineToken ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>LINE token</span>
+        <span className={cn("rounded-full px-2 py-0.5", status.hasLineTargetId ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>LINE target</span>
+        <span className={cn("rounded-full px-2 py-0.5", status.hasSupabaseUrl ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>Supabase URL</span>
+        <span className={cn("rounded-full px-2 py-0.5", status.hasSupabaseServiceRoleKey ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>Service role key</span>
+      </div>
+    </div>
+  );
+}
 
 function PreviewSectionCard({
   title,
@@ -71,8 +129,10 @@ function PreviewSectionCard({
       <div className="space-y-1">
         <p className="text-sm font-semibold text-slate-900">{title}</p>
         <p className="text-xs text-slate-500">
-          สถานะ: {section.enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"} · target date: {section.targetDate}
+          สถานะ: {section.enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"} · target date: {section.targetDate} · เวลาแจ้งเตือน: {section.scheduleTime}
         </p>
+        <p className="text-xs text-slate-500">รอบถัดไป: {formatBangkokDateTime(section.nextRunAt)}</p>
+        <p className="text-xs text-slate-500">{section.summaryText}</p>
         <p className="text-xs text-slate-500">
           matched {section.matched} · eligible {section.eligible} · skipped {section.skipped}
         </p>
@@ -89,22 +149,26 @@ function PreviewSectionCard({
               <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-900">งาน: {item.equipment_code ?? "-"}</span>
                 <span className="text-slate-500">วันที่ดับไฟ: {formatThaiDateBE(item.outage_date)}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 font-medium",
-                    item.wouldSend
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700"
-                  )}
-                >
-                  {item.wouldSend ? "would send" : "skipped"}
+                <span className={cn("rounded-full px-2 py-0.5 font-medium", readinessBadgeClass(item.readinessStatus))}>
+                  {item.readinessStatus}
                 </span>
                 {!item.wouldSend && item.skipReason ? (
-                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-700">
-                    {item.skipReason}
-                  </span>
+                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-700">{item.skipReason}</span>
                 ) : null}
               </div>
+
+              <div className="mb-2 space-y-1 rounded-lg bg-white p-2 text-xs text-slate-700">
+                <p>จะถูกแจ้งเตือนวันที่: {formatThaiDateBE(item.plannedNotifyDate)}</p>
+                <p>เวลา: {item.plannedNotifyTime}</p>
+                <p>planned at: {formatBangkokDateTime(item.plannedNotifyAt)}</p>
+                <p>สถานะตอนนี้: {item.readinessReason}</p>
+                {item.readinessStatus === "scheduled" ? (
+                  <p className="text-amber-700">
+                    ยังไม่ถึงวันแจ้งเตือน ระบบจะส่งในวันที่ {formatPlannedNotifyThaiDateTime(item.plannedNotifyDate, item.plannedNotifyTime)}
+                  </p>
+                ) : null}
+              </div>
+
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-slate-700">
                 {item.messagePreview}
               </pre>
@@ -324,8 +388,9 @@ export default function ReminderSettingsPage() {
           {preview ? (
             <>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                generatedAt: {new Date(preview.generatedAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · timezone: {preview.timezone}
+                generatedAt: {formatBangkokDateTime(preview.generatedAt)} · timezone: {preview.timezone}
               </div>
+              <SystemStatusCard preview={preview} />
               <PreviewSectionCard
                 title="แจ้งเตือนล่วงหน้า"
                 emptyMessage="วันนี้ไม่มีงานที่เข้าเงื่อนไขแจ้งเตือนล่วงหน้า"

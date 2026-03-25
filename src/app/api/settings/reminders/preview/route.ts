@@ -51,6 +51,10 @@ export async function GET(request: NextRequest) {
     console.log("reminder-preview-end", {
       ok: true,
       previewDate,
+      generatedAt: preview.generatedAt,
+      isSystemReady: preview.systemStatus.isSystemReady,
+      nextLeadRunAt: preview.systemStatus.nextLeadRunAt,
+      nextSameDayRunAt: preview.systemStatus.nextSameDayRunAt,
     });
 
     return NextResponse.json(preview);
