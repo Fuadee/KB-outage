@@ -1,6 +1,21 @@
 export const BANGKOK_TIMEZONE = "Asia/Bangkok";
 export const REMINDER_LEAD_DAYS = 5;
 
+const THAI_SHORT_MONTHS = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
+];
+
 export function normalizeDateOnly(value: string | null | undefined): string | null {
   if (!value) return null;
 
@@ -49,6 +64,10 @@ export function addDaysToDateOnly(dateOnly: string, days: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function computeBangkokTodayDateOnly(now?: Date): string {
+  return formatDateInTimezone(now ?? new Date(), BANGKOK_TIMEZONE);
+}
+
 export function computeTargetOutageDate(options?: {
   now?: Date;
   leadDays?: number;
@@ -79,13 +98,27 @@ export function shouldRunAtBangkokEight(date: Date): boolean {
   return hour === "08" && minute === "00";
 }
 
-
 export type ReminderEligibilityInput = {
   line_reminder_sent_at?: string | null;
+  line_same_day_reminder_sent_at?: string | null;
   outage_date?: string | null;
   status?: string | null;
   is_closed?: boolean | null;
 };
+
+function getClosedOrDoneReason(
+  job: ReminderEligibilityInput,
+  statusFieldExists: boolean
+): string | null {
+  if (job.is_closed) return "is_closed=true";
+
+  const normalizedStatus = (job.status ?? "").toLowerCase().trim();
+  if (statusFieldExists && (normalizedStatus === "closed" || normalizedStatus === "done")) {
+    return `status=${normalizedStatus}`;
+  }
+
+  return null;
+}
 
 export function getReminderSkipReason(
   job: ReminderEligibilityInput,
@@ -94,15 +127,45 @@ export function getReminderSkipReason(
 ): string | null {
   if (job.line_reminder_sent_at) return "already_sent";
 
-  if (job.is_closed) return "is_closed=true";
-
-  const normalizedStatus = (job.status ?? "").toLowerCase().trim();
-  if (statusFieldExists && (normalizedStatus === "closed" || normalizedStatus === "done")) {
-    return `status=${normalizedStatus}`;
-  }
+  const closedOrDoneReason = getClosedOrDoneReason(job, statusFieldExists);
+  if (closedOrDoneReason) return closedOrDoneReason;
 
   const normalizedOutageDate = normalizeDateOnly(job.outage_date ?? null);
   if (normalizedOutageDate !== targetDate) return "outage_date_not_match";
 
   return null;
+}
+
+export function getSameDayReminderSkipReason(
+  job: ReminderEligibilityInput,
+  targetDate: string,
+  statusFieldExists = true
+): string | null {
+  if (job.line_same_day_reminder_sent_at) return "already_sent_same_day";
+
+  const closedOrDoneReason = getClosedOrDoneReason(job, statusFieldExists);
+  if (closedOrDoneReason) return closedOrDoneReason;
+
+  const normalizedOutageDate = normalizeDateOnly(job.outage_date ?? null);
+  if (normalizedOutageDate !== targetDate) return "outage_date_not_match";
+
+  return null;
+}
+
+export function formatThaiDateBE(dateText: string | null | undefined): string {
+  if (!dateText) return "-";
+
+  const [y, m, d] = dateText.split("-").map(Number);
+  if (!y || !m || !d) return dateText;
+
+  const month = THAI_SHORT_MONTHS[m - 1] ?? "";
+  const buddhistYear = y + 543;
+  return `${d} ${month} ${buddhistYear}`;
+}
+
+export function formatSameDayReminderMessage(input: {
+  equipmentCode?: string | null;
+  outageDate?: string | null;
+}): string {
+  return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n📢 กรุณาดำเนินการแจ้งผู้ใช้ไฟฟ้า\nและเตรียมความพร้อมก่อนดำเนินการ`;
 }
