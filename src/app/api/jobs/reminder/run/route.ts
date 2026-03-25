@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   BANGKOK_TIMEZONE,
   computeTargetOutageDate,
-  formatThaiDateBE,
+  formatLeadReminderMessage,
   getReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
@@ -248,7 +248,11 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         continue;
       }
 
-      const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา ${settings.lead_reminder_days} วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
+      const lineText = formatLeadReminderMessage({
+        equipmentCode: job.equipment_code,
+        outageDate: job.outage_date,
+        leadDays: settings.lead_reminder_days,
+      });
 
       const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
       if (!lineResult.ok) {

@@ -68,3 +68,17 @@ Vercel cron ใช้ UTC:
 - ไม่รองรับ realtime reminder แบบนาทีเป๊ะ
 - ไม่รองรับ polling ทุก 5 นาที
 - ไม่ควรผูก UX ว่าตั้งเวลาเองได้แบบทันทีแล้ว backend จะยิงตรงนาที
+
+## Reminder Preview (Settings Page)
+
+- Endpoint preview: `GET /api/settings/reminders/preview`
+- Optional query: `previewDate=YYYY-MM-DD` (สำหรับ debug/จำลองวันที่)
+- Response จะคืน `leadPreview` และ `sameDayPreview` พร้อมรายการ `items` ที่มี:
+  - `wouldSend`: ถ้าระบบรันตอนนี้งานนี้จะถูกส่งหรือไม่
+  - `skipReason`: เหตุผลที่ข้าม (เช่น `already_sent`, `already_sent_same_day`, `status=closed`, `is_closed=true`, `reminder_disabled`)
+  - `messagePreview`: ข้อความที่ระบบจะส่ง (format เดียวกับ helper จริง)
+- Preview query ข้อมูลจริงจาก DB แต่เป็น **preview-only**:
+  - ไม่เรียก LINE API
+  - ไม่อัปเดต `line_reminder_sent_at`
+  - ไม่อัปเดต `line_same_day_reminder_sent_at`
+- หน้า `/settings/reminders` จะ refresh preview อัตโนมัติหลังบันทึก settings สำเร็จ

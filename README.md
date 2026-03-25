@@ -125,7 +125,11 @@ After creating a document, the dashboard will mark the job as `PENDING_APPROVAL`
 - กำหนดเวลาเองได้แบบ `HH:mm` (อิง `Asia/Bangkok`)
 - กำหนดจำนวนวันล่วงหน้าได้สำหรับ lead reminder
 
-Cron จะวิ่งถี่ทุก 5 นาที แล้ว endpoint จะอ่านค่า settings จาก DB และตัดสินใจส่งตามเวลาที่ตั้งไว้
+หน้า Reminder Settings มี Preview panel สำหรับจำลองว่าถ้าระบบรันตอนนี้ จะส่งงานใดบ้างจากข้อมูลจริงในฐานข้อมูล
+- ปุ่ม “ตรวจสอบรายการแจ้งเตือน” จะเรียก `GET /api/settings/reminders/preview`
+- Preview จะแสดงทั้ง lead reminder และ same-day reminder พร้อม `wouldSend` / `skipReason` และข้อความที่จะส่ง
+- Preview เป็น read-only: **ไม่ส่ง LINE จริง** และ **ไม่อัปเดต sent flags**
+
 รายละเอียดเพิ่มดูที่ `docs/vercel-cron-reminder.md`
 
 ## Notes

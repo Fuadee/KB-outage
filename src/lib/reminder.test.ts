@@ -5,6 +5,7 @@ import {
   addDaysToDateOnly,
   computeBangkokTodayDateOnly,
   computeTargetOutageDate,
+  formatLeadReminderMessage,
   formatSameDayReminderMessage,
   getReminderSkipReason,
   getSameDayReminderSkipReason,
@@ -12,6 +13,8 @@ import {
   parseTimeHHmm,
   shouldRunAtBangkokEight,
 } from "./reminder.ts";
+
+import { buildPreviewSection } from "./reminderPreview.ts";
 import { validateReminderSettingsInput } from "./reminderSettings.ts";
 
 test("today 2026-03-14 should target outage_date 2026-03-19", () => {
@@ -169,4 +172,54 @@ test("same-day message is today tone and has equipment fallback", () => {
   assert.match(withCode, /งาน: TR-001/);
   assert.match(noCode, /งาน: -/);
   assert.doesNotMatch(withCode, /เหลือเวลา 5 วัน/);
+});
+
+
+test("lead reminder message uses Thai date format and lead days", () => {
+  const text = formatLeadReminderMessage({
+    equipmentCode: "TR-001",
+    outageDate: "2026-03-19",
+    leadDays: 3,
+  });
+
+  assert.match(text, /แจ้งเตือนเตรียมขอดับไฟ/);
+  assert.match(text, /งาน: TR-001/);
+  assert.match(text, /19 มี\.ค\. 2569/);
+  assert.match(text, /เหลือเวลา 3 วัน/);
+});
+
+test("preview section marks reminder_disabled skip reason when section disabled", () => {
+  const section = buildPreviewSection({
+    enabled: false,
+    targetDate: "2026-03-14",
+    jobs: [
+      {
+        id: 1,
+        equipment_code: "TR-001",
+        outage_date: "2026-03-14",
+        line_reminder_sent_at: null,
+        line_same_day_reminder_sent_at: null,
+      },
+    ],
+    statusFieldExists: true,
+    getSkipReason: () => null,
+    formatMessage: () => "preview-message",
+  });
+
+  assert.equal(section.eligible, 0);
+  assert.equal(section.skipped, 1);
+  assert.equal(section.items[0]?.wouldSend, false);
+  assert.equal(section.items[0]?.skipReason, "reminder_disabled");
+});
+
+test("preview route remains preview-only and avoids side effects", () => {
+  const source = readFileSync(
+    new URL("../app/api/settings/reminders/preview/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /buildReminderPreview/);
+  assert.doesNotMatch(source, /line_reminder_sent_at/);
+  assert.doesNotMatch(source, /line_same_day_reminder_sent_at/);
+  assert.doesNotMatch(source, /api\.line\.me/);
 });
