@@ -45,6 +45,13 @@ Manual date override for verification:
 - `GET /api/jobs/reminder/same-day/run?date=2026-03-14`
 - `POST /api/jobs/reminder/same-day/run` with body `{ "date": "2026-03-14" }`
 
+Manual debug mode (same-day only):
+- Dry-run (query + skip evaluation only, no LINE send, no sent-flag update):
+  - `GET /api/jobs/reminder/same-day/run?date=2026-03-14&dryRun=1`
+- Force-send (manual POST only, explicit opt-in, allows bypassing sent flag):
+  - `POST /api/jobs/reminder/same-day/run?date=2026-03-14&forceSend=1`
+  - Body example: `{ "date": "2026-03-14", "forceSend": true }`
+
 ## Debug output
 Both endpoints return diagnostic fields to help troubleshooting:
 
@@ -60,6 +67,31 @@ Both endpoints return diagnostic fields to help troubleshooting:
 - `diagnostics.requestedDateOverride`
 - `diagnostics.skipReasons`
 - `errors[]` with per-job failure details
+
+Same-day endpoint also returns:
+- `mode` (`normal` / `dryRun` / `forceSend`)
+- `eligible`
+- `skipReasons`
+- `lineSendAttempts`
+- `lineSendFailures`
+- `updatedRows`
+
+## Log keys for same-day debug
+Search these keys in function logs:
+- `same-day-reminder-route-start`
+- `same-day-reminder-target-date`
+- `same-day-reminder-query-start`
+- `same-day-reminder-query-end`
+- `same-day-reminder-total-rows`
+- `same-day-reminder-row-skip`
+- `same-day-reminder-row-eligible`
+- `same-day-reminder-line-send-start`
+- `same-day-reminder-line-send-success`
+- `same-day-reminder-line-send-failed`
+- `same-day-reminder-update-sent-start`
+- `same-day-reminder-update-sent-success`
+- `same-day-reminder-update-sent-conflict`
+- `same-day-reminder-route-end`
 
 ## Important notes
 - Vercel Cron runs only after the project is deployed to Vercel.
