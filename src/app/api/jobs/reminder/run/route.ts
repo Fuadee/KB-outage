@@ -8,6 +8,7 @@ import {
   normalizeDateOnly,
 } from "@/lib/reminder";
 import { getReminderSettings } from "@/lib/reminderSettings";
+import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,7 @@ type Summary = {
   sent: number;
   skipped: number;
   sampleRows: ReminderJob[];
+  matchedRows: ReminderJob[];
   errors: Array<{ id?: number | string; error: string }>;
   diagnostics: {
     triggerSource: "cron-or-get" | "manual-post";
@@ -44,6 +46,7 @@ type Summary = {
     skipReasons: Record<string, number>;
     leadReminderEnabled: boolean;
     leadReminderDays: number;
+    dryRun: boolean;
   };
 };
 
@@ -115,11 +118,16 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const queryOverride = req.nextUrl.searchParams.get("date");
-  const bodyOverride =
+  const requestBody =
     triggerSource === "manual-post"
-      ? normalizeDateOnly(String((await req.json().catch(() => ({})))?.date ?? ""))
-      : null;
+      ? await req.json().catch(() => ({}))
+      : {};
+  const queryOverride = req.nextUrl.searchParams.get("date");
+  const bodyOverride = normalizeDateOnly(String((requestBody as { date?: string })?.date ?? ""));
+  const dryRun =
+    triggerSource === "manual-post"
+      ? Boolean((requestBody as { dryRun?: boolean | number | string })?.dryRun)
+      : req.nextUrl.searchParams.get("dryRun") === "1";
   const requestedDateOverride = normalizeDateOnly(queryOverride) ?? bodyOverride;
 
   const summary: Summary = {
@@ -130,6 +138,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
     sent: 0,
     skipped: 0,
     sampleRows: [],
+    matchedRows: [],
     errors: [],
     diagnostics: {
       triggerSource,
@@ -151,8 +160,40 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       skipReasons: {},
       leadReminderEnabled: true,
       leadReminderDays: 5,
+      dryRun,
     },
   };
+
+  if (triggerSource === "manual-post") {
+    const { accessToken } = getAuthTokens();
+    if (!accessToken) {
+      return NextResponse.json(
+        { ...summary, ok: false, error: "UNAUTHENTICATED" },
+        { status: 401 }
+      );
+    }
+
+    const authClient = createServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ...summary, ok: false, error: "UNAUTHENTICATED" },
+        { status: 401 }
+      );
+    }
+  }
+
+  if (triggerSource === "manual-post") {
+    console.log("reminder-manual-run-start", {
+      route: "lead-reminder",
+      requestedDateOverride,
+      dryRun,
+    });
+  }
 
   console.log("reminder-route-start", {
     route: "lead-reminder",
@@ -238,6 +279,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
     });
 
     summary.matched = matchedJobs.length;
+    summary.matchedRows = matchedJobs.slice(0, 50);
 
     const supabase = createClient(lineSupabaseUrl, lineServiceRoleKey);
 
@@ -254,29 +296,31 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         leadDays: settings.lead_reminder_days,
       });
 
-      const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
-      if (!lineResult.ok) {
-        summary.errors.push({
-          id: job.id,
-          error: `LINE push failed (${lineResult.status}): ${lineResult.body}`,
-        });
-        addSkipReason("line_push_failed");
-        continue;
-      }
+      if (!dryRun) {
+        const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
+        if (!lineResult.ok) {
+          summary.errors.push({
+            id: job.id,
+            error: `LINE push failed (${lineResult.status}): ${lineResult.body}`,
+          });
+          addSkipReason("line_push_failed");
+          continue;
+        }
 
-      const { error: updateError } = await supabase
-        .from("outage_jobs")
-        .update({ line_reminder_sent_at: new Date().toISOString() })
-        .eq("id", job.id)
-        .is("line_reminder_sent_at", null);
+        const { error: updateError } = await supabase
+          .from("outage_jobs")
+          .update({ line_reminder_sent_at: new Date().toISOString() })
+          .eq("id", job.id)
+          .is("line_reminder_sent_at", null);
 
-      if (updateError) {
-        summary.errors.push({
-          id: job.id,
-          error: `Failed to update line_reminder_sent_at: ${updateError.message}`,
-        });
-        addSkipReason("update_sent_at_failed");
-        continue;
+        if (updateError) {
+          summary.errors.push({
+            id: job.id,
+            error: `Failed to update line_reminder_sent_at: ${updateError.message}`,
+          });
+          addSkipReason("update_sent_at_failed");
+          continue;
+        }
       }
 
       summary.sent += 1;
@@ -297,6 +341,21 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       totalRows: summary.totalRowsChecked,
     });
 
+    if (triggerSource === "manual-post") {
+      console.log("reminder-manual-run-success", {
+        route: "lead-reminder",
+        targetDate: summary.targetDateUsed,
+        dryRun,
+        sent: summary.sent,
+        matched: summary.matched,
+      });
+      console.log("reminder-manual-run-end", {
+        route: "lead-reminder",
+        ok: true,
+        dryRun,
+      });
+    }
+
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -307,6 +366,19 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       sent: summary.sent,
       skipped: summary.skipped,
     });
+
+    if (triggerSource === "manual-post") {
+      console.log("reminder-manual-run-failed", {
+        route: "lead-reminder",
+        dryRun,
+        error: message,
+      });
+      console.log("reminder-manual-run-end", {
+        route: "lead-reminder",
+        ok: false,
+        dryRun,
+      });
+    }
 
     return NextResponse.json(
       {
