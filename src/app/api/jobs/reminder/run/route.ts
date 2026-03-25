@@ -4,6 +4,7 @@ import {
   BANGKOK_TIMEZONE,
   computeTargetOutageDate,
   formatLeadReminderMessage,
+  getReminderMissingEnvKeys,
   getReminderRuntimeReadiness,
   getReminderSkipReason,
   normalizeDateOnly,
@@ -204,12 +205,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   });
 
   const runtimeReadiness = getReminderRuntimeReadiness();
-  const missing = [
-    !runtimeReadiness.hasLineToken && "LINE_CHANNEL_ACCESS_TOKEN",
-    !runtimeReadiness.hasLineTargetId && "LINE_DEFAULT_TARGET_ID",
-    !runtimeReadiness.hasSupabaseUrl && "SUPABASE_URL",
-    !runtimeReadiness.hasSupabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
-  ].filter(Boolean) as string[];
+  const missing = getReminderMissingEnvKeys(runtimeReadiness);
 
   if (missing.length > 0) {
     return NextResponse.json(

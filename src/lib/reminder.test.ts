@@ -11,6 +11,7 @@ import {
   deriveReminderReadinessStatus,
   formatLeadReminderMessage,
   formatSameDayReminderMessage,
+  getReminderMissingEnvKeys,
   getReminderSkipReason,
   getSameDayReminderSkipReason,
   normalizeDateOnly,
@@ -75,6 +76,17 @@ test("same-day reminder route reads settings from DB helper", () => {
   );
   assert.match(source, /getReminderSettings/);
   assert.doesNotMatch(source, /isWithinScheduledWindowBangkok/);
+});
+
+test("manual same-day route requires authenticated user", () => {
+  const source = readFileSync(
+    new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /getAuthTokens/);
+  assert.match(source, /createServerClient/);
+  assert.match(source, /UNAUTHENTICATED/);
 });
 
 test("normalize and date math are date-only safe", () => {
@@ -415,6 +427,39 @@ test("PUT save flow and preview flow use same reminder settings helper", () => {
   assert.match(saveRouteSource, /getReminderSettings/);
   assert.match(saveRouteSource, /updateReminderSettings/);
   assert.match(previewHelperSource, /getReminderSettings/);
+});
+
+test("lead and same-day routes share readiness missing-env helper", () => {
+  const leadRouteSource = readFileSync(
+    new URL("../app/api/jobs/reminder/run/route.ts", import.meta.url),
+    "utf8"
+  );
+  const sameDayRouteSource = readFileSync(
+    new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(leadRouteSource, /getReminderMissingEnvKeys/);
+  assert.match(sameDayRouteSource, /getReminderMissingEnvKeys/);
+});
+
+test("getReminderMissingEnvKeys returns all missing keys", () => {
+  const missing = getReminderMissingEnvKeys({
+    timezone: "Asia/Bangkok",
+    hasLineToken: false,
+    hasLineTargetId: true,
+    hasSupabaseUrl: false,
+    hasSupabaseServiceRoleKey: false,
+    routeLeadReady: false,
+    routeSameDayReady: false,
+    isSystemReady: false,
+  });
+
+  assert.deepEqual(missing, [
+    "LINE_CHANNEL_ACCESS_TOKEN",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ]);
 });
 
 test("preview/system status/same-day section use same_day_reminder_time from DB", async () => {

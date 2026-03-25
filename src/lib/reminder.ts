@@ -280,6 +280,13 @@ export type ReminderRuntimeReadiness = {
   isSystemReady: boolean;
 };
 
+export const REMINDER_REQUIRED_ENV_KEYS = [
+  "LINE_CHANNEL_ACCESS_TOKEN",
+  "LINE_DEFAULT_TARGET_ID",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
 export function getReminderRuntimeReadiness(): ReminderRuntimeReadiness {
   const hasLineToken = Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN);
   const hasLineTargetId = Boolean(process.env.LINE_DEFAULT_TARGET_ID);
@@ -297,4 +304,15 @@ export function getReminderRuntimeReadiness(): ReminderRuntimeReadiness {
     routeSameDayReady: routeReady,
     isSystemReady: routeReady,
   };
+}
+
+export function getReminderMissingEnvKeys(
+  readiness: ReminderRuntimeReadiness = getReminderRuntimeReadiness()
+): string[] {
+  return REMINDER_REQUIRED_ENV_KEYS.filter((key) => {
+    if (key === "LINE_CHANNEL_ACCESS_TOKEN") return !readiness.hasLineToken;
+    if (key === "LINE_DEFAULT_TARGET_ID") return !readiness.hasLineTargetId;
+    if (key === "SUPABASE_URL") return !readiness.hasSupabaseUrl;
+    return !readiness.hasSupabaseServiceRoleKey;
+  });
 }
