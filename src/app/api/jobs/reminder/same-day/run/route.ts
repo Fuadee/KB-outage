@@ -2,20 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   BANGKOK_TIMEZONE,
-  REMINDER_LEAD_DAYS,
-  computeTargetOutageDate,
-  formatThaiDateBE,
-  getReminderSkipReason,
+  computeBangkokTodayDateOnly,
+  formatSameDayReminderMessage,
+  getSameDayReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
 
 export const runtime = "nodejs";
 
-type ReminderJob = {
+type SameDayReminderJob = {
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
-  line_reminder_sent_at: string | null;
+  line_same_day_reminder_sent_at: string | null;
   status?: string | null;
   is_closed?: boolean | null;
 };
@@ -27,7 +26,7 @@ type Summary = {
   matched: number;
   sent: number;
   skipped: number;
-  sampleRows: ReminderJob[];
+  sampleRows: SameDayReminderJob[];
   errors: Array<{ id?: number | string; error: string }>;
   diagnostics: {
     triggerSource: "cron-or-get" | "manual-post";
@@ -45,23 +44,23 @@ type Summary = {
   };
 };
 
-async function fetchReminderJobs(
+async function fetchSameDayReminderJobs(
   supabaseUrl: string,
   serviceRoleKey: string,
   targetDate: string
-): Promise<{ jobs: ReminderJob[]; statusFieldExists: boolean }> {
+): Promise<{ jobs: SameDayReminderJob[]; statusFieldExists: boolean }> {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const withStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_reminder_sent_at,status,is_closed")
+    .select("id,equipment_code,outage_date,line_same_day_reminder_sent_at,status,is_closed")
     .eq("outage_date", targetDate)
-    .is("line_reminder_sent_at", null)
+    .is("line_same_day_reminder_sent_at", null)
     .order("outage_date", { ascending: true });
 
   if (!withStatus.error) {
     return {
-      jobs: (withStatus.data ?? []) as ReminderJob[],
+      jobs: (withStatus.data ?? []) as SameDayReminderJob[],
       statusFieldExists: true,
     };
   }
@@ -72,9 +71,9 @@ async function fetchReminderJobs(
 
   const withoutStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_reminder_sent_at")
+    .select("id,equipment_code,outage_date,line_same_day_reminder_sent_at")
     .eq("outage_date", targetDate)
-    .is("line_reminder_sent_at", null)
+    .is("line_same_day_reminder_sent_at", null)
     .order("outage_date", { ascending: true });
 
   if (withoutStatus.error) {
@@ -82,7 +81,7 @@ async function fetchReminderJobs(
   }
 
   return {
-    jobs: (withoutStatus.data ?? []) as ReminderJob[],
+    jobs: (withoutStatus.data ?? []) as SameDayReminderJob[],
     statusFieldExists: false,
   };
 }
@@ -107,7 +106,7 @@ async function pushLineMessage(token: string, to: string, text: string) {
   };
 }
 
-async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "manual-post") {
+async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get" | "manual-post") {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   const targetId = process.env.LINE_DEFAULT_TARGET_ID;
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -181,14 +180,10 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   };
 
   try {
-    const targetDate = computeTargetOutageDate({
-      leadDays: REMINDER_LEAD_DAYS,
-      timezone: BANGKOK_TIMEZONE,
-      overrideDate: requestedDateOverride,
-    });
+    const targetDate = requestedDateOverride ?? computeBangkokTodayDateOnly();
     summary.targetDateUsed = targetDate;
 
-    const { jobs, statusFieldExists } = await fetchReminderJobs(
+    const { jobs, statusFieldExists } = await fetchSameDayReminderJobs(
       lineSupabaseUrl,
       lineServiceRoleKey,
       targetDate
@@ -198,7 +193,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
     summary.sampleRows = jobs.slice(0, 10);
 
     const matchedJobs = jobs.filter((job) => {
-      const reason = getReminderSkipReason(job, targetDate, statusFieldExists);
+      const reason = getSameDayReminderSkipReason(job, targetDate, statusFieldExists);
       return reason === null;
     });
 
@@ -207,16 +202,19 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
     const supabase = createClient(lineSupabaseUrl, lineServiceRoleKey);
 
     for (const job of jobs) {
-      const skipReason = getReminderSkipReason(job, targetDate, statusFieldExists);
+      const skipReason = getSameDayReminderSkipReason(job, targetDate, statusFieldExists);
       if (skipReason) {
         addSkipReason(skipReason);
         continue;
       }
 
-      const lineText = `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${job.equipment_code ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(job.outage_date)}\n\n⏰ เหลือเวลา 5 วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
+      const lineText = formatSameDayReminderMessage({
+        equipmentCode: job.equipment_code,
+        outageDate: job.outage_date,
+      });
 
       const lineResult = await pushLineMessage(lineToken, lineTargetId, lineText);
-      console.log("[reminder] LINE push", {
+      console.log("[reminder-same-day] LINE push", {
         jobId: job.id,
         ok: lineResult.ok,
         status: lineResult.status,
@@ -232,25 +230,31 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         continue;
       }
 
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("outage_jobs")
-        .update({ line_reminder_sent_at: new Date().toISOString() })
+        .update({ line_same_day_reminder_sent_at: new Date().toISOString() })
         .eq("id", job.id)
-        .is("line_reminder_sent_at", null);
+        .is("line_same_day_reminder_sent_at", null)
+        .select("id");
 
       if (updateError) {
         summary.errors.push({
           id: job.id,
-          error: `Failed to update line_reminder_sent_at: ${updateError.message}`,
+          error: `Failed to update line_same_day_reminder_sent_at: ${updateError.message}`,
         });
         addSkipReason("update_sent_at_failed");
+        continue;
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        addSkipReason("update_conflict_or_already_sent");
         continue;
       }
 
       summary.sent += 1;
     }
 
-    console.log("[reminder] summary", summary);
+    console.log("[reminder-same-day] summary", summary);
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -267,9 +271,9 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
 }
 
 export async function GET(req: NextRequest) {
-  return runReminder(req, "cron-or-get");
+  return runSameDayReminder(req, "cron-or-get");
 }
 
 export async function POST(req: NextRequest) {
-  return runReminder(req, "manual-post");
+  return runSameDayReminder(req, "manual-post");
 }
