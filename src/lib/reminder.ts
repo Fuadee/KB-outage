@@ -265,8 +265,11 @@ export function formatLeadReminderMessage(input: {
 export function formatSameDayReminderMessage(input: {
   equipmentCode?: string | null;
   outageDate?: string | null;
+  mapLink?: string | null;
 }): string {
-  return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n📢 กรุณาดำเนินการแจ้งผู้ใช้ไฟฟ้า\nและเตรียมความพร้อมก่อนดำเนินการ`;
+  const mapLinkText = input.mapLink?.trim() || "-";
+
+  return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n📍 พื้นที่ดับไฟ (ดูแผนที่):\n${mapLinkText}\n\n📅 ตรวจสอบแผนดับไฟล่วงหน้า:\nhttps://kb-outage.vercel.app/calendar\n\n📢 เตรียมความพร้อมก่อนปฏิบัติงาน`;
 }
 
 export type ReminderRuntimeReadiness = {

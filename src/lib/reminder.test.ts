@@ -179,15 +179,23 @@ test("same-day message is today tone and has equipment fallback", () => {
   const withCode = formatSameDayReminderMessage({
     equipmentCode: "TR-001",
     outageDate: "2026-03-14",
+    mapLink: "https://maps.google.com/?q=13.7563,100.5018",
   });
   const noCode = formatSameDayReminderMessage({
     equipmentCode: null,
     outageDate: "2026-03-14",
+    mapLink: null,
   });
 
   assert.match(withCode, /แจ้งเตือนการดับไฟ \(วันนี้\)/);
   assert.match(withCode, /งาน: TR-001/);
+  assert.match(withCode, /📍 พื้นที่ดับไฟ \(ดูแผนที่\):/);
+  assert.match(withCode, /https:\/\/maps\.google\.com\/\?q=13\.7563,100\.5018/);
+  assert.match(withCode, /https:\/\/kb-outage\.vercel\.app\/calendar/);
+  assert.match(withCode, /📢 เตรียมความพร้อมก่อนปฏิบัติงาน/);
+  assert.doesNotMatch(withCode, /กรุณาดำเนินการแจ้งผู้ใช้ไฟฟ้า/);
   assert.match(noCode, /งาน: -/);
+  assert.match(noCode, /📍 พื้นที่ดับไฟ \(ดูแผนที่\):\n-/);
   assert.doesNotMatch(withCode, /เหลือเวลา 5 วัน/);
 });
 

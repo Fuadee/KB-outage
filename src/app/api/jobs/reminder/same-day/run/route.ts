@@ -18,6 +18,7 @@ type SameDayReminderJob = {
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
+  map_link?: string | null;
   line_same_day_reminder_sent_at: string | null;
   status?: string | null;
   is_closed?: boolean | null;
@@ -66,7 +67,7 @@ async function fetchSameDayReminderJobs(
 
   let withStatusQuery = supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_same_day_reminder_sent_at,status,is_closed")
+    .select("id,equipment_code,outage_date,map_link,line_same_day_reminder_sent_at,status,is_closed")
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
 
@@ -89,7 +90,7 @@ async function fetchSameDayReminderJobs(
 
   let withoutStatusQuery = supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_same_day_reminder_sent_at")
+    .select("id,equipment_code,outage_date,map_link,line_same_day_reminder_sent_at")
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
 
@@ -321,6 +322,7 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       const lineText = formatSameDayReminderMessage({
         equipmentCode: job.equipment_code,
         outageDate: job.outage_date,
+        mapLink: job.map_link,
       });
 
       if (dryRun) {

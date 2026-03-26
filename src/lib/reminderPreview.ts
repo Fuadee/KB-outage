@@ -23,6 +23,7 @@ export type PreviewJob = {
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
+  map_link?: string | null;
   line_reminder_sent_at: string | null;
   line_same_day_reminder_sent_at: string | null;
   status?: string | null;
@@ -96,7 +97,7 @@ async function fetchPreviewJobsByDate(
   const withStatus = await supabase
     .from("outage_jobs")
     .select(
-      "id,equipment_code,outage_date,line_reminder_sent_at,line_same_day_reminder_sent_at,status,is_closed"
+      "id,equipment_code,outage_date,map_link,line_reminder_sent_at,line_same_day_reminder_sent_at,status,is_closed"
     )
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
@@ -114,7 +115,7 @@ async function fetchPreviewJobsByDate(
 
   const withoutStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,line_reminder_sent_at,line_same_day_reminder_sent_at")
+    .select("id,equipment_code,outage_date,map_link,line_reminder_sent_at,line_same_day_reminder_sent_at")
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
 
@@ -369,6 +370,7 @@ export async function buildReminderPreview(options: {
         formatSameDayReminderMessage({
           equipmentCode: job.equipment_code,
           outageDate: job.outage_date,
+          mapLink: job.map_link,
         }),
     }),
   };
