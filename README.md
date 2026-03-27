@@ -120,15 +120,14 @@ After creating a document, the dashboard will mark the job as `PENDING_APPROVAL`
 
 ## Reminder Settings
 
-- เปิดหน้า `/settings/reminders` เพื่อปรับค่าแจ้งเตือน LINE จาก UI
-- รองรับการเปิด/ปิด reminder แยก 2 แบบ (ล่วงหน้า / วันจริง)
-- กำหนดเวลาเองได้แบบ `HH:mm` (อิง `Asia/Bangkok`)
-- กำหนดจำนวนวันล่วงหน้าได้สำหรับ lead reminder
-
-หน้า Reminder Settings มี Preview panel สำหรับจำลองว่าถ้าระบบรันตอนนี้ จะส่งงานใดบ้างจากข้อมูลจริงในฐานข้อมูล
-- ปุ่ม “ตรวจสอบรายการแจ้งเตือน” จะเรียก `GET /api/settings/reminders/preview`
-- Preview จะแสดงทั้ง lead reminder และ same-day reminder พร้อม `wouldSend` / `skipReason` และข้อความที่จะส่ง
-- Preview เป็น read-only: **ไม่ส่ง LINE จริง** และ **ไม่อัปเดต sent flags**
+- หน้า `/settings/reminders` เป็นหน้า read-only สำหรับอธิบาย behavior ที่ใช้งานจริง
+- ระบบ reminder ใช้ค่าคงที่จาก code (`src/lib/reminderConfig.ts`) โดยตรง
+- ไม่มี endpoint settings/preview และไม่มีการแก้ค่าผ่าน UI
+- ค่ามาตรฐาน:
+  - timezone = `Asia/Bangkok`
+  - cron display time = `08:00`
+  - lead reminder = เปิดใช้งาน, ล่วงหน้า 5 วัน
+  - same-day reminder = เปิดใช้งาน
 
 รายละเอียดเพิ่มดูที่ `docs/vercel-cron-reminder.md`
 
