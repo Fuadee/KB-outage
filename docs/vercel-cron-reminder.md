@@ -1,23 +1,31 @@
-# Vercel Cron + Reminder Settings (LINE) — Hobby Plan
+# Vercel Cron + Reminder (Hardcoded Config)
 
-## สรุประบบใหม่
-ระบบ Reminder ถูกปรับให้รองรับ **Vercel Hobby** โดยใช้ cron trigger แบบ **วันละครั้งต่อ route** เท่านั้น และไม่พึ่งพา logic เวลาแบบนาทีเป๊ะจาก DB อีกต่อไป
+## สรุป
+ระบบ Reminder ใช้ cron จาก Vercel และใช้ค่าคงที่จาก code โดยตรง (ไม่อ่าน settings จาก DB)
 
 - Lead reminder route: `/api/jobs/reminder/run`
 - Same-day reminder route: `/api/jobs/reminder/same-day/run`
+- Config กลาง: `src/lib/reminderConfig.ts`
+
+## ค่าคงที่ที่ใช้งานจริง
+
+- `timezone = Asia/Bangkok`
+- `leadReminderEnabled = true`
+- `leadReminderDays = 5`
+- `sameDayReminderEnabled = true`
+- `cronRunTimeDisplay = 08:00`
 
 ## Cron schedule (UTC)
+
 Vercel cron ใช้ UTC:
 
-- `/api/jobs/reminder/run` → `0 1 * * *` (ประมาณ 08:00 ไทย)
-- `/api/jobs/reminder/same-day/run` → `0 1 * * *` (ประมาณ 08:00 ไทย)
-
-> ข้อจำกัด Vercel Hobby: งาน cron อาจคลาดเคลื่อนระดับชั่วโมงได้ จึงเน้น “ถูกวัน” มากกว่า “ตรงนาที”
+- `/api/jobs/reminder/run` → `0 1 * * *` (08:00 เวลาไทย)
+- `/api/jobs/reminder/same-day/run` → `0 1 * * *` (08:00 เวลาไทย)
 
 ## Business logic ที่คงไว้
 
 ### 1) Lead reminder
-- targetDate = วันนี้ตามเวลา Bangkok + lead_reminder_days
+- targetDate = วันนี้ตามเวลา Bangkok + 5 วัน
 - query เฉพาะงาน `outage_date = targetDate`
 - query เฉพาะงานที่ `line_reminder_sent_at IS NULL`
 - skip งาน closed/done
@@ -32,63 +40,7 @@ Vercel cron ใช้ UTC:
 - ส่ง LINE
 - update `line_same_day_reminder_sent_at`
 
-## Reminder settings ที่ยังใช้
-ยังคงใช้ settings จากตาราง `reminder_settings` เฉพาะ:
-- `lead_reminder_enabled`
-- `lead_reminder_days`
-- `same_day_reminder_enabled`
-- `timezone` (ต้องเป็น `Asia/Bangkok`)
+## หมายเหตุ
 
-**หมายเหตุ:** field เวลา `lead_reminder_time` / `same_day_reminder_time` ยังคงเก็บใน DB ได้เพื่อ backward compatibility แต่ route ไม่ใช้ตัดสินใจส่งแล้ว
-
-## Observability logs
-แต่ละ route จะมี log หลัก:
-- `reminder-route-start`
-- `reminder-target-date`
-- `reminder-total-rows`
-- `reminder-sent-count`
-- `reminder-skipped-count`
-- `reminder-route-end`
-
-## Manual testing
-
-1) Lead reminder (manual GET)
-- `GET /api/jobs/reminder/run?date=YYYY-MM-DD`
-
-2) Same-day reminder (manual GET)
-- `GET /api/jobs/reminder/same-day/run?date=YYYY-MM-DD`
-
-3) Dry run (ไม่ส่งจริง)
-- `GET /api/jobs/reminder/same-day/run?date=YYYY-MM-DD&dryRun=1`
-
-4) Force send (manual POST)
-- `POST /api/jobs/reminder/same-day/run` body: `{ "date": "YYYY-MM-DD", "forceSend": 1 }`
-
-## ข้อจำกัดสำคัญบน Hobby
-- ไม่รองรับ realtime reminder แบบนาทีเป๊ะ
-- ไม่รองรับ polling ทุก 5 นาที
-- ไม่ควรผูก UX ว่าตั้งเวลาเองได้แบบทันทีแล้ว backend จะยิงตรงนาที
-
-## Reminder Preview (Settings Page)
-
-- Endpoint preview: `GET /api/settings/reminders/preview`
-- Optional query: `previewDate=YYYY-MM-DD` (สำหรับ debug/จำลองวันที่)
-- Response ระดับบนมีข้อมูล schedule/system readiness เพิ่มเติม:
-  - `generatedAt`, `timezone`
-  - `systemStatus.isSystemReady`
-  - `systemStatus.hasLineToken`, `hasLineTargetId`, `hasSupabaseUrl`, `hasSupabaseServiceRoleKey`
-  - `systemStatus.leadReminderScheduleTime`, `sameDayReminderScheduleTime`
-  - `systemStatus.nextLeadRunAt`, `nextSameDayRunAt`
-- ทั้ง `leadPreview` และ `sameDayPreview` มี metadata สำหรับอธิบายรอบทำงาน:
-  - `enabled`, `targetDate`, `scheduleTime`, `nextRunAt`, `summaryText`
-  - `matched`, `eligible`, `skipped`
-- แต่ละงานใน `items` มี planned notification schedule:
-  - `notificationType` (`lead` / `same_day`)
-  - `plannedNotifyDate`, `plannedNotifyTime`, `plannedNotifyAt`
-  - `readinessStatus` (`disabled`, `scheduled`, `ready_today`, `sent`, `skipped`)
-  - `readinessReason`, `wouldSend`, `skipReason`, `messagePreview`
-- Preview query ข้อมูลจริงจาก DB แต่เป็น **preview-only**:
-  - ไม่เรียก LINE API
-  - ไม่อัปเดต `line_reminder_sent_at`
-  - ไม่อัปเดต `line_same_day_reminder_sent_at`
-- หน้า `/settings/reminders` จะ refresh preview อัตโนมัติหลังบันทึก settings สำเร็จ
+- ไม่มี reminder settings API/preview API แล้ว
+- หน้า `/settings/reminders` เป็น read-only เพื่ออธิบาย behavior ที่ตรงกับ cron จริง

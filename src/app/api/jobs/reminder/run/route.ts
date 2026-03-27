@@ -9,7 +9,7 @@ import {
   getReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
-import { getReminderSettings } from "@/lib/reminderSettings";
+import { reminderConfig } from "@/lib/reminderConfig";
 import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -160,8 +160,8 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         hasSupabaseServiceRoleKey: Boolean(serviceRoleKey),
       },
       skipReasons: {},
-      leadReminderEnabled: true,
-      leadReminderDays: 5,
+      leadReminderEnabled: reminderConfig.leadReminderEnabled,
+      leadReminderDays: reminderConfig.leadReminderDays,
       dryRun,
     },
   };
@@ -231,11 +231,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   };
 
   try {
-    const settings = await getReminderSettings();
-    summary.diagnostics.leadReminderEnabled = settings.lead_reminder_enabled;
-    summary.diagnostics.leadReminderDays = settings.lead_reminder_days;
-
-    if (!settings.lead_reminder_enabled) {
+    if (!reminderConfig.leadReminderEnabled) {
       console.log("reminder-route-end", {
         route: "lead-reminder",
         reason: "lead_reminder_disabled",
@@ -250,8 +246,8 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
     }
 
     const targetDate = computeTargetOutageDate({
-      leadDays: settings.lead_reminder_days,
-      timezone: settings.timezone ?? BANGKOK_TIMEZONE,
+      leadDays: reminderConfig.leadReminderDays,
+      timezone: reminderConfig.timezone ?? BANGKOK_TIMEZONE,
       overrideDate: requestedDateOverride,
     });
     summary.targetDateUsed = targetDate;
@@ -291,7 +287,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       const lineText = formatLeadReminderMessage({
         equipmentCode: job.equipment_code,
         outageDate: job.outage_date,
-        leadDays: settings.lead_reminder_days,
+        leadDays: reminderConfig.leadReminderDays,
       });
 
       if (!dryRun) {

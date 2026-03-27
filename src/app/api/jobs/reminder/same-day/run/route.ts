@@ -9,7 +9,7 @@ import {
   getSameDayReminderSkipReason,
   normalizeDateOnly,
 } from "@/lib/reminder";
-import { getReminderSettings } from "@/lib/reminderSettings";
+import { reminderConfig } from "@/lib/reminderConfig";
 import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -194,7 +194,7 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       },
       dryRun,
       forceSend,
-      sameDayReminderEnabled: true,
+      sameDayReminderEnabled: reminderConfig.sameDayReminderEnabled,
     },
   };
 
@@ -258,10 +258,7 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
   };
 
   try {
-    const settings = await getReminderSettings();
-    summary.diagnostics.sameDayReminderEnabled = settings.same_day_reminder_enabled;
-
-    if (!settings.same_day_reminder_enabled && !forceSend) {
+    if (!reminderConfig.sameDayReminderEnabled && !forceSend) {
       console.log("reminder-route-end", {
         route: "same-day-reminder",
         reason: "same_day_reminder_disabled",
