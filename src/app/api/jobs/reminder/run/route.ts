@@ -46,8 +46,7 @@ type Summary = {
       hasSupabaseServiceRoleKey: boolean;
     };
     skipReasons: Record<string, number>;
-    leadReminderEnabled: boolean;
-    leadReminderDays: number;
+    leadDays: number;
     dryRun: boolean;
   };
 };
@@ -160,8 +159,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
         hasSupabaseServiceRoleKey: Boolean(serviceRoleKey),
       },
       skipReasons: {},
-      leadReminderEnabled: reminderConfig.leadReminderEnabled,
-      leadReminderDays: reminderConfig.leadReminderDays,
+      leadDays: reminderConfig.leadDays,
       dryRun,
     },
   };
@@ -231,22 +229,8 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
   };
 
   try {
-    if (!reminderConfig.leadReminderEnabled) {
-      console.log("reminder-route-end", {
-        route: "lead-reminder",
-        reason: "lead_reminder_disabled",
-        sent: 0,
-        skipped: 0,
-      });
-      return NextResponse.json({
-        ...summary,
-        skippedBySchedule: true,
-        reason: "lead_reminder_disabled",
-      });
-    }
-
     const targetDate = computeTargetOutageDate({
-      leadDays: reminderConfig.leadReminderDays,
+      leadDays: reminderConfig.leadDays,
       timezone: reminderConfig.timezone ?? BANGKOK_TIMEZONE,
       overrideDate: requestedDateOverride,
     });
@@ -287,7 +271,7 @@ async function runReminder(req: NextRequest, triggerSource: "cron-or-get" | "man
       const lineText = formatLeadReminderMessage({
         equipmentCode: job.equipment_code,
         outageDate: job.outage_date,
-        leadDays: reminderConfig.leadReminderDays,
+        leadDays: reminderConfig.leadDays,
       });
 
       if (!dryRun) {

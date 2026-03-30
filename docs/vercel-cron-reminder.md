@@ -10,10 +10,10 @@
 ## ค่าคงที่ที่ใช้งานจริง
 
 - `timezone = Asia/Bangkok`
-- `leadReminderEnabled = true`
-- `leadReminderDays = 5`
-- `sameDayReminderEnabled = true`
-- `cronRunTimeDisplay = 08:00`
+- `leadDays = 5`
+- `allowSameDayReminder = true`
+- `reminderRunDisplayTime = 08:00`
+- `sameDayRunDisplayTime = 08:00`
 
 ## Cron schedule (UTC)
 
@@ -43,4 +43,4 @@ Vercel cron ใช้ UTC:
 ## หมายเหตุ
 
 - ไม่มี reminder settings API/preview API แล้ว
-- หน้า `/settings/reminders` เป็น read-only เพื่ออธิบาย behavior ที่ตรงกับ cron จริง
+- ไม่มีหน้า `/settings/reminders` และไม่มี flow แก้ไข settings ผ่าน UI
