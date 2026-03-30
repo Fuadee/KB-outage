@@ -118,16 +118,16 @@ Placeholders list:
 
 After creating a document, the dashboard will mark the job as `PENDING_APPROVAL` for social posting. Use the “รออนุมัติ” button on the job card to open the preview modal, copy the text, and finalize posting. Once posted, the job is marked as `POSTED` and keeps the preview text stored in the database for future access.
 
-## Reminder Settings
+## Reminder Configuration
 
-- หน้า `/settings/reminders` เป็นหน้า read-only สำหรับอธิบาย behavior ที่ใช้งานจริง
 - ระบบ reminder ใช้ค่าคงที่จาก code (`src/lib/reminderConfig.ts`) โดยตรง
-- ไม่มี endpoint settings/preview และไม่มีการแก้ค่าผ่าน UI
+- ไม่มีหน้า Reminder Settings และไม่มี endpoint สำหรับ save/preview/debug settings
 - ค่ามาตรฐาน:
   - timezone = `Asia/Bangkok`
-  - cron display time = `08:00`
-  - lead reminder = เปิดใช้งาน, ล่วงหน้า 5 วัน
-  - same-day reminder = เปิดใช้งาน
+  - leadDays = `5`
+  - allowSameDayReminder = `true`
+  - reminderRunDisplayTime = `08:00`
+  - sameDayRunDisplayTime = `08:00`
 
 รายละเอียดเพิ่มดูที่ `docs/vercel-cron-reminder.md`
 

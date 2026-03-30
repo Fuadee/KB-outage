@@ -39,10 +39,10 @@ test("parseTimeHHmm validates HH:mm format", () => {
 
 test("hardcoded reminder config uses expected values", () => {
   assert.equal(reminderConfig.timezone, "Asia/Bangkok");
-  assert.equal(reminderConfig.leadReminderEnabled, true);
-  assert.equal(reminderConfig.leadReminderDays, 5);
-  assert.equal(reminderConfig.sameDayReminderEnabled, true);
-  assert.equal(reminderConfig.cronRunTimeDisplay, "08:00");
+  assert.equal(reminderConfig.leadDays, 5);
+  assert.equal(reminderConfig.allowSameDayReminder, true);
+  assert.equal(reminderConfig.reminderRunDisplayTime, "08:00");
+  assert.equal(reminderConfig.sameDayRunDisplayTime, "08:00");
 });
 
 test("lead reminder route uses code config (not DB settings helper)", () => {
@@ -176,9 +176,11 @@ test("getReminderMissingEnvKeys returns all missing keys", () => {
   assert.deepEqual(missing, ["LINE_CHANNEL_ACCESS_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
 });
 
-test("settings page is read-only and does not call settings/preview APIs", () => {
-  const source = readFileSync(new URL("../app/(app)/settings/reminders/page.tsx", import.meta.url), "utf8");
-  assert.match(source, /read-only/);
-  assert.doesNotMatch(source, /api\/settings\/reminders/);
-  assert.doesNotMatch(source, /fetch\(/);
+test("app shell navigation does not expose reminder settings UI", () => {
+  const sidebarSource = readFileSync(new URL("../components/layout/Sidebar.tsx", import.meta.url), "utf8");
+  const topNavSource = readFileSync(new URL("../components/layout/TopNav.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(sidebarSource, /\/settings\/reminders/);
+  assert.doesNotMatch(sidebarSource, /Reminder Settings/);
+  assert.doesNotMatch(topNavSource, /\/settings\/reminders/);
+  assert.doesNotMatch(topNavSource, /Reminder Settings/);
 });

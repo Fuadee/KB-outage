@@ -53,7 +53,7 @@ type Summary = {
     };
     dryRun: boolean;
     forceSend: boolean;
-    sameDayReminderEnabled: boolean;
+    allowSameDayReminder: boolean;
   };
 };
 
@@ -194,7 +194,7 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
       },
       dryRun,
       forceSend,
-      sameDayReminderEnabled: reminderConfig.sameDayReminderEnabled,
+      allowSameDayReminder: reminderConfig.allowSameDayReminder,
     },
   };
 
@@ -258,7 +258,7 @@ async function runSameDayReminder(req: NextRequest, triggerSource: "cron-or-get"
   };
 
   try {
-    if (!reminderConfig.sameDayReminderEnabled && !forceSend) {
+    if (!reminderConfig.allowSameDayReminder && !forceSend) {
       console.log("reminder-route-end", {
         route: "same-day-reminder",
         reason: "same_day_reminder_disabled",
