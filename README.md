@@ -124,10 +124,9 @@ After creating a document, the dashboard will mark the job as `PENDING_APPROVAL`
 - ไม่มีหน้า Reminder Settings และไม่มี endpoint สำหรับ save/preview/debug settings
 - ค่ามาตรฐาน:
   - timezone = `Asia/Bangkok`
-  - leadDays = `5`
   - allowSameDayReminder = `true`
-  - reminderRunDisplayTime = `08:00`
   - sameDayRunDisplayTime = `08:00`
+- ระบบ planned outage reminder ปัจจุบันเหลือเฉพาะ same-day reminder (`/api/jobs/reminder/same-day/run`)
 
 รายละเอียดเพิ่มดูที่ `docs/vercel-cron-reminder.md`
 

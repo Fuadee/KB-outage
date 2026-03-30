@@ -1,5 +1,4 @@
 export const BANGKOK_TIMEZONE = "Asia/Bangkok";
-export const REMINDER_LEAD_DAYS = 5;
 
 const THAI_SHORT_MONTHS = [
   "ม.ค.",
@@ -68,23 +67,6 @@ export function computeBangkokTodayDateOnly(now?: Date): string {
   return formatDateInTimezone(now ?? new Date(), BANGKOK_TIMEZONE);
 }
 
-export function computeTargetOutageDate(options?: {
-  now?: Date;
-  leadDays?: number;
-  timezone?: string;
-  overrideDate?: string | null;
-}): string {
-  const timezone = options?.timezone ?? BANGKOK_TIMEZONE;
-  const leadDays = options?.leadDays ?? REMINDER_LEAD_DAYS;
-  const now = options?.now ?? new Date();
-  const overrideDate = normalizeDateOnly(options?.overrideDate ?? null);
-
-  if (overrideDate) return overrideDate;
-
-  const currentLocalDate = formatDateInTimezone(now, timezone);
-  return addDaysToDateOnly(currentLocalDate, leadDays);
-}
-
 export function shouldRunAtBangkokEight(date: Date): boolean {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: BANGKOK_TIMEZONE,
@@ -136,12 +118,6 @@ function computeCurrentTimeInTimezone(date: Date, timezone: string): { hour: num
   };
 }
 
-export function computeLeadPlannedNotifyDate(outageDate: string | null | undefined, leadDays: number): string | null {
-  const normalized = normalizeDateOnly(outageDate);
-  if (!normalized) return null;
-  return addDaysToDateOnly(normalized, -leadDays);
-}
-
 export function computeSameDayPlannedNotifyDate(outageDate: string | null | undefined): string | null {
   return normalizeDateOnly(outageDate);
 }
@@ -190,7 +166,6 @@ export function formatPlannedNotifyThaiDateTime(dateText: string | null, timeTex
   return `${formatThaiDateBE(dateText)} เวลา ${timeText} น.`;
 }
 export type ReminderEligibilityInput = {
-  line_reminder_sent_at?: string | null;
   line_same_day_reminder_sent_at?: string | null;
   outage_date?: string | null;
   status?: string | null;
@@ -207,22 +182,6 @@ function getClosedOrDoneReason(
   if (statusFieldExists && (normalizedStatus === "closed" || normalizedStatus === "done")) {
     return `status=${normalizedStatus}`;
   }
-
-  return null;
-}
-
-export function getReminderSkipReason(
-  job: ReminderEligibilityInput,
-  targetDate: string,
-  statusFieldExists = true
-): string | null {
-  if (job.line_reminder_sent_at) return "already_sent";
-
-  const closedOrDoneReason = getClosedOrDoneReason(job, statusFieldExists);
-  if (closedOrDoneReason) return closedOrDoneReason;
-
-  const normalizedOutageDate = normalizeDateOnly(job.outage_date ?? null);
-  if (normalizedOutageDate !== targetDate) return "outage_date_not_match";
 
   return null;
 }
@@ -254,14 +213,6 @@ export function formatThaiDateBE(dateText: string | null | undefined): string {
   return `${d} ${month} ${buddhistYear}`;
 }
 
-export function formatLeadReminderMessage(input: {
-  equipmentCode?: string | null;
-  outageDate?: string | null;
-  leadDays: number;
-}): string {
-  return `⚡ แจ้งเตือนเตรียมขอดับไฟ\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n⏰ เหลือเวลา ${input.leadDays} วัน\nกรุณาดำเนินการขออนุมัติดับไฟ\nเพื่อเตรียมแจ้งผู้ใช้ไฟฟ้า`;
-}
-
 export function formatSameDayReminderMessage(input: {
   equipmentCode?: string | null;
   outageDate?: string | null;
@@ -278,9 +229,7 @@ export type ReminderRuntimeReadiness = {
   hasLineTargetId: boolean;
   hasSupabaseUrl: boolean;
   hasSupabaseServiceRoleKey: boolean;
-  routeLeadReady: boolean;
-  routeSameDayReady: boolean;
-  isSystemReady: boolean;
+  routeReady: boolean;
 };
 
 export const REMINDER_REQUIRED_ENV_KEYS = [
@@ -303,9 +252,7 @@ export function getReminderRuntimeReadiness(): ReminderRuntimeReadiness {
     hasLineTargetId,
     hasSupabaseUrl,
     hasSupabaseServiceRoleKey,
-    routeLeadReady: routeReady,
-    routeSameDayReady: routeReady,
-    isSystemReady: routeReady,
+    routeReady,
   };
 }
 

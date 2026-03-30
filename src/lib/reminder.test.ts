@@ -4,15 +4,11 @@ import { readFileSync } from "node:fs";
 import {
   addDaysToDateOnly,
   computeBangkokTodayDateOnly,
-  computeLeadPlannedNotifyDate,
   computeNextScheduledRunAt,
   computeSameDayPlannedNotifyDate,
-  computeTargetOutageDate,
   deriveReminderReadinessStatus,
-  formatLeadReminderMessage,
   formatSameDayReminderMessage,
   getReminderMissingEnvKeys,
-  getReminderSkipReason,
   getSameDayReminderSkipReason,
   normalizeDateOnly,
   parseTimeHHmm,
@@ -20,10 +16,9 @@ import {
 } from "./reminder.ts";
 import { reminderConfig } from "./reminderConfig.ts";
 
-test("today 2026-03-14 should target outage_date 2026-03-19", () => {
-  const now = new Date("2026-03-14T02:00:00+07:00");
-  const targetDate = computeTargetOutageDate({ now });
-  assert.equal(targetDate, "2026-03-19");
+test("computeBangkokTodayDateOnly uses Bangkok timezone date", () => {
+  const now = new Date("2026-03-14T00:30:00Z"); // 07:30 Bangkok
+  assert.equal(computeBangkokTodayDateOnly(now), "2026-03-14");
 });
 
 test("08:00 Asia/Bangkok is detected correctly", () => {
@@ -37,18 +32,12 @@ test("parseTimeHHmm validates HH:mm format", () => {
   assert.equal(parseTimeHHmm("2:10"), null);
 });
 
-test("hardcoded reminder config uses expected values", () => {
+test("hardcoded reminder config keeps same-day only values", () => {
   assert.equal(reminderConfig.timezone, "Asia/Bangkok");
-  assert.equal(reminderConfig.leadDays, 5);
   assert.equal(reminderConfig.allowSameDayReminder, true);
-  assert.equal(reminderConfig.reminderRunDisplayTime, "08:00");
   assert.equal(reminderConfig.sameDayRunDisplayTime, "08:00");
-});
-
-test("lead reminder route uses code config (not DB settings helper)", () => {
-  const source = readFileSync(new URL("../app/api/jobs/reminder/run/route.ts", import.meta.url), "utf8");
-  assert.match(source, /reminderConfig/);
-  assert.doesNotMatch(source, /getReminderSettings/);
+  assert.equal("leadDays" in reminderConfig, false);
+  assert.equal("reminderRunDisplayTime" in reminderConfig, false);
 });
 
 test("same-day reminder route uses code config (not DB settings helper)", () => {
@@ -70,25 +59,19 @@ test("manual same-day route requires authenticated user", () => {
   assert.match(source, /UNAUTHENTICATED/);
 });
 
+test("lead reminder route has been removed", () => {
+  const sameDayRouteSource = readFileSync(
+    new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
+    "utf8"
+  );
+  assert.doesNotMatch(sameDayRouteSource, /line_reminder_sent_at/);
+  assert.doesNotMatch(sameDayRouteSource, /formatLeadReminderMessage/);
+  assert.doesNotMatch(sameDayRouteSource, /getReminderSkipReason/);
+});
+
 test("normalize and date math are date-only safe", () => {
   assert.equal(normalizeDateOnly("2026-03-19T00:00:00.000Z"), "2026-03-19");
   assert.equal(addDaysToDateOnly("2026-03-14", 5), "2026-03-19");
-});
-
-test("manual override date is respected", () => {
-  const targetDate = computeTargetOutageDate({
-    now: new Date("2026-03-14T08:00:00+07:00"),
-    overrideDate: "2026-03-14",
-  });
-  assert.equal(targetDate, "2026-03-14");
-});
-
-test("already sent jobs must not be sent again", () => {
-  const reason = getReminderSkipReason(
-    { outage_date: "2026-03-19", line_reminder_sent_at: "2026-03-10T01:00:00Z" },
-    "2026-03-19"
-  );
-  assert.equal(reason, "already_sent");
 });
 
 test("same-day skips when same-day reminder was already sent", () => {
@@ -121,14 +104,7 @@ test("same-day message contains expected sections", () => {
   assert.match(withCode, /https:\/\/kb-outage\.vercel\.app\/calendar/);
 });
 
-test("lead reminder message uses Thai date format and lead days", () => {
-  const text = formatLeadReminderMessage({ equipmentCode: "TR-001", outageDate: "2026-03-19", leadDays: 3 });
-  assert.match(text, /19 มี\.ค\. 2569/);
-  assert.match(text, /เหลือเวลา 3 วัน/);
-});
-
-test("planned notify date helpers work", () => {
-  assert.equal(computeLeadPlannedNotifyDate("2026-03-31", 5), "2026-03-26");
+test("same-day planned notify date helper works", () => {
   assert.equal(computeSameDayPlannedNotifyDate("2026-03-31"), "2026-03-31");
 });
 
@@ -152,16 +128,6 @@ test("computeNextScheduledRunAt returns same day when time not passed", () => {
   assert.equal(next, "2026-03-25T08:00:00+07:00");
 });
 
-test("lead and same-day routes share readiness missing-env helper", () => {
-  const leadRouteSource = readFileSync(new URL("../app/api/jobs/reminder/run/route.ts", import.meta.url), "utf8");
-  const sameDayRouteSource = readFileSync(
-    new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
-    "utf8"
-  );
-  assert.match(leadRouteSource, /getReminderMissingEnvKeys/);
-  assert.match(sameDayRouteSource, /getReminderMissingEnvKeys/);
-});
-
 test("getReminderMissingEnvKeys returns all missing keys", () => {
   const missing = getReminderMissingEnvKeys({
     timezone: "Asia/Bangkok",
@@ -169,9 +135,7 @@ test("getReminderMissingEnvKeys returns all missing keys", () => {
     hasLineTargetId: true,
     hasSupabaseUrl: false,
     hasSupabaseServiceRoleKey: false,
-    routeLeadReady: false,
-    routeSameDayReady: false,
-    isSystemReady: false,
+    routeReady: false,
   });
   assert.deepEqual(missing, ["LINE_CHANNEL_ACCESS_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
 });
