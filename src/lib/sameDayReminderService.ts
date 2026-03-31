@@ -23,7 +23,7 @@ export type SameDayReminderJob = {
 export type SameDayReminderRunInput = {
   date?: string | null;
   dryRun?: boolean;
-  trigger: "external-get" | "external-post" | "vercel-cron";
+  trigger: "external-get" | "external-post";
 };
 
 export type SameDayReminderRunSummary = {
@@ -154,6 +154,7 @@ export async function runSameDayReminder(
   const runtimeReadiness = getReminderRuntimeReadiness();
   const missing = getReminderMissingEnvKeys(runtimeReadiness);
   if (missing.length > 0) {
+    console.error("same-day-reminder-missing-env", { nowUtc: summary.nowUtc, trigger: summary.trigger, missing });
     return {
       status: 500,
       summary: {
@@ -165,6 +166,7 @@ export async function runSameDayReminder(
   }
 
   if (!reminderConfig.allowSameDayReminder) {
+    console.warn("same-day-reminder-disabled", { nowUtc: summary.nowUtc, trigger: summary.trigger });
     addSkipReason("same_day_reminder_disabled");
     return {
       status: 200,
@@ -185,6 +187,14 @@ export async function runSameDayReminder(
     );
 
     summary.totalRowsChecked = jobs.length;
+
+    console.log("same-day-reminder-query-result", {
+      nowUtc: summary.nowUtc,
+      targetDateUsed: summary.targetDateUsed,
+      totalRowsChecked: summary.totalRowsChecked,
+      statusFieldExists,
+      trigger: summary.trigger,
+    });
     summary.sampleRows = jobs.slice(0, 10).map((job) => ({
       id: job.id,
       equipment_code: job.equipment_code,
@@ -265,12 +275,23 @@ export async function runSameDayReminder(
       sent: summary.sent,
       skipped: summary.skipped,
       skipReasons: summary.skipReasons,
+      sampleRows: summary.sampleRows,
+      lineSendAttempts: summary.lineSendAttempts,
+      lineSendFailures: summary.lineSendFailures,
+      updatedRows: summary.updatedRows,
       trigger: summary.trigger,
+      errors: summary.errors,
     });
 
     return { status: 200, summary };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("same-day-reminder-run-failed", {
+      nowUtc: summary.nowUtc,
+      targetDateUsed: summary.targetDateUsed,
+      trigger: summary.trigger,
+      error: message,
+    });
     return {
       status: 500,
       summary: {

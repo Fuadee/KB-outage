@@ -127,9 +127,11 @@ After creating a document, the dashboard will mark the job as `PENDING_APPROVAL`
   - allowSameDayReminder = `true`
   - sameDayRunDisplayTime = `09:30`
 - ระบบ planned outage reminder ปัจจุบันเหลือเฉพาะ same-day reminder (`/api/jobs/reminder/same-day/run`)
-- trigger หลักเป็น external scheduler และ endpoint ต้องส่ง header `x-reminder-secret` ให้ตรงกับ `REMINDER_JOB_SECRET`
+- production trigger strategy ของ same-day reminder เป็น **external scheduler first**
+- same-day reminder ไม่ใช้ Vercel Cron เป็น production path อีกต่อไป
+- endpoint ต้องส่ง header `x-reminder-secret` ให้ตรงกับ `REMINDER_JOB_SECRET`
 
-รายละเอียดเพิ่มดูที่ `docs/vercel-cron-reminder.md`
+รายละเอียด runbook ดูที่ `docs/external-scheduler-same-day-reminder.md` และสถานะ Vercel Cron ดูที่ `docs/vercel-cron-reminder.md`
 
 ## Notes
 
