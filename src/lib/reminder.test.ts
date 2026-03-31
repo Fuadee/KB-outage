@@ -35,28 +35,33 @@ test("parseTimeHHmm validates HH:mm format", () => {
 test("hardcoded reminder config keeps same-day only values", () => {
   assert.equal(reminderConfig.timezone, "Asia/Bangkok");
   assert.equal(reminderConfig.allowSameDayReminder, true);
-  assert.equal(reminderConfig.sameDayRunDisplayTime, "08:00");
+  assert.equal(reminderConfig.sameDayRunDisplayTime, "09:30");
   assert.equal("leadDays" in reminderConfig, false);
   assert.equal("reminderRunDisplayTime" in reminderConfig, false);
 });
 
-test("same-day reminder route uses code config (not DB settings helper)", () => {
-  const source = readFileSync(
+test("same-day reminder runtime uses code config (not DB settings helper)", () => {
+  const routeSource = readFileSync(
     new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
     "utf8"
   );
-  assert.match(source, /reminderConfig/);
-  assert.doesNotMatch(source, /getReminderSettings/);
+  const serviceSource = readFileSync(
+    new URL("./sameDayReminderService.ts", import.meta.url),
+    "utf8"
+  );
+  assert.match(serviceSource, /reminderConfig/);
+  assert.match(routeSource, /runSameDayReminder/);
+  assert.doesNotMatch(serviceSource, /getReminderSettings/);
 });
 
-test("manual same-day route requires authenticated user", () => {
+test("same-day route requires x-reminder-secret", () => {
   const source = readFileSync(
     new URL("../app/api/jobs/reminder/same-day/run/route.ts", import.meta.url),
     "utf8"
   );
-  assert.match(source, /getAuthTokens/);
-  assert.match(source, /createServerClient/);
-  assert.match(source, /UNAUTHENTICATED/);
+  assert.match(source, /x-reminder-secret/);
+  assert.match(source, /REMINDER_JOB_SECRET/);
+  assert.doesNotMatch(source, /getAuthTokens/);
 });
 
 test("lead reminder route has been removed", () => {
@@ -122,10 +127,10 @@ test("readinessStatus helpers work", () => {
 test("computeNextScheduledRunAt returns same day when time not passed", () => {
   const next = computeNextScheduledRunAt({
     now: new Date("2026-03-25T07:00:00+07:00"),
-    scheduleTime: "08:00",
+    scheduleTime: "09:30",
     timezone: "Asia/Bangkok",
   });
-  assert.equal(next, "2026-03-25T08:00:00+07:00");
+  assert.equal(next, "2026-03-25T09:30:00+07:00");
 });
 
 test("getReminderMissingEnvKeys returns all missing keys", () => {

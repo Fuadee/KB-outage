@@ -1,35 +1,53 @@
-# Vercel Cron + Reminder (Same-day Only)
+# Reminder Trigger Strategy (External Scheduler First)
 
-## สรุป
-ระบบ Planned Outage Reminder ปัจจุบันเหลือเฉพาะ **Same-day reminder**
-(ไม่ใช้ lead reminder แล้ว)
+## สรุปแนวทางใหม่
+ระบบ Planned Outage Reminder ปัจจุบันเหลือเฉพาะ **Same-day reminder** เหมือนเดิม แต่เปลี่ยน trigger หลักเป็น **external scheduler** แทน Vercel Cron
 
 - Same-day reminder route: `/api/jobs/reminder/same-day/run`
-- Config กลาง: `src/lib/reminderConfig.ts`
+- รองรับทั้ง `GET` และ `POST`
+- trigger หลัก: external scheduler (เช่น cron-job.org / GitHub Actions)
+- Vercel Cron: เก็บไว้เป็น optional/fallback เท่านั้น
 
 ## ค่าคงที่ที่ใช้งานจริง
 
 - `timezone = Asia/Bangkok`
 - `allowSameDayReminder = true`
-- `sameDayRunDisplayTime = 08:00`
+- `sameDayRunDisplayTime = 09:30`
 
-## Cron schedule (UTC)
+## เวลา schedule
 
-Vercel cron ใช้ UTC:
+- เวลาไทยที่ต้องการ: `09:30 Asia/Bangkok`
+- UTC ที่ตรงกัน: `02:30 UTC`
 
-- `/api/jobs/reminder/same-day/run` → `0 1 * * *` (08:00 เวลาไทย)
+### ถ้าใช้ Vercel Cron (fallback)
+- `/api/jobs/reminder/same-day/run` → `30 2 * * *` (02:30 UTC = 09:30 เวลาไทย)
 
-## Business logic ที่ใช้งานจริง
+## Endpoint contract
 
-### Same-day reminder
-- targetDate = วันนี้ตามเวลา Bangkok
-- query เฉพาะงาน `outage_date = targetDate`
-- query เฉพาะงานที่ `line_same_day_reminder_sent_at IS NULL` (ยกเว้น forceSend)
-- skip งาน closed/done และงานที่ `is_closed = true`
-- ส่ง LINE
-- update `line_same_day_reminder_sent_at`
+### `GET /api/jobs/reminder/same-day/run`
+### `POST /api/jobs/reminder/same-day/run`
+
+Headers:
+- `x-reminder-secret: <REMINDER_JOB_SECRET>` (required)
+
+Query/body params:
+- `date=YYYY-MM-DD` (optional; ถ้าไม่ส่งจะใช้ "วันนี้" ตาม Asia/Bangkok)
+- `dryRun=1` (optional; ถ้าส่งจะไม่ยิง LINE และไม่ mark sent)
+
+## Data flow (same-day)
+
+1. validate `x-reminder-secret`
+2. resolve target date (query/body > Bangkok today)
+3. query `outage_jobs` ตาม `outage_date = targetDate`
+4. กรอง skip ด้วยเงื่อนไข:
+   - `line_same_day_reminder_sent_at` มีค่าแล้ว
+   - `is_closed = true`
+   - `status in (closed, done)`
+5. ถ้าไม่ใช่ dry-run:
+   - ส่ง LINE push
+   - update `line_same_day_reminder_sent_at` แบบ idempotent (`... IS NULL`)
 
 ## หมายเหตุ
 
-- ไม่มีหน้า `/settings/reminders` และไม่มี flow แก้ไข settings ผ่าน UI
-- ใน DB อาจยังมีตาราง/คอลัมน์จาก lead reminder เดิม แต่ code path ปัจจุบันไม่ใช้งานแล้ว
+- response จะมี debug fields ครบ: `nowUtc`, `nowBangkok`, `targetDateUsed`, `dryRun`, counters, `skipReasons`, `sampleRows`
+- 5-day reminder ไม่ถูกแตะ เพราะ code path ปัจจุบันใช้ same-day เท่านั้น
