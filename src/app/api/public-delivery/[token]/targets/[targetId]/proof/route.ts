@@ -18,6 +18,18 @@ export async function POST(
 ) {
   try {
     const { token, targetId } = await params;
+    if (!token?.trim()) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่พบ token สำหรับลิงก์ติดตาม" },
+        { status: 400 }
+      );
+    }
+    if (!targetId?.trim()) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่พบ target ที่ต้องการอัปเดต" },
+        { status: 400 }
+      );
+    }
     console.info("[delivery-public] proof upload incoming", { token: `${token.slice(0, 8)}...`, targetId });
     const formData = await request.formData();
     const proofFile = formData.get("proof");
@@ -85,6 +97,24 @@ export async function POST(
   } catch (error) {
     console.error("Public delivery proof upload failed", { error });
     if (error instanceof DeliveryTrackingError) {
+      const detailCode =
+        typeof error.details === "object" &&
+        error.details !== null &&
+        "code" in error.details
+          ? String((error.details as { code?: string }).code ?? "")
+          : "";
+      if (detailCode === "42501") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "เซิร์ฟเวอร์ไม่มีสิทธิ์อัปเดตสถานะจัดส่ง (ตรวจ env service role key และ policy ของ delivery_targets)",
+            code: "PERMISSION_DENIED",
+            details: error.details ?? null
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json(
         {
           ok: false,

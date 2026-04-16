@@ -9,6 +9,12 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
+    if (!token?.trim()) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่พบ token สำหรับลิงก์ติดตาม" },
+        { status: 400 }
+      );
+    }
     const data = await getDeliveryBatchWithTargetsByToken(token);
 
     if (!data) {
@@ -41,6 +47,17 @@ export async function GET(
     });
   } catch (error) {
     console.error("Public delivery GET failed", error);
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "BATCH_TOKEN_LOOKUP_FAILED"
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่สามารถตรวจสอบ token ได้ กรุณาลองใหม่" },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { ok: false, error: "ไม่สามารถโหลดข้อมูลได้" },
       { status: 500 }
