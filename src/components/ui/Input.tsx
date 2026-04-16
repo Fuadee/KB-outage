@@ -8,11 +8,7 @@ const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>
     <input
       ref={ref}
       type={type}
-      className={cn(
-        inputLight,
-        type === "date" && "[color-scheme:light]",
-        className
-      )}
+      className={cn(inputLight, className)}
       {...props}
     />
   )

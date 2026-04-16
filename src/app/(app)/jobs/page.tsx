@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useMemo, useState } from "react";
-import MapActionButtons from "@/components/job/MapActionButtons";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import JobCard, { type JobAction } from "@/components/job/JobCard";
+import type { JobStep } from "@/components/job/JobStatusStepper";
 import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
-import StatusBadge from "@/components/StatusBadge";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -19,11 +20,7 @@ import {
 } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
 import { inputLight } from "@/lib/theme";
-import {
-  getJobUrgency,
-  getUrgencyStyles,
-  parseLocalDate
-} from "@/lib/dateUtils";
+import { getJobUrgency, parseLocalDate } from "@/lib/dateUtils";
 
 type FilterOption = "all" | "green" | "yellow" | "red";
 type TabOption = "active" | "closed";
@@ -93,6 +90,52 @@ const actionLabelMap: Record<ActionKey, string> = {
   wait_approval: "รออนุมัติ",
   notify_outage_letter: "แจ้งหนังสือดับไฟ",
   close_job: "ปิดงาน"
+};
+
+const getWorkflowSteps = (job: OutageJob): JobStep[] => {
+  const isDocGenerated =
+    job.doc_status === "GENERATED" || Boolean(job.doc_generated_at);
+  const socialStatus = job.social_status ?? "DRAFT";
+  const noticeStatus = job.notice_status ?? "NONE";
+  const isClosed = job.is_closed ?? false;
+
+  return [
+    {
+      id: "doc",
+      label: "สร้างเอกสาร",
+      state: isDocGenerated ? "done" : "current"
+    },
+    {
+      id: "social",
+      label: "โพสต์ประชาสัมพันธ์",
+      state: !isDocGenerated
+        ? "locked"
+        : socialStatus === "POSTED"
+          ? "done"
+          : socialStatus === "PENDING_APPROVAL"
+            ? "current"
+            : "pending"
+    },
+    {
+      id: "notice",
+      label: "แจ้งหนังสือดับไฟ",
+      state:
+        socialStatus !== "POSTED"
+          ? "locked"
+          : noticeStatus === "SCHEDULED"
+            ? "done"
+            : "current"
+    },
+    {
+      id: "close",
+      label: "ปิดงาน",
+      state: isClosed
+        ? "done"
+        : noticeStatus === "SCHEDULED"
+          ? "current"
+          : "locked"
+    }
+  ];
 };
 
 const textareaStyles = `${inputLight} min-h-[96px]`;
@@ -538,27 +581,38 @@ export default function JobsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Jobs
-          </h1>
-          <p className="text-sm text-slate-500">
-            ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
-          </p>
+    <div className="space-y-4">
+      <header className="rounded-xl border border-slate-300/70 bg-[#e8edf5] p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Jobs
+            </h1>
+            <p className="text-sm text-slate-600">
+              ศูนย์ควบคุมติดตามงานดับไฟ แสดงสถานะงานและขั้นตอนถัดไปของแต่ละใบงาน
+            </p>
+          </div>
+          <Link
+            href="/new"
+            className="inline-flex items-center rounded-md bg-[#f97316] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea6a13]"
+          >
+            + สร้างงาน
+          </Link>
+        </div>
       </header>
 
-      <Card className="border border-slate-200/70 bg-white/80 shadow-none">
-        <CardContent className="p-4 lg:p-5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(300px,1fr)_auto_auto] lg:items-end">
+      <Card className="border-slate-600 bg-[#111827]">
+        <CardContent className="p-3 lg:p-4">
+          <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-end">
             <div className="flex w-full flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                 ค้นหาอุปกรณ์
               </label>
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="กรอกรหัสอุปกรณ์"
+                className="h-9"
               />
             </div>
             <Segmented
@@ -573,7 +627,7 @@ export default function JobsPage() {
             />
             <Segmented
               options={[
-                { id: "active", label: "กำลังดำเนินการ" },
+                { id: "active", label: "ดำเนินการ" },
                 { id: "closed", label: "ปิดแล้ว" }
               ]}
               value={tab}
@@ -617,23 +671,22 @@ export default function JobsPage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-5 lg:gap-6">
+      <section className="grid gap-3">
         {loading ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-slate-500">
+            <CardContent className="py-8 text-center text-sm text-slate-300">
               กำลังโหลดข้อมูล...
             </CardContent>
           </Card>
         ) : filteredJobs.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-slate-500">
+            <CardContent className="py-8 text-center text-sm text-slate-300">
               ยังไม่มีงานที่ตรงกับตัวกรอง
             </CardContent>
           </Card>
         ) : (
           filteredJobs.map((job) => {
             const urgency = getJobUrgency(job);
-            const status = getUrgencyStyles(urgency.color);
             const nakhonStatus = job.nakhon_status ?? "PENDING";
             const isPending = nakhonStatus === "PENDING";
             const isNotified = nakhonStatus === "NOTIFIED";
@@ -651,327 +704,119 @@ export default function JobsPage() {
             const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
             const nextAction = getNextAction(job);
             const nextActionLabel = actionLabelMap[nextAction];
-            const actionItems: Array<{
-              id: string;
-              key?: ActionKey;
-              node: ReactNode;
-            }> = [];
+            const workflowSteps = getWorkflowSteps(job);
+            const secondaryActions: JobAction[] = [];
+            const tertiaryItems: string[] = [];
+            let primaryAction: JobAction | undefined;
 
             if (isPending) {
-              actionItems.push({
-                id: "notify_nakhon",
-                key: "notify_nakhon",
-                node: (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => openNotifiedModal(job)}
-                  >
-                    แจ้งศูนย์นครแล้ว
-                  </Button>
-                )
-              });
-              actionItems.push({
+              secondaryActions.push({
                 id: "not_required",
-                node: (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => handleNotRequired(job)}
-                    disabled={actionDisabled}
-                  >
-                    {actionDisabled ? "กำลังบันทึก..." : "ไม่ต้องแจ้งศูนย์นคร"}
-                  </Button>
-                )
+                label: actionDisabled ? "กำลังบันทึก..." : "ไม่ต้องแจ้งศูนย์นคร",
+                onClick: () => handleNotRequired(job),
+                disabled: actionDisabled
               });
             } else if (isDocGenerated) {
-              actionItems.push({
+              secondaryActions.push({
                 id: "create_doc",
-                key: "create_doc",
-                node: job.doc_url ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => {
-                      if (job.doc_url) {
-                        window.open(job.doc_url, "_blank", "noopener,noreferrer");
-                        return;
-                      }
-                      openDocModal(job);
-                    }}
-                  >
-                    พิมพ์เอกสาร
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => openDocModal(job)}
-                  >
-                    ดาวน์โหลดเอกสารอีกครั้ง
-                  </Button>
-                )
+                label: job.doc_url ? "พิมพ์เอกสาร" : "ดาวน์โหลดเอกสารอีกครั้ง",
+                onClick: () => {
+                  if (job.doc_url) {
+                    window.open(job.doc_url, "_blank", "noopener,noreferrer");
+                    return;
+                  }
+                  openDocModal(job);
+                }
               });
             } else {
-              actionItems.push({
+              secondaryActions.push({
                 id: "create_doc",
-                key: "create_doc",
-                node: (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => openDocModal(job)}
-                    disabled={actionDisabled || isDocGenerating}
-                  >
-                    {isDocGenerating ? "กำลังสร้าง..." : "สร้างเอกสารดับไฟ"}
-                  </Button>
-                )
+                label: isDocGenerating ? "กำลังสร้าง..." : "สร้างเอกสารดับไฟ",
+                onClick: () => openDocModal(job),
+                disabled: actionDisabled || isDocGenerating
               });
             }
 
             if (showSocialButton) {
-              actionItems.push({
+              secondaryActions.push({
                 id: "wait_approval",
-                key: "wait_approval",
-                node: (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => setSocialJob(job)}
-                  >
-                    {socialStatus === "POSTED"
-                      ? "Posted แล้วสื่อ Social"
-                      : "รออนุมัติ"}
-                  </Button>
-                )
+                label:
+                  socialStatus === "POSTED"
+                    ? "Posted แล้วสื่อ Social"
+                    : "รออนุมัติ",
+                onClick: () => setSocialJob(job)
               });
             }
 
             if (showNoticeButton) {
-              actionItems.push({
+              secondaryActions.push({
                 id: "notify_outage_letter",
-                key: "notify_outage_letter",
-                node: (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => setNoticeJob(job)}
-                  >
-                    {noticeStatus === "SCHEDULED"
-                      ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                      : "แจ้งหนังสือดับไฟ"}
-                  </Button>
-                )
+                label:
+                  noticeStatus === "SCHEDULED"
+                    ? "แก้ไขกำหนดการแจ้งหนังสือ"
+                    : "แจ้งหนังสือดับไฟ",
+                onClick: () => setNoticeJob(job)
               });
             }
 
             if (canCloseJob) {
-              actionItems.push({
+              secondaryActions.push({
                 id: "close_job",
-                key: "close_job",
-                node: (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => openCloseModal(job)}
-                  >
-                    ปิดงาน
-                  </Button>
-                )
+                label: "ปิดงาน",
+                onClick: () => openCloseModal(job)
               });
             }
 
-            const primaryAction = actionItems.find((item) => item.key === nextAction);
-            const secondaryActions = actionItems.filter(
-              (item) => item.id !== primaryAction?.id
+            primaryAction = {
+              id: nextAction,
+              label:
+                nextAction === "wait_approval" && socialStatus === "POSTED"
+                  ? "Posted แล้วสื่อ Social"
+                  : nextAction === "notify_outage_letter" &&
+                      noticeStatus === "SCHEDULED"
+                    ? "กำหนดการแจ้งเรียบร้อยแล้ว"
+                    : actionLabelMap[nextAction],
+              onClick: () => {
+                if (nextAction === "notify_nakhon") return openNotifiedModal(job);
+                if (nextAction === "create_doc") {
+                  if (isDocGenerated && job.doc_url) {
+                    window.open(job.doc_url, "_blank", "noopener,noreferrer");
+                    return;
+                  }
+                  return openDocModal(job);
+                }
+                if (nextAction === "wait_approval") return setSocialJob(job);
+                if (nextAction === "notify_outage_letter") return setNoticeJob(job);
+                return openCloseModal(job);
+              },
+              disabled: nextAction === "create_doc" && (actionDisabled || isDocGenerating)
+            };
+
+            const displaySecondaryActions = secondaryActions.filter(
+              (item) => item.id !== nextAction
             );
+
+            if (isNotified) {
+              tertiaryItems.push(
+                `แจ้งศูนย์นคร ${job.nakhon_notified_date ?? "-"} / เลขที่ ${job.nakhon_memo_no ?? "-"}`
+              );
+            }
+            if (isNotRequired) tertiaryItems.push("ไม่ต้องแจ้งศูนย์นคร");
+            if (socialStatus === "POSTED") tertiaryItems.push("โพสต์ Social แล้ว");
+            if (noticeStatus === "SCHEDULED") tertiaryItems.push("กำหนดการแจ้งเรียบร้อยแล้ว");
+
             return (
-              <Card
+              <JobCard
                 key={job.id}
-                className="group flex items-stretch overflow-hidden transition hover:-translate-y-0.5"
-              >
-                <div className={`w-1.5 ${status.strip}`} />
-                <div className="grid w-full gap-4 p-4 lg:grid-cols-[250px_minmax(0,1fr)_260px] lg:gap-5 lg:p-5">
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-300">
-                      {parseLocalDate(job.outage_date).toLocaleDateString("th-TH", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric"
-                      })}
-                    </p>
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-2xl font-semibold tracking-tight text-white">
-                          {job.equipment_code}
-                        </p>
-                        <StatusBadge status={urgency.color} label={urgency.color} />
-                      </div>
-                      <p className={`text-sm font-medium ${status.text}`}>{urgency.label}</p>
-                    </div>
-                    {isClosed ? (
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-200/80">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
-                          ปิดแล้ว
-                        </span>
-                        <span>
-                          ปิดเมื่อ{" "}
-                          {job.closed_at
-                            ? new Date(job.closed_at).toLocaleString("th-TH", {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit"
-                              })
-                            : "-"}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex min-w-0 flex-1 flex-col gap-4">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => router.push(`/job/${job.id}`)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          router.push(`/job/${job.id}`);
-                        }
-                      }}
-                      className="cursor-pointer space-y-3 rounded-2xl outline-none transition focus-visible:ring-2 focus-visible:ring-fuchsia-300 focus-visible:ring-offset-2"
-                    >
-                      <div className="space-y-1.5">
-                        <p className="text-sm text-slate-200/80">
-                          {job.note?.trim() || "ไม่มีหมายเหตุ"}
-                        </p>
-                      </div>
-                      {(isNotified || isNotRequired) && (
-                        <div className="text-sm text-slate-200/80">
-                          {isNotified ? (
-                            <>
-                              แจ้งศูนย์นครแล้ว:{" "}
-                              <span className="font-medium text-slate-200">
-                                {job.nakhon_notified_date
-                                  ? parseLocalDate(
-                                      job.nakhon_notified_date
-                                    ).toLocaleDateString("th-TH", {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric"
-                                    })
-                                  : "-"}
-                              </span>{" "}
-                              | เลขที่บันทึก:{" "}
-                              <span className="font-medium text-slate-200">
-                                {job.nakhon_memo_no ?? "-"}
-                              </span>
-                            </>
-                          ) : (
-                            <span>ไม่ต้องแจ้งศูนย์นคร</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="border-t border-slate-700/70 pt-3">
-                      <MapActionButtons
-                        googleUrl={job.map_link}
-                        myMapUrl={job.mymaps_url}
-                      />
-                    </div>
-                  </div>
-
-                  {!isClosed ? (
-                    <div className="flex w-full flex-col items-stretch gap-3 lg:w-auto lg:min-w-[220px] lg:self-stretch">
-                      <div className="text-xs font-medium text-slate-400">
-                        ขั้นตอนถัดไป:{" "}
-                        <span className="text-slate-200">{nextActionLabel}</span>
-                      </div>
-
-                      {secondaryActions.length > 0 ? (
-                        <div className="space-y-2 rounded-xl border border-slate-700/70 p-2">
-                          {secondaryActions.map((action) => (
-                            <div key={action.id}>{action.node}</div>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {primaryAction ? (
-                        <div className="mt-auto">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="primary"
-                            className="w-full"
-                            onClick={() => {
-                              if (primaryAction.id === "notify_nakhon") {
-                                openNotifiedModal(job);
-                                return;
-                              }
-                              if (primaryAction.id === "create_doc") {
-                                if (isDocGenerated && job.doc_url) {
-                                  window.open(
-                                    job.doc_url,
-                                    "_blank",
-                                    "noopener,noreferrer"
-                                  );
-                                  return;
-                                }
-                                openDocModal(job);
-                                return;
-                              }
-                              if (primaryAction.id === "wait_approval") {
-                                setSocialJob(job);
-                                return;
-                              }
-                              if (primaryAction.id === "notify_outage_letter") {
-                                setNoticeJob(job);
-                                return;
-                              }
-                              if (primaryAction.id === "close_job") {
-                                openCloseModal(job);
-                              }
-                            }}
-                            disabled={
-                              (primaryAction.id === "not_required" && actionDisabled) ||
-                              (primaryAction.id === "create_doc" &&
-                                (actionDisabled || isDocGenerating))
-                            }
-                          >
-                            {primaryAction.id === "create_doc" && isDocGenerating
-                              ? "กำลังสร้าง..."
-                              : primaryAction.id === "wait_approval" &&
-                                  socialStatus === "POSTED"
-                                ? "Posted แล้วสื่อ Social"
-                                : primaryAction.id === "notify_outage_letter" &&
-                                    noticeStatus === "SCHEDULED"
-                                  ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                                  : actionLabelMap[nextAction]}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              </Card>
+                job={job}
+                urgency={urgency}
+                stepper={workflowSteps}
+                nextActionLabel={nextActionLabel}
+                primaryAction={isClosed ? undefined : primaryAction}
+                secondaryActions={displaySecondaryActions}
+                tertiaryItems={tertiaryItems}
+                onOpenDetail={() => router.push(`/job/${job.id}`)}
+              />
             );
           })
         )}

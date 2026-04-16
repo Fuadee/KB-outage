@@ -17,12 +17,12 @@ export default function AppNavbar() {
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-3">
               <div className={brandBadge}>
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-900">
+                <div className="flex h-full w-full items-center justify-center rounded bg-[#0f172a] text-xs font-semibold text-slate-100">
                   KB
                 </div>
               </div>
               <div className="hidden sm:block">
-                <p className="text-sm font-semibold text-slate-900">KB Outage Operations</p>
+                <p className="text-sm font-semibold text-slate-100">KB Outage Operations</p>
               </div>
             </Link>
 
@@ -34,14 +34,14 @@ export default function AppNavbar() {
           <div className="flex items-center gap-2">
             <Link
               href="/new"
-              className="hidden items-center justify-center rounded-full bg-gradient-to-r from-[#f97316] via-[#ec4899] to-[#4f46e5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 sm:inline-flex"
+              className="hidden items-center justify-center rounded-md bg-[#f97316] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea6a13] sm:inline-flex"
             >
               + สร้างงาน
             </Link>
             <UserMenu />
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50 md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-[#111827] text-slate-100 transition hover:bg-[#1e293b] md:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open navigation"
             >
