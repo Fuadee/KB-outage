@@ -49,6 +49,14 @@ const resolveServiceRoleKey = () => {
 };
 
 export const DELIVERY_PROOFS_BUCKET = "delivery-proofs";
+const DELIVERY_PROOF_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const sanitizeFileName = (fileName: string) =>
+  fileName
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
 const createAdminClient = () => {
   const serviceRole = resolveServiceRoleKey();
@@ -457,23 +465,80 @@ export async function uploadDeliveryProof(args: {
   targetId: string;
   file: File;
 }) {
+  if (!(args.file instanceof File)) {
+    throw new DeliveryTrackingError(
+      "ไม่พบไฟล์ที่อัปโหลด",
+      "PROOF_FILE_MISSING"
+    );
+  }
+
+  if (!args.file.type.startsWith("image/")) {
+    throw new DeliveryTrackingError(
+      "ประเภทไฟล์ไม่ถูกต้อง (อนุญาตเฉพาะ image/*)",
+      "PROOF_FILE_INVALID_TYPE",
+      { contentType: args.file.type }
+    );
+  }
+
+  if (args.file.size <= 0) {
+    throw new DeliveryTrackingError(
+      "ไม่พบไฟล์ที่อัปโหลด",
+      "PROOF_FILE_EMPTY"
+    );
+  }
+
+  if (args.file.size > DELIVERY_PROOF_MAX_FILE_SIZE_BYTES) {
+    throw new DeliveryTrackingError(
+      "ขนาดไฟล์เกินกำหนด (สูงสุด 10MB)",
+      "PROOF_FILE_TOO_LARGE",
+      { size: args.file.size, max: DELIVERY_PROOF_MAX_FILE_SIZE_BYTES }
+    );
+  }
+
   const supabase = createAdminClient();
-  const extension = args.file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const path = `${args.batchId}/${args.targetId}/${Date.now()}.${extension}`;
+  const originalName = sanitizeFileName(args.file.name || "upload.jpg");
+  const extension = originalName.split(".").pop()?.toLowerCase() ?? "jpg";
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const randomSuffix = randomBytes(6).toString("hex");
+  const finalName = `${timestamp}-${randomSuffix}.${extension}`;
+  const path = `${DELIVERY_PROOFS_BUCKET}/${args.batchId}/${args.targetId}/${finalName}`;
 
   const { error } = await supabase.storage
     .from(DELIVERY_PROOFS_BUCKET)
     .upload(path, args.file, {
-      upsert: true,
+      upsert: false,
       contentType: args.file.type || "image/jpeg",
       cacheControl: "3600"
     });
 
   if (error) {
+    const errorMessage = String(error.message ?? "").toLowerCase();
+    const details = {
+      ...(typeof error === "object" && error !== null ? error : {}),
+      bucket: DELIVERY_PROOFS_BUCKET,
+      path
+    };
+
+    if (errorMessage.includes("bucket") && errorMessage.includes("not found")) {
+      throw new DeliveryTrackingError(
+        "ไม่พบ bucket delivery-proofs",
+        "PROOF_BUCKET_NOT_FOUND",
+        details
+      );
+    }
+
+    if (errorMessage.includes("duplicate") || errorMessage.includes("already exists")) {
+      throw new DeliveryTrackingError(
+        "ชื่อไฟล์ซ้ำใน storage กรุณาลองอัปโหลดใหม่",
+        "PROOF_UPLOAD_DUPLICATE",
+        details
+      );
+    }
+
     throw new DeliveryTrackingError(
-      "Unable to upload delivery proof image",
+      "upload storage ไม่สำเร็จ",
       "PROOF_UPLOAD_FAILED",
-      error
+      details
     );
   }
 
