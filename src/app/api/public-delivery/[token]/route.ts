@@ -50,10 +50,12 @@ export async function GET(
     console.info("[delivery-public] list payload fetched", {
       token: `${token.slice(0, 8)}...`,
       summary: responsePayload.data.summary,
-      statuses: responsePayload.data.targets.map((target) => ({
+      targets: responsePayload.data.targets.map((target) => ({
         id: target.id,
+        company_name: target.company_name,
         status: target.status,
-        delivered_at: target.delivered_at
+        delivered_at: target.delivered_at,
+        proof_image_url: target.proof_image_url
       }))
     });
 

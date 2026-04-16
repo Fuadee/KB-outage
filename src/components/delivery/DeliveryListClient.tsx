@@ -41,10 +41,12 @@ export default function DeliveryListClient({ token }: { token: string }) {
     console.info("[delivery-public] list client fetched", {
       token,
       summary: result.data.summary,
-      statuses: (result.data.targets ?? []).map((target: DeliveryPayload["targets"][number]) => ({
+      targets: (result.data.targets ?? []).map((target: DeliveryPayload["targets"][number]) => ({
         id: target.id,
+        company_name: target.company_name,
         status: target.status,
-        delivered_at: target.delivered_at
+        delivered_at: target.delivered_at,
+        proof_image_url: target.proof_image_url
       }))
     });
     setData(result.data);
@@ -95,12 +97,28 @@ export default function DeliveryListClient({ token }: { token: string }) {
               </span>
             </div>
             {target.status === "delivered" && target.delivered_at ? (
-              <p className="mb-2 text-xs text-emerald-700">เวลาแจ้ง {new Date(target.delivered_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="mb-2 text-xs text-emerald-700">
+                แจ้งเมื่อ{" "}
+                {new Date(target.delivered_at).toLocaleString("th-TH", {
+                  dateStyle: "medium",
+                  timeStyle: "short"
+                })}
+              </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
               {target.map_url ? (
                 <a href={target.map_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-3 py-2 text-xs font-medium text-white">
                   เปิดแผนที่
+                </a>
+              ) : null}
+              {target.proof_image_url ? (
+                <a
+                  href={`/api/public-delivery/${token}/targets/${target.id}/proof`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-3 py-2 text-xs font-medium text-white"
+                >
+                  ดูรูปหลักฐาน
                 </a>
               ) : null}
               <Link href={`/delivery/${token}/target/${target.id}`}>
