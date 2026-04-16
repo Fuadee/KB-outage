@@ -24,9 +24,19 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_ENV_CANDIDATES = [
   "SUPABASE_SERVICE_ROLE_KEY",
-  "SERVICE_ROLE_KEY",
-  "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY"
+  "SERVICE_ROLE_KEY"
 ] as const;
+
+const decodeJwtPayload = (token: string) => {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payload = Buffer.from(parts[1], "base64url").toString("utf8");
+    return JSON.parse(payload) as { role?: string };
+  } catch {
+    return null;
+  }
+};
 
 const resolveServiceRoleKey = () => {
   for (const key of SERVICE_ROLE_ENV_CANDIDATES) {
@@ -44,13 +54,23 @@ const createAdminClient = () => {
   const serviceRole = resolveServiceRoleKey();
   if (!SUPABASE_URL || !serviceRole?.value) {
     throw new DeliveryTrackingError(
-      "ระบบยังไม่ได้ตั้งค่า Supabase service role สำหรับ delivery tracking (รองรับ SUPABASE_SERVICE_ROLE_KEY / SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY)",
+      "ระบบยังไม่ได้ตั้งค่า Supabase service role สำหรับ delivery tracking (รองรับ SUPABASE_SERVICE_ROLE_KEY / SERVICE_ROLE_KEY)",
       "MISSING_SUPABASE_ENV"
     );
   }
-  if (serviceRole.keyName === "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY") {
+
+  const payload = decodeJwtPayload(serviceRole.value);
+  if (payload?.role !== "service_role") {
+    throw new DeliveryTrackingError(
+      `ค่า ${serviceRole.keyName} ไม่ใช่ service role key (role=${payload?.role ?? "unknown"})`,
+      "INVALID_SERVICE_ROLE_KEY",
+      { env: serviceRole.keyName, role: payload?.role ?? null }
+    );
+  }
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim()) {
     console.warn(
-      "[delivery] Using NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY as fallback. Move this key to server-only SUPABASE_SERVICE_ROLE_KEY."
+      "[delivery] NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is set. Move service role key to server-only env immediately."
     );
   }
 
@@ -192,7 +212,7 @@ export async function regenerateDeliveryBatchToken(jobId: string) {
 
   if (error || !data) {
     throw new DeliveryTrackingError(
-      "Unable to regenerate token",
+      "Unable to regenerate delivery batch token",
       "TOKEN_REGENERATE_FAILED",
       error
     );
@@ -307,9 +327,9 @@ export async function replaceDeliveryTargets(batchId: string, targets: DeliveryT
         error
       });
       throw new DeliveryTrackingError(
-        `Unable to save target at index ${index}`,
+        `Unable to save target at index ${index + 1}`,
         "TARGET_UPSERT_FAILED",
-        { index, payload, error }
+        { index, itemNumber: index + 1, payload, error }
       );
     }
 
