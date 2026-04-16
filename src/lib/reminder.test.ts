@@ -146,10 +146,10 @@ test("getReminderMissingEnvKeys returns all missing keys", () => {
 });
 
 test("app shell navigation does not expose reminder settings UI", () => {
-  const sidebarSource = readFileSync(new URL("../components/layout/Sidebar.tsx", import.meta.url), "utf8");
-  const topNavSource = readFileSync(new URL("../components/layout/TopNav.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(sidebarSource, /\/settings\/reminders/);
-  assert.doesNotMatch(sidebarSource, /Reminder Settings/);
-  assert.doesNotMatch(topNavSource, /\/settings\/reminders/);
-  assert.doesNotMatch(topNavSource, /Reminder Settings/);
+  const appNavbarSource = readFileSync(new URL("../components/layout/AppNavbar.tsx", import.meta.url), "utf8");
+  const navLinksSource = readFileSync(new URL("../components/layout/NavLinks.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(appNavbarSource, /\/settings\/reminders/);
+  assert.doesNotMatch(appNavbarSource, /Reminder Settings/);
+  assert.doesNotMatch(navLinksSource, /\/settings\/reminders/);
+  assert.doesNotMatch(navLinksSource, /Reminder Settings/);
 });

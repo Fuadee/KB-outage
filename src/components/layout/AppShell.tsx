@@ -1,8 +1,7 @@
 "use client";
 
-import { ReactNode, useState } from "react";
-import Sidebar from "@/components/layout/Sidebar";
-import TopNav from "@/components/layout/TopNav";
+import { ReactNode } from "react";
+import AppNavbar from "@/components/layout/AppNavbar";
 import { appBg } from "@/lib/theme";
 
 interface AppShellProps {
@@ -10,15 +9,12 @@ interface AppShellProps {
 }
 
 export default function AppShell({ children }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   return (
     <div className={appBg}>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex min-h-[100dvh] flex-col lg:pl-[20.5rem]">
-        <TopNav onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 px-4 pb-12 pt-6 sm:px-6 lg:px-10">
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+      <div className="flex min-h-[100dvh] flex-col">
+        <AppNavbar />
+        <main className="flex-1 px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
       </div>
     </div>

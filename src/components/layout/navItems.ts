@@ -1,0 +1,24 @@
+export type NavItem = {
+  label: string;
+  href: string;
+  match?: (pathname: string) => boolean;
+};
+
+export const appNavItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard"
+  },
+  {
+    label: "Jobs",
+    href: "/jobs",
+    match: (pathname) =>
+      pathname === "/jobs" ||
+      pathname.startsWith("/jobs/") ||
+      pathname.startsWith("/job/")
+  },
+  {
+    label: "Calendar",
+    href: "/calendar"
+  }
+];
