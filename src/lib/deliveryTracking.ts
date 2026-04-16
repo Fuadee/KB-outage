@@ -436,13 +436,14 @@ export async function markTargetDeliveredByToken(args: {
   const targetExists = batchData.targets.some((target) => target.id === args.targetId);
   if (!targetExists) return null;
 
+  const deliveredAt = new Date().toISOString();
   const { data, error } = await supabase
     .from("delivery_targets")
     .update({
       status: "delivered",
       proof_image_url: args.proofImageUrl,
       delivered_by_name: normalizeText(args.deliveredByName),
-      delivered_at: new Date().toISOString()
+      delivered_at: deliveredAt
     })
     .eq("id", args.targetId)
     .eq("batch_id", batchData.batch.id)
@@ -454,6 +455,32 @@ export async function markTargetDeliveredByToken(args: {
       "Unable to update target status",
       "MARK_DELIVERED_FAILED",
       error
+    );
+  }
+
+  const isPersisted =
+    data.status === "delivered" &&
+    Boolean(data.delivered_at) &&
+    data.proof_image_url === args.proofImageUrl;
+
+  if (!isPersisted) {
+    throw new DeliveryTrackingError(
+      "อัปเดต target สำเร็จไม่ครบทุกฟิลด์ที่ต้องการ",
+      "MARK_DELIVERED_NOT_PERSISTED",
+      {
+        expected: {
+          status: "delivered",
+          delivered_at: deliveredAt,
+          proof_image_url: args.proofImageUrl
+        },
+        actual: {
+          status: data.status,
+          delivered_at: data.delivered_at,
+          proof_image_url: data.proof_image_url
+        },
+        targetId: args.targetId,
+        batchId: batchData.batch.id
+      }
     );
   }
 

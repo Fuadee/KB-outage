@@ -4,6 +4,12 @@ import { getDeliveryBatchWithTargetsByToken, getDeliveryMapUrl } from "@/lib/del
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const isDeliveredTarget = (target: {
+  status: string;
+  delivered_at: string | null;
+  proof_image_url: string | null;
+}) => target.status === "delivered" || Boolean(target.delivered_at) || Boolean(target.proof_image_url);
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -25,6 +31,21 @@ export async function GET(
       );
     }
 
+    const mappedTargets = data.targets.map((target) => {
+      const derivedDelivered = isDeliveredTarget(target);
+      return {
+        id: target.id,
+        company_name: target.company_name,
+        contact_name: target.contact_name,
+        note: target.note,
+        status: derivedDelivered ? "delivered" : "pending",
+        delivered_at: target.delivered_at,
+        map_url: getDeliveryMapUrl(target),
+        proof_image_url: target.proof_image_url
+      };
+    });
+    const deliveredCount = mappedTargets.filter((target) => target.status === "delivered").length;
+
     const responsePayload = {
       ok: true,
       data: {
@@ -33,17 +54,12 @@ export async function GET(
           job_id: data.batch.job_id
         },
         job: data.job,
-        summary: data.summary,
-        targets: data.targets.map((target) => ({
-          id: target.id,
-          company_name: target.company_name,
-          contact_name: target.contact_name,
-          note: target.note,
-          status: target.status,
-          delivered_at: target.delivered_at,
-          map_url: getDeliveryMapUrl(target),
-          proof_image_url: target.proof_image_url
-        }))
+        summary: {
+          total: mappedTargets.length,
+          delivered: deliveredCount,
+          pending: mappedTargets.length - deliveredCount
+        },
+        targets: mappedTargets
       }
     };
 

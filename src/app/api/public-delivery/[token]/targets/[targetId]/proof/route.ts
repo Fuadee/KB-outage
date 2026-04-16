@@ -147,13 +147,42 @@ export async function POST(
 
     const verifyBatchData = await getDeliveryBatchWithTargetsByToken(token);
     const verifiedTarget = verifyBatchData?.targets.find((item) => item.id === targetId) ?? null;
+    const verifyPersisted =
+      verifiedTarget?.status === "delivered" &&
+      Boolean(verifiedTarget.delivered_at) &&
+      verifiedTarget.proof_image_url === proofImageUrl;
     console.info("[delivery-public] target row verify after mark delivered", {
       token: `${token.slice(0, 8)}...`,
       targetId,
       status: verifiedTarget?.status ?? null,
       delivered_at: verifiedTarget?.delivered_at ?? null,
-      proof_image_url: verifiedTarget?.proof_image_url ?? null
+      proof_image_url: verifiedTarget?.proof_image_url ?? null,
+      verifyPersisted
     });
+
+    if (!verifyPersisted) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "อัปเดตสถานะไม่สำเร็จ: delivery_targets row ยังไม่เปลี่ยนตามที่คาดหวัง",
+          code: "DELIVERY_TARGET_VERIFY_FAILED",
+          details: {
+            expected: {
+              status: "delivered",
+              proof_image_url: proofImageUrl
+            },
+            actual: verifiedTarget
+              ? {
+                  status: verifiedTarget.status,
+                  delivered_at: verifiedTarget.delivered_at,
+                  proof_image_url: verifiedTarget.proof_image_url
+                }
+              : null
+          }
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
