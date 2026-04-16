@@ -45,6 +45,8 @@ export default function DeliveryTrackingModal({
   const [summary, setSummary] = useState<{ total: number; delivered: number; pending: number } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  const getFieldError = (tempId: string, field: string) => fieldErrors[`${tempId}:${field}`];
+
   const hasJobId = jobId.trim().length > 0;
 
   const activeTargets = useMemo(
@@ -101,7 +103,9 @@ export default function DeliveryTrackingModal({
   const patchTarget = (tempId: string, patch: Partial<EditableTarget>) => {
     setFieldErrors((prev) => {
       const next = { ...prev };
-      delete next[tempId];
+      Object.keys(next)
+        .filter((key) => key.startsWith(`${tempId}:`))
+        .forEach((key) => delete next[key]);
       return next;
     });
     setTargets((prev) => prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target)));
@@ -158,18 +162,21 @@ export default function DeliveryTrackingModal({
     const payloadTargets = activeTargets.map((target, index) => {
       const companyName = target.company_name.trim();
       if (!companyName) {
-        nextFieldErrors[target.tempId] = "กรุณากรอกชื่อบริษัท/สถานที่";
+        nextFieldErrors[`${target.tempId}:company_name`] = "กรุณากรอกชื่อบริษัท/สถานที่";
       }
 
       const latitudeParsed = parseCoordinate(target.latitudeInput);
       const longitudeParsed = parseCoordinate(target.longitudeInput);
-      if (latitudeParsed.error || longitudeParsed.error) {
-        nextFieldErrors[target.tempId] = "latitude/longitude ไม่ถูกต้อง";
+      if (latitudeParsed.error) {
+        nextFieldErrors[`${target.tempId}:latitude`] = latitudeParsed.error;
+      }
+      if (longitudeParsed.error) {
+        nextFieldErrors[`${target.tempId}:longitude`] = longitudeParsed.error;
       }
 
       const mapLink = normalizeMapLink(target.map_link);
       if (mapLink.error) {
-        nextFieldErrors[target.tempId] = mapLink.error;
+        nextFieldErrors[`${target.tempId}:map_link`] = mapLink.error;
       }
 
       return {
@@ -192,7 +199,7 @@ export default function DeliveryTrackingModal({
         target.longitudeInput.trim() ||
         target.map_link?.trim();
       if (hasOtherContent && !target.company_name.trim()) {
-        nextFieldErrors[target.tempId] = "กรุณากรอกชื่อบริษัท/สถานที่";
+        nextFieldErrors[`${target.tempId}:company_name`] = "กรุณากรอกชื่อบริษัท/สถานที่";
       }
     });
 
@@ -306,8 +313,11 @@ export default function DeliveryTrackingModal({
                 value={target.company_name}
                 onChange={(event) => patchTarget(target.tempId, { company_name: event.target.value })}
                 placeholder="ชื่อบริษัท / สถานที่"
-                className={fieldErrors[target.tempId] ? "border-red-400 focus-visible:ring-red-300" : undefined}
+                className={getFieldError(target.tempId, "company_name") ? "border-red-400 focus-visible:ring-red-300" : undefined}
               />
+              {getFieldError(target.tempId, "company_name") ? (
+                <p className="text-xs text-red-500">{getFieldError(target.tempId, "company_name")}</p>
+              ) : null}
               <Input
                 type="text"
                 value={target.contact_name ?? ""}
@@ -330,7 +340,11 @@ export default function DeliveryTrackingModal({
                     })
                   }
                   placeholder="Latitude"
+                  className={getFieldError(target.tempId, "latitude") ? "border-red-400 focus-visible:ring-red-300" : undefined}
                 />
+                {getFieldError(target.tempId, "latitude") ? (
+                  <p className="col-span-2 text-xs text-red-500">{getFieldError(target.tempId, "latitude")}</p>
+                ) : null}
                 <Input
                   type="number"
                   value={target.longitudeInput}
@@ -340,16 +354,21 @@ export default function DeliveryTrackingModal({
                     })
                   }
                   placeholder="Longitude"
+                  className={getFieldError(target.tempId, "longitude") ? "border-red-400 focus-visible:ring-red-300" : undefined}
                 />
+                {getFieldError(target.tempId, "longitude") ? (
+                  <p className="col-span-2 text-xs text-red-500">{getFieldError(target.tempId, "longitude")}</p>
+                ) : null}
               </div>
               <Input
                 type="url"
                 value={target.map_link ?? ""}
                 onChange={(event) => patchTarget(target.tempId, { map_link: event.target.value })}
                 placeholder="Google Maps link (ถ้ามี)"
+                className={getFieldError(target.tempId, "map_link") ? "border-red-400 focus-visible:ring-red-300" : undefined}
               />
-              {fieldErrors[target.tempId] ? (
-                <p className="text-xs text-red-500">{fieldErrors[target.tempId]}</p>
+              {getFieldError(target.tempId, "map_link") ? (
+                <p className="text-xs text-red-500">{getFieldError(target.tempId, "map_link")}</p>
               ) : null}
             </div>
           </div>
