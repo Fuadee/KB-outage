@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import JobCard, { type JobAction } from "@/components/job/JobCard";
 import type { JobStep } from "@/components/job/JobStatusStepper";
 import Modal from "@/components/Modal";
@@ -184,6 +191,15 @@ export default function JobsPage() {
     message: string;
     tone: "success" | "error";
   } | null>(null);
+  const notifiedDateRef = useRef<HTMLInputElement>(null);
+  const memoNoRef = useRef<HTMLInputElement>(null);
+  const docIssueDateRef = useRef<HTMLInputElement>(null);
+  const docPurposeRef = useRef<HTMLInputElement>(null);
+  const docAreaTitleRef = useRef<HTMLInputElement>(null);
+  const docTimeStartRef = useRef<HTMLInputElement>(null);
+  const docTimeEndRef = useRef<HTMLInputElement>(null);
+  const docAreaDetailRef = useRef<HTMLTextAreaElement>(null);
+  const mapLinkRef = useRef<HTMLInputElement>(null);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -210,6 +226,20 @@ export default function JobsPage() {
     }, 2000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (!selectedJob) return;
+    window.setTimeout(() => {
+      notifiedDateRef.current?.focus();
+    }, 0);
+  }, [selectedJob]);
+
+  useEffect(() => {
+    if (!docJob) return;
+    window.setTimeout(() => {
+      docIssueDateRef.current?.focus();
+    }, 0);
+  }, [docJob]);
 
   const closeModal = () => {
     setSelectedJob(null);
@@ -326,6 +356,12 @@ export default function JobsPage() {
     }
     if (Object.keys(nextErrors).length > 0) {
       setModalErrors(nextErrors);
+      const firstErrorRef = nextErrors.date ? notifiedDateRef : memoNoRef;
+      firstErrorRef.current?.focus();
+      firstErrorRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth"
+      });
       return;
     }
 
@@ -412,6 +448,34 @@ export default function JobsPage() {
 
     if (Object.keys(nextErrors).length > 0) {
       setDocErrors(nextErrors);
+      const firstErrorField = (
+        [
+          "doc_issue_date",
+          "doc_purpose",
+          "doc_area_title",
+          "doc_time_start",
+          "doc_time_end",
+          "doc_area_detail",
+          "map_link"
+        ] as const
+      ).find((field) => nextErrors[field]);
+      const fieldRefMap: Record<
+        keyof DocForm,
+        RefObject<HTMLInputElement> | RefObject<HTMLTextAreaElement>
+      > = {
+        doc_issue_date: docIssueDateRef,
+        doc_purpose: docPurposeRef,
+        doc_area_title: docAreaTitleRef,
+        doc_time_start: docTimeStartRef,
+        doc_time_end: docTimeEndRef,
+        doc_area_detail: docAreaDetailRef,
+        map_link: mapLinkRef
+      };
+      if (firstErrorField) {
+        const ref = fieldRefMap[firstErrorField];
+        ref.current?.focus();
+        ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
       return;
     }
 
@@ -578,6 +642,16 @@ export default function JobsPage() {
     setNoticeJob((prev) =>
       prev?.id === jobId ? { ...prev, ...patch } : prev
     );
+  };
+
+  const handleNotifiedFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleSubmitNotified();
+  };
+
+  const handleCreateDocFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleCreateDoc();
   };
 
   return (
@@ -826,26 +900,41 @@ export default function JobsPage() {
         isOpen={Boolean(selectedJob)}
         title="แจ้งศูนย์นครแล้ว"
         onClose={closeModal}
+        onSubmit={handleNotifiedFormSubmit}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={closeModal}>
+              ยกเลิก
+            </Button>
+            <Button type="submit" disabled={modalSaving}>
+              {modalSaving ? "กำลังบันทึก..." : "บันทึก"}
+            </Button>
+          </div>
+        }
       >
-        <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+        <div className="grid gap-3">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             วันที่แจ้งศูนย์นคร
             <Input
+              ref={notifiedDateRef}
               type="date"
               value={notifiedDate}
               onChange={(event) => setNotifiedDate(event.target.value)}
+              className="h-10"
               required
             />
             {modalErrors.date ? (
               <span className="text-xs text-red-600">{modalErrors.date}</span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             เลขที่บันทึก
             <Input
+              ref={memoNoRef}
               type="text"
               value={memoNo}
               onChange={(event) => setMemoNo(event.target.value)}
+              className="h-10"
               required
             />
             {modalErrors.memoNo ? (
@@ -857,18 +946,6 @@ export default function JobsPage() {
               {modalErrors.submit}
             </div>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={closeModal}>
-              ยกเลิก
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmitNotified}
-              disabled={modalSaving}
-            >
-              {modalSaving ? "กำลังบันทึก..." : "ตกลง"}
-            </Button>
-          </div>
         </div>
       </Modal>
 
@@ -876,11 +953,23 @@ export default function JobsPage() {
         isOpen={Boolean(docJob)}
         title="สร้างเอกสารดับไฟ"
         onClose={closeDocModal}
+        onSubmit={handleCreateDocFormSubmit}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={closeDocModal}>
+              ยกเลิก
+            </Button>
+            <Button type="submit" disabled={docSaving}>
+              {docSaving ? "กำลังสร้าง..." : "บันทึก"}
+            </Button>
+          </div>
+        }
       >
-        <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             หนังสือลงวันที่
             <Input
+              ref={docIssueDateRef}
               type="date"
               value={docForm.doc_issue_date}
               onChange={(event) =>
@@ -889,6 +978,7 @@ export default function JobsPage() {
                   doc_issue_date: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.doc_issue_date ? (
@@ -897,9 +987,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             ดับไฟเพื่อ
             <Input
+              ref={docPurposeRef}
               type="text"
               value={docForm.doc_purpose}
               onChange={(event) =>
@@ -908,6 +999,7 @@ export default function JobsPage() {
                   doc_purpose: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.doc_purpose ? (
@@ -916,9 +1008,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             บริเวณที่ดับ
             <Input
+              ref={docAreaTitleRef}
               type="text"
               value={docForm.doc_area_title}
               onChange={(event) =>
@@ -927,6 +1020,7 @@ export default function JobsPage() {
                   doc_area_title: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.doc_area_title ? (
@@ -935,9 +1029,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             เวลาเริ่มดับไฟ
             <Input
+              ref={docTimeStartRef}
               type="time"
               value={docForm.doc_time_start}
               onChange={(event) =>
@@ -946,6 +1041,7 @@ export default function JobsPage() {
                   doc_time_start: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.doc_time_start ? (
@@ -954,9 +1050,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
             เวลาจ่ายไฟ
             <Input
+              ref={docTimeEndRef}
               type="time"
               value={docForm.doc_time_end}
               onChange={(event) =>
@@ -965,6 +1062,7 @@ export default function JobsPage() {
                   doc_time_end: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.doc_time_end ? (
@@ -973,9 +1071,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
             รายละเอียดพื้นที่ดับไฟ
             <textarea
+              ref={docAreaDetailRef}
               value={docForm.doc_area_detail}
               onChange={(event) =>
                 setDocForm((prev) => ({
@@ -984,7 +1083,7 @@ export default function JobsPage() {
                 }))
               }
               rows={3}
-              className={textareaStyles}
+              className={`${textareaStyles} min-h-[84px]`}
               required
             />
             {docErrors.doc_area_detail ? (
@@ -993,9 +1092,10 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
             ลิ้ง google map
             <Input
+              ref={mapLinkRef}
               type="url"
               value={docForm.map_link}
               onChange={(event) =>
@@ -1004,6 +1104,7 @@ export default function JobsPage() {
                   map_link: event.target.value
                 }))
               }
+              className="h-10"
               required
             />
             {docErrors.map_link ? (
@@ -1013,22 +1114,10 @@ export default function JobsPage() {
             ) : null}
           </label>
           {docErrors.submit ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2">
               {docErrors.submit}
             </div>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={closeDocModal}>
-              ยกเลิก
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreateDoc}
-              disabled={docSaving}
-            >
-              {docSaving ? "กำลังสร้าง..." : "สร้าง"}
-            </Button>
-          </div>
         </div>
       </Modal>
 
