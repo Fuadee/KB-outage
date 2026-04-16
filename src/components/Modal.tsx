@@ -7,9 +7,18 @@ type ModalProps = {
   title?: string;
   onClose: () => void;
   children: ReactNode;
+  panelClassName?: string;
+  bodyClassName?: string;
 };
 
-export default function Modal({ isOpen, title, onClose, children }: ModalProps) {
+export default function Modal({
+  isOpen,
+  title,
+  onClose,
+  children,
+  panelClassName,
+  bodyClassName
+}: ModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -19,7 +28,7 @@ export default function Modal({ isOpen, title, onClose, children }: ModalProps) 
         onClick={onClose}
         role="presentation"
       />
-      <div className={cn("relative z-10 max-w-lg p-6", cardDark)}>
+      <div className={cn("relative z-10 max-w-lg p-6", cardDark, panelClassName)}>
         <div className="flex items-start justify-between gap-4">
           {title ? (
             <h2 className={cn("text-xl", titleText)}>{title}</h2>
@@ -32,7 +41,7 @@ export default function Modal({ isOpen, title, onClose, children }: ModalProps) 
             ปิด
           </button>
         </div>
-        <div className="mt-4">{children}</div>
+        <div className={cn("mt-4", bodyClassName)}>{children}</div>
       </div>
     </div>
   );

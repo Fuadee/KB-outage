@@ -37,6 +37,7 @@ export type DeliveryTargetInput = {
   longitude?: number | null;
   map_link?: string | null;
   sort_order?: number | null;
+  status?: DeliveryStatus;
 };
 
 export type DeliverySummary = {
