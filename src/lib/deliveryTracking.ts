@@ -29,12 +29,17 @@ export const DELIVERY_PROOFS_BUCKET = "delivery-proofs";
 const createAdminClient = () => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new DeliveryTrackingError(
-      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var.",
+      "ระบบยังไม่ได้ตั้งค่า Supabase service role สำหรับ delivery tracking",
       "MISSING_SUPABASE_ENV"
     );
   }
 
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
 };
 
 const normalizeText = (value?: string | null) => {
