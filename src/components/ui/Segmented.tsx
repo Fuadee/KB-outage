@@ -23,7 +23,7 @@ export default function Segmented<T extends string>({
     <div
       role="group"
       className={cn(
-        "inline-flex items-center rounded-full bg-slate-100/80 p-1 text-sm shadow-inner",
+        "inline-flex items-center rounded-md border border-slate-600 bg-[#0f172a] p-1 text-sm",
         className
       )}
     >
@@ -35,10 +35,10 @@ export default function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-300 focus-visible:ring-offset-2",
+              "rounded px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
               isActive
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-900"
+                ? "bg-[#1e293b] text-slate-100"
+                : "text-slate-400 hover:text-slate-100"
             )}
           >
             {option.label}
