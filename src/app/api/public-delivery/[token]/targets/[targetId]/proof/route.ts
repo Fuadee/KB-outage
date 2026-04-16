@@ -7,6 +7,7 @@ import {
 } from "@/lib/deliveryTracking";
 
 export const runtime = "nodejs";
+const MAX_PROOF_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(
   request: Request,
@@ -37,14 +38,28 @@ export async function POST(
 
     if (!(proofFile instanceof File)) {
       return NextResponse.json(
-        { ok: false, error: "กรุณาแนบรูปหลักฐาน" },
+        { ok: false, error: "ไม่พบไฟล์ที่อัปโหลด", code: "PROOF_FILE_MISSING" },
         { status: 400 }
       );
     }
 
     if (!proofFile.type.startsWith("image/")) {
       return NextResponse.json(
-        { ok: false, error: "รองรับเฉพาะไฟล์รูปภาพ" },
+        { ok: false, error: "ประเภทไฟล์ไม่ถูกต้อง (อนุญาตเฉพาะ image/*)", code: "PROOF_FILE_INVALID_TYPE" },
+        { status: 400 }
+      );
+    }
+
+    if (proofFile.size <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่พบไฟล์ที่อัปโหลด", code: "PROOF_FILE_EMPTY" },
+        { status: 400 }
+      );
+    }
+
+    if (proofFile.size > MAX_PROOF_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: "ขนาดไฟล์เกินกำหนด (สูงสุด 10MB)", code: "PROOF_FILE_TOO_LARGE" },
         { status: 400 }
       );
     }
@@ -52,15 +67,15 @@ export async function POST(
     const batchData = await getDeliveryBatchWithTargetsByToken(token);
     if (!batchData) {
       return NextResponse.json(
-        { ok: false, error: "invalid token" },
-        { status: 404 }
+        { ok: false, error: "token หรือ target ไม่ถูกต้อง: token ไม่ถูกต้องหรือหมดอายุ", code: "INVALID_TOKEN" },
+        { status: 401 }
       );
     }
 
     const target = batchData.targets.find((item) => item.id === targetId);
     if (!target) {
       return NextResponse.json(
-        { ok: false, error: "ไม่พบรายการที่ต้องการอัปเดต" },
+        { ok: false, error: "token หรือ target ไม่ถูกต้อง: target นี้ไม่ได้อยู่ใน batch ของลิงก์นี้", code: "TARGET_NOT_IN_TOKEN_BATCH" },
         { status: 404 }
       );
     }
@@ -80,8 +95,8 @@ export async function POST(
 
     if (!updated) {
       return NextResponse.json(
-        { ok: false, error: "ไม่สามารถบันทึกผลการแจ้งได้" },
-        { status: 400 }
+        { ok: false, error: "update delivery target หลัง upload ไม่สำเร็จ", code: "DELIVERY_TARGET_UPDATE_FAILED" },
+        { status: 500 }
       );
     }
 
@@ -97,6 +112,17 @@ export async function POST(
   } catch (error) {
     console.error("Public delivery proof upload failed", { error });
     if (error instanceof DeliveryTrackingError) {
+      if (error.code === "MISSING_SUPABASE_ENV") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "ไม่พบ service role key",
+            code: "MISSING_SERVICE_ROLE_KEY",
+            details: error.details ?? null
+          },
+          { status: 500 }
+        );
+      }
       const detailCode =
         typeof error.details === "object" &&
         error.details !== null &&
