@@ -460,6 +460,44 @@ export async function markTargetDeliveredByToken(args: {
   return data;
 }
 
+const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
+
+const normalizeStoragePath = (value: string) => {
+  const trimmed = value.trim().replace(/^\/+/, "");
+  if (trimmed.startsWith(`${DELIVERY_PROOFS_BUCKET}/`)) {
+    return trimmed.slice(`${DELIVERY_PROOFS_BUCKET}/`.length);
+  }
+  return trimmed;
+};
+
+export async function resolveDeliveryProofUrl(rawProofUrl: string) {
+  const normalized = normalizeText(rawProofUrl);
+  if (!normalized) {
+    throw new DeliveryTrackingError("ไม่พบ proof image url", "PROOF_URL_MISSING");
+  }
+
+  if (isAbsoluteUrl(normalized)) {
+    return normalized;
+  }
+
+  const supabase = createAdminClient();
+  const storagePath = normalizeStoragePath(normalized);
+
+  const { data, error } = await supabase.storage
+    .from(DELIVERY_PROOFS_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60);
+
+  if (error || !data?.signedUrl) {
+    throw new DeliveryTrackingError(
+      "ไม่สามารถสร้าง signed url ของรูปหลักฐานได้",
+      "PROOF_SIGNED_URL_FAILED",
+      { error, storagePath }
+    );
+  }
+
+  return data.signedUrl;
+}
+
 export async function uploadDeliveryProof(args: {
   batchId: string;
   targetId: string;

@@ -3,6 +3,7 @@ import {
   DeliveryTrackingError,
   getDeliveryBatchWithTargetsByToken,
   markTargetDeliveredByToken,
+  resolveDeliveryProofUrl,
   uploadDeliveryProof
 } from "@/lib/deliveryTracking";
 
@@ -144,6 +145,16 @@ export async function POST(
       proof_image_url: updated.proof_image_url
     });
 
+    const verifyBatchData = await getDeliveryBatchWithTargetsByToken(token);
+    const verifiedTarget = verifyBatchData?.targets.find((item) => item.id === targetId) ?? null;
+    console.info("[delivery-public] target row verify after mark delivered", {
+      token: `${token.slice(0, 8)}...`,
+      targetId,
+      status: verifiedTarget?.status ?? null,
+      delivered_at: verifiedTarget?.delivered_at ?? null,
+      proof_image_url: verifiedTarget?.proof_image_url ?? null
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
@@ -199,5 +210,33 @@ export async function POST(
       { ok: false, error: "ส่งหลักฐานไม่สำเร็จ กรุณาลองใหม่" },
       { status: 500 }
     );
+  }
+}
+
+export async function GET(
+  _request: Request,
+  {
+    params
+  }: {
+    params: Promise<{ token: string; targetId: string }>;
+  }
+) {
+  try {
+    const { token, targetId } = await params;
+    const batchData = await getDeliveryBatchWithTargetsByToken(token);
+    if (!batchData) {
+      return NextResponse.json({ ok: false, error: "invalid token" }, { status: 404 });
+    }
+
+    const target = batchData.targets.find((item) => item.id === targetId);
+    if (!target?.proof_image_url) {
+      return NextResponse.json({ ok: false, error: "ไม่พบรูปหลักฐาน" }, { status: 404 });
+    }
+
+    const resolvedProofUrl = await resolveDeliveryProofUrl(target.proof_image_url);
+    return NextResponse.redirect(resolvedProofUrl, { status: 302 });
+  } catch (error) {
+    console.error("Public delivery proof view failed", { error });
+    return NextResponse.json({ ok: false, error: "ไม่สามารถเปิดรูปหลักฐานได้" }, { status: 500 });
   }
 }
