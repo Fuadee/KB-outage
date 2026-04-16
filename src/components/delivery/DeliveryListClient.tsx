@@ -57,6 +57,9 @@ export default function DeliveryListClient({ token }: { token: string }) {
     loadData();
   }, [token]);
 
+  const isDeliveredTarget = (target: DeliveryPayload["targets"][number]) =>
+    target.status === "delivered" || Boolean(target.delivered_at) || Boolean(target.proof_image_url);
+
   if (error) {
     return <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">{error}</div>;
   }
@@ -85,18 +88,20 @@ export default function DeliveryListClient({ token }: { token: string }) {
       </div>
 
       <div className="space-y-3">
-        {data.targets.map((target) => (
+        {data.targets.map((target) => {
+          const delivered = isDeliveredTarget(target);
+          return (
           <div key={target.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <p className="font-medium text-slate-900">{target.company_name}</p>
                 {target.contact_name ? <p className="text-sm text-slate-500">ผู้รับผิดชอบ: {target.contact_name}</p> : null}
               </div>
-              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${target.status === "delivered" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                {target.status === "delivered" ? "แจ้งแล้ว" : "ยังไม่แจ้ง"}
+              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${delivered ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                {delivered ? "แจ้งแล้ว" : "ยังไม่แจ้ง"}
               </span>
             </div>
-            {target.status === "delivered" && target.delivered_at ? (
+            {delivered && target.delivered_at ? (
               <p className="mb-2 text-xs text-emerald-700">
                 แจ้งเมื่อ{" "}
                 {new Date(target.delivered_at).toLocaleString("th-TH", {
@@ -126,7 +131,7 @@ export default function DeliveryListClient({ token }: { token: string }) {
               </Link>
             </div>
           </div>
-        ))}
+        )})}
       </div>
     </div>
   );
