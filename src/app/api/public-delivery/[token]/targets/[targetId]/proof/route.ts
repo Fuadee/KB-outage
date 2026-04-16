@@ -80,25 +80,69 @@ export async function POST(
       );
     }
 
-    const proofImageUrl = await uploadDeliveryProof({
-      batchId: batchData.batch.id,
-      targetId,
-      file: proofFile
-    });
+    let proofImageUrl: string;
+    try {
+      proofImageUrl = await uploadDeliveryProof({
+        batchId: batchData.batch.id,
+        targetId,
+        file: proofFile
+      });
+      console.info("[delivery-public] storage upload success", {
+        token: `${token.slice(0, 8)}...`,
+        targetId,
+        proofImageUrl
+      });
+    } catch (uploadError) {
+      console.error("[delivery-public] storage upload failed", {
+        token: `${token.slice(0, 8)}...`,
+        targetId,
+        error: uploadError
+      });
+      throw uploadError;
+    }
 
-    const updated = await markTargetDeliveredByToken({
-      token,
-      targetId,
-      proofImageUrl,
-      deliveredByName
-    });
+    let updated;
+    try {
+      updated = await markTargetDeliveredByToken({
+        token,
+        targetId,
+        proofImageUrl,
+        deliveredByName
+      });
+      console.info("[delivery-public] db update result", {
+        token: `${token.slice(0, 8)}...`,
+        targetId,
+        updated
+      });
+    } catch (updateError) {
+      console.error("[delivery-public] db update failed after upload", {
+        token: `${token.slice(0, 8)}...`,
+        targetId,
+        proofImageUrl,
+        error: updateError
+      });
+      throw updateError;
+    }
 
     if (!updated) {
+      console.error("[delivery-public] db update returned empty result", {
+        token: `${token.slice(0, 8)}...`,
+        targetId,
+        proofImageUrl
+      });
       return NextResponse.json(
         { ok: false, error: "update delivery target หลัง upload ไม่สำเร็จ", code: "DELIVERY_TARGET_UPDATE_FAILED" },
         { status: 500 }
       );
     }
+
+    console.info("[delivery-public] target status after update", {
+      token: `${token.slice(0, 8)}...`,
+      targetId,
+      status: updated.status,
+      delivered_at: updated.delivered_at,
+      proof_image_url: updated.proof_image_url
+    });
 
     return NextResponse.json({
       ok: true,

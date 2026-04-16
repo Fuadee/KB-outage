@@ -25,13 +25,28 @@ export default function DeliveryListClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
-    const response = await fetch(`/api/public-delivery/${token}`, { method: "GET", cache: "no-store" });
+    const response = await fetch(`/api/public-delivery/${token}?ts=${Date.now()}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Pragma: "no-cache"
+      }
+    });
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
       setError("ลิงก์ไม่ถูกต้อง หรือหมดอายุแล้ว");
       setData(null);
       return;
     }
+    console.info("[delivery-public] list client fetched", {
+      token,
+      summary: result.data.summary,
+      statuses: (result.data.targets ?? []).map((target: DeliveryPayload["targets"][number]) => ({
+        id: target.id,
+        status: target.status,
+        delivered_at: target.delivered_at
+      }))
+    });
     setData(result.data);
     setError(null);
   };

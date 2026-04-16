@@ -78,7 +78,13 @@ export default function DeliveryTargetDetailClient({ token, targetId }: { token:
       return;
     }
 
-    window.location.href = `/delivery/${token}`;
+    console.info("[delivery-public] upload+update success", {
+      token,
+      targetId,
+      data: result.data
+    });
+
+    window.location.replace(`/delivery/${token}?refresh=${Date.now()}`);
   };
 
   if (error) {
