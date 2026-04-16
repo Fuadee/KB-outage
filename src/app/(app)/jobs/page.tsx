@@ -7,7 +7,6 @@ import Modal from "@/components/Modal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import StatusBadge from "@/components/StatusBadge";
-import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -142,7 +141,6 @@ export default function JobsPage() {
     message: string;
     tone: "success" | "error";
   } | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -160,25 +158,6 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs();
-  }, []);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserEmail(data.user?.email ?? null);
-    };
-
-    loadUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUserEmail(session?.user?.email ?? null);
-      }
-    );
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
   }, []);
 
   useEffect(() => {
@@ -291,12 +270,6 @@ export default function JobsPage() {
     } finally {
       setCloseSaving(false);
     }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    await fetch("/api/auth/session", { method: "DELETE" });
-    router.push("/login");
   };
 
   const handleSubmitNotified = async () => {
@@ -566,33 +539,19 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Current View
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">Jobs</h1>
+      <header className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            Jobs
+          </h1>
           <p className="text-sm text-slate-500">
             ติดตามงานดับไฟตามกำหนดและสถานะวันคงเหลือ
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {userEmail ? <Badge variant="neutral">{userEmail}</Badge> : null}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleLogout}
-          >
-            ออกจากระบบ
-          </Button>
-        </div>
       </header>
 
       <Card className="border border-slate-200/70 bg-white/80 shadow-none">
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-            <div className="flex w-full max-w-sm flex-col gap-1.5">
+        <CardContent className="p-4 lg:p-5">
+          <div className="grid gap-3 lg:grid-cols-[minmax(300px,1fr)_auto_auto] lg:items-end">
+            <div className="flex w-full flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 ค้นหาอุปกรณ์
               </label>
@@ -658,7 +617,7 @@ export default function JobsPage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-4">
+      <section className="grid gap-5 lg:gap-6">
         {loading ? (
           <Card>
             <CardContent className="py-8 text-center text-sm text-slate-500">
@@ -848,7 +807,7 @@ export default function JobsPage() {
                 className="group flex items-stretch overflow-hidden transition hover:-translate-y-0.5"
               >
                 <div className={`w-1.5 ${status.strip}`} />
-                <div className="grid w-full gap-4 p-4 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:items-start">
+                <div className="grid w-full gap-4 p-4 lg:grid-cols-[250px_minmax(0,1fr)_260px] lg:gap-5 lg:p-5">
                   <div className="space-y-3">
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-300">
                       {parseLocalDate(job.outage_date).toLocaleDateString("th-TH", {
