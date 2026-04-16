@@ -22,19 +22,39 @@ export class DeliveryTrackingError extends Error {
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_ROLE_ENV_CANDIDATES = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "SERVICE_ROLE_KEY",
+  "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY"
+] as const;
+
+const resolveServiceRoleKey = () => {
+  for (const key of SERVICE_ROLE_ENV_CANDIDATES) {
+    const value = process.env[key];
+    if (value?.trim()) {
+      return { keyName: key, value };
+    }
+  }
+  return null;
+};
 
 export const DELIVERY_PROOFS_BUCKET = "delivery-proofs";
 
 const createAdminClient = () => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  const serviceRole = resolveServiceRoleKey();
+  if (!SUPABASE_URL || !serviceRole?.value) {
     throw new DeliveryTrackingError(
-      "ระบบยังไม่ได้ตั้งค่า Supabase service role สำหรับ delivery tracking",
+      "ระบบยังไม่ได้ตั้งค่า Supabase service role สำหรับ delivery tracking (รองรับ SUPABASE_SERVICE_ROLE_KEY / SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY)",
       "MISSING_SUPABASE_ENV"
     );
   }
+  if (serviceRole.keyName === "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY") {
+    console.warn(
+      "[delivery] Using NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY as fallback. Move this key to server-only SUPABASE_SERVICE_ROLE_KEY."
+    );
+  }
 
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(SUPABASE_URL, serviceRole.value, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

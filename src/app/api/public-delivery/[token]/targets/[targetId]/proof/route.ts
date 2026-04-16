@@ -108,7 +108,7 @@ export async function POST(
           {
             ok: false,
             error:
-              "เซิร์ฟเวอร์ไม่มีสิทธิ์อัปเดตสถานะจัดส่ง (ต้องใช้ service role key ฝั่ง server)",
+              "เซิร์ฟเวอร์ไม่มีสิทธิ์อัปเดตสถานะจัดส่ง (ตรวจ env service role key และ policy ของ delivery_targets)",
             code: "PERMISSION_DENIED",
             details: error.details ?? null
           },

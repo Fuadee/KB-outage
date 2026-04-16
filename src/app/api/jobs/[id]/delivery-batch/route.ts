@@ -28,7 +28,7 @@ const buildDeliveryErrorResponse = (error: DeliveryTrackingError) => {
     TARGET_UPSERT_FAILED: "ไม่สามารถบันทึกรายการบางรายการได้",
     TARGET_DELETE_FAILED: "ไม่สามารถลบรายการเดิมได้",
     MISSING_SUPABASE_ENV:
-      "ระบบยังไม่ได้ตั้งค่า service role สำหรับ delivery tracking (ต้องตั้ง SUPABASE_SERVICE_ROLE_KEY ฝั่ง server)",
+      "ระบบยังไม่ได้ตั้งค่า service role สำหรับ delivery tracking (ตั้งค่า SUPABASE_SERVICE_ROLE_KEY หรือ SERVICE_ROLE_KEY ที่ server)",
     MISSING_BATCH_ID: "ไม่พบ batch_id",
     TARGETS_LOOKUP_FAILED: "ไม่สามารถโหลดรายการเดิมได้"
   };
@@ -50,7 +50,7 @@ const buildDeliveryErrorResponse = (error: DeliveryTrackingError) => {
       {
         ok: false,
         error:
-          "ไม่มีสิทธิ์เขียนข้อมูล delivery tracking: route นี้ต้องใช้ Supabase service role key บน server เท่านั้น",
+          "ไม่มีสิทธิ์เขียนข้อมูล delivery tracking: ตรวจ env service role key และ policy ของตาราง delivery_batches/delivery_targets",
         code: "PERMISSION_DENIED",
         details: error.details ?? null
       },
