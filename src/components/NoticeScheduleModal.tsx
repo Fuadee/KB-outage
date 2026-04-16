@@ -5,6 +5,7 @@ import Modal from "./Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import type { OutageJob } from "@/lib/jobsRepo";
+import DeliveryTrackingModal from "./DeliveryTrackingModal";
 
 const TOAST_TIMEOUT_MS = 2000;
 
@@ -32,6 +33,19 @@ export default function NoticeScheduleModal({
   }>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliverySummary, setDeliverySummary] = useState<{
+    total: number;
+    delivered: number;
+    pending: number;
+    token: string | null;
+    targets: Array<{
+      id: string;
+      company_name: string;
+      status: "pending" | "delivered";
+      delivered_at: string | null;
+    }>;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -41,7 +55,54 @@ export default function NoticeScheduleModal({
     setErrors({});
     setToastMessage(null);
     setIsSaving(false);
+    setShowDeliveryModal(false);
   }, [open, job]);
+
+  const fetchDeliverySummary = async () => {
+    if (!job) return;
+    const response = await fetch(`/api/jobs/${job.id}/delivery-batch`, {
+      method: "GET"
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.ok || !result?.data) {
+      setDeliverySummary(null);
+      return;
+    }
+
+    const targets = result.data.targets ?? [];
+    const delivered = targets.filter(
+      (target: { status: string }) => target.status === "delivered"
+    ).length;
+
+    setDeliverySummary({
+      total: targets.length,
+      delivered,
+      pending: targets.length - delivered,
+      token: result.data.batch?.access_token ?? null,
+      targets: targets.map(
+        (target: {
+          id: string;
+          company_name: string;
+          status: "pending" | "delivered";
+          delivered_at: string | null;
+        }) => ({
+          id: target.id,
+          company_name: target.company_name,
+          status: target.status,
+          delivered_at: target.delivered_at
+        })
+      )
+    });
+  };
+
+  useEffect(() => {
+    if (!open || !job || job.notice_status !== "SCHEDULED") return;
+    console.info("[notice-modal] scheduled job ready for delivery tracking", {
+      jobId: job.id,
+      noticeStatus: job.notice_status
+    });
+    fetchDeliverySummary();
+  }, [open, job?.id, job?.notice_status]);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -118,9 +179,7 @@ export default function NoticeScheduleModal({
       });
 
       setToastMessage("กำหนดการแจ้งเรียบร้อยแล้ว");
-      setTimeout(() => {
-        onOpenChange(false);
-      }, 800);
+      fetchDeliverySummary();
     } catch (error) {
       console.error("Notice schedule failed", error);
       setErrors({
@@ -197,7 +256,78 @@ export default function NoticeScheduleModal({
             {isSaving ? "กำลังบันทึก..." : "บันทึกกำหนดการ"}
           </Button>
         </div>
+        {job?.notice_status === "SCHEDULED" ? (
+          <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-100">
+                สถานะการแจ้งผู้ใช้ไฟรายใหญ่
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setShowDeliveryModal(true)}
+              >
+                ติดตามการแจ้งผู้ใช้ไฟรายใหญ่
+              </Button>
+            </div>
+            {deliverySummary ? (
+              <div className="space-y-2 text-xs text-slate-300">
+                <p>
+                  ทั้งหมด {deliverySummary.total} ราย | แจ้งแล้ว{" "}
+                  {deliverySummary.delivered} ราย | ยังไม่แจ้ง{" "}
+                  {deliverySummary.pending} ราย
+                </p>
+                {deliverySummary.token ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        const link = `${window.location.origin}/delivery/${deliverySummary.token}`;
+                        await navigator.clipboard.writeText(link);
+                      }}
+                    >
+                      copy public delivery link
+                    </Button>
+                  </div>
+                ) : null}
+                {deliverySummary.targets.length > 0 ? (
+                  <ul className="space-y-1">
+                    {deliverySummary.targets.slice(0, 5).map((target) => (
+                      <li key={target.id}>
+                        - {target.company_name} —{" "}
+                        {target.status === "delivered"
+                          ? `แจ้งแล้ว ${
+                              target.delivered_at
+                                ? new Date(target.delivered_at).toLocaleTimeString("th-TH", {
+                                    hour: "2-digit",
+                                    minute: "2-digit"
+                                  })
+                                : ""
+                            }`
+                          : "ยังไม่แจ้ง"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>ยังไม่มีรายการผู้ใช้ไฟรายใหญ่</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">ยังไม่มีรายการผู้ใช้ไฟรายใหญ่</p>
+            )}
+          </div>
+        ) : null}
       </div>
+      {job ? (
+        <DeliveryTrackingModal
+          open={showDeliveryModal}
+          onOpenChange={setShowDeliveryModal}
+          jobId={job.id}
+          onSaved={fetchDeliverySummary}
+        />
+      ) : null}
     </Modal>
   );
 }
