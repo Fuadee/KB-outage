@@ -74,16 +74,46 @@ export async function POST(
   } catch (error) {
     console.error("Delivery batch POST failed", { error });
     if (error instanceof DeliveryTrackingError) {
+      const detailCode =
+        typeof error.details === "object" &&
+        error.details !== null &&
+        "code" in error.details
+          ? String((error.details as { code?: string }).code ?? "")
+          : "";
       const messageByCode: Record<string, string> = {
         MISSING_JOB_ID: "ไม่พบ job_id",
         BATCH_LOOKUP_FAILED: "ไม่สามารถค้นหา delivery batch ได้",
         BATCH_CREATE_FAILED: "ไม่สามารถสร้าง delivery batch ได้",
+        BATCH_REFETCH_AFTER_CONFLICT_FAILED:
+          "สร้าง batch ซ้ำพร้อมกันและไม่สามารถโหลดรายการเดิมได้",
         TARGET_UPSERT_FAILED: "ไม่สามารถบันทึกรายการบางรายการได้",
         TARGET_DELETE_FAILED: "ไม่สามารถลบรายการเดิมได้",
         MISSING_SUPABASE_ENV: "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Supabase",
         MISSING_BATCH_ID: "ไม่พบ batch_id",
         TARGETS_LOOKUP_FAILED: "ไม่สามารถโหลดรายการเดิมได้"
       };
+      if (error.code === "BATCH_CREATE_FAILED" && detailCode === "42P01") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "ยังไม่พบตาราง delivery_batches/delivery_targets (migration ยังไม่ถูก run)",
+            code: "MIGRATION_MISSING",
+            details: error.details ?? null
+          },
+          { status: 500 }
+        );
+      }
+      if (error.code === "BATCH_CREATE_FAILED" && detailCode === "42501") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "ไม่มีสิทธิ์เขียนข้อมูล delivery batch (ตรวจ service role / policy)",
+            code: "PERMISSION_DENIED",
+            details: error.details ?? null
+          },
+          { status: 500 }
+        );
+      }
 
       return NextResponse.json(
         {

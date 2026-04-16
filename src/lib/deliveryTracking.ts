@@ -115,6 +115,27 @@ export async function getOrCreateDeliveryBatchByJobId(jobId: string) {
     .single<DeliveryBatch>();
 
   if (error || !data) {
+    const pgCode = (error as { code?: string } | null)?.code;
+    if (pgCode === "23505") {
+      console.warn("[delivery] getOrCreateDeliveryBatchByJobId:unique_conflict_refetch", {
+        jobId,
+        error
+      });
+      const { data: refetched, error: refetchError } = await supabase
+        .from("delivery_batches")
+        .select("*")
+        .eq("job_id", jobId)
+        .maybeSingle<DeliveryBatch>();
+      if (refetchError) {
+        throw new DeliveryTrackingError(
+          "Cannot re-fetch delivery batch after unique conflict",
+          "BATCH_REFETCH_AFTER_CONFLICT_FAILED",
+          refetchError
+        );
+      }
+      if (refetched) return refetched;
+    }
+
     console.error("[delivery] getOrCreateDeliveryBatchByJobId:create_error", {
       jobId,
       error

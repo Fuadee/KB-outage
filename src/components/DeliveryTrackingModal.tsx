@@ -221,7 +221,13 @@ export default function DeliveryTrackingModal({
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
       console.error("[delivery-modal] save error", { status: response.status, result });
-      setError(result?.error ?? "บันทึกไม่สำเร็จ");
+      const detailText =
+        result?.code || result?.details
+          ? ` (${result?.code ?? "UNKNOWN"}${
+              result?.details ? `: ${JSON.stringify(result.details)}` : ""
+            })`
+          : "";
+      setError(`${result?.error ?? "บันทึกไม่สำเร็จ"}${detailText}`);
       setIsSaving(false);
       return false;
     }
