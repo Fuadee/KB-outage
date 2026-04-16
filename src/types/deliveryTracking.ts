@@ -38,6 +38,8 @@ export type DeliveryTargetInput = {
   map_link?: string | null;
   sort_order?: number | null;
   status?: DeliveryStatus;
+  proof_image_url?: string | null;
+  delivered_at?: string | null;
 };
 
 export type DeliverySummary = {

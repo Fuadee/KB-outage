@@ -9,7 +9,7 @@ import LargeCustomerDeliveryList from "./LargeCustomerDeliveryList";
 import EditLargeCustomerDeliveryItemModal from "./EditLargeCustomerDeliveryItemModal";
 import CreateLargeCustomerDeliveryItemModal from "./CreateLargeCustomerDeliveryItemModal";
 import { createEmptyTarget, toEditableTarget, type EditableTarget } from "./types";
-import type { DeliveryStatus, DeliveryTargetInput } from "@/types/deliveryTracking";
+import type { DeliveryStatus, DeliveryTarget, DeliveryTargetInput } from "@/types/deliveryTracking";
 
 type DeliveryTrackingModalProps = {
   open: boolean;
@@ -170,9 +170,7 @@ export default function LargeCustomerDeliveryManagerModal({
     }
 
     const payload = result.data;
-    const nextTargets = (payload?.targets ?? []).map(
-      (target: DeliveryTargetInput & { id: string; status?: DeliveryStatus }) => toEditableTarget(target)
-    );
+    const nextTargets = (payload?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
     setTargets(nextTargets);
 
     if (payload?.batch?.access_token) {
@@ -234,11 +232,7 @@ export default function LargeCustomerDeliveryManagerModal({
 
     const batch = result.data?.batch;
     const nextTargets = result.data?.targets ?? [];
-    setTargets(
-      nextTargets.map((target: DeliveryTargetInput & { id: string; status?: DeliveryStatus }) =>
-        toEditableTarget(target)
-      )
-    );
+    setTargets(nextTargets.map((target: DeliveryTarget) => toEditableTarget(target)));
     if (batch?.access_token) {
       setDeliveryLink(`${window.location.origin}/delivery/${batch.access_token}`);
     }
