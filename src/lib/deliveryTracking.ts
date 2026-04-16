@@ -288,7 +288,10 @@ export async function replaceDeliveryTargets(batchId: string, targets: DeliveryT
           : null,
       map_link: normalizeMapLink(target.map_link),
       sort_order: target.sort_order ?? index,
-      status: (target.id ? existingStatusMap.get(target.id) : null) ?? "pending"
+      status:
+        target.status === "delivered" || target.status === "pending"
+          ? target.status
+          : (target.id ? existingStatusMap.get(target.id) : null) ?? "pending"
     }))
     .filter((target) => target.company_name.length > 0);
 
