@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDeliveryBatchWithTargetsByToken, getDeliveryMapUrl } from "@/lib/deliveryTracking";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: Request,
@@ -24,7 +25,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       ok: true,
       data: {
         batch: {
@@ -43,6 +44,22 @@ export async function GET(
           map_url: getDeliveryMapUrl(target),
           proof_image_url: target.proof_image_url
         }))
+      }
+    };
+
+    console.info("[delivery-public] list payload fetched", {
+      token: `${token.slice(0, 8)}...`,
+      summary: responsePayload.data.summary,
+      statuses: responsePayload.data.targets.map((target) => ({
+        id: target.id,
+        status: target.status,
+        delivered_at: target.delivered_at
+      }))
+    });
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate"
       }
     });
   } catch (error) {
