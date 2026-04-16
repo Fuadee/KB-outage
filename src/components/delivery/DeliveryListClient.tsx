@@ -129,7 +129,7 @@ export default function DeliveryListClient({ token }: { token: string }) {
                 </a>
               ) : null}
               <Link href={`/delivery/${token}/target/${target.id}`}>
-                <Button type="button" size="sm">อัปโหลดรูปยืนยัน</Button>
+                <Button type="button" size="sm">ถ่ายรูป/ส่งหลักฐาน</Button>
               </Link>
             </div>
           </div>
