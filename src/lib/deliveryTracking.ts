@@ -422,6 +422,47 @@ export async function getDeliveryBatchWithTargetsByToken(token: string) {
   };
 }
 
+export async function getDeliveryBatchByToken(token: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("delivery_batches")
+    .select("*")
+    .eq("access_token", token)
+    .maybeSingle<DeliveryBatch>();
+
+  if (error) {
+    throw new DeliveryTrackingError(
+      "Unable to lookup delivery batch by token",
+      "BATCH_TOKEN_LOOKUP_FAILED",
+      error
+    );
+  }
+
+  return data;
+}
+
+export async function getLatestActiveDeliveryBatchByJobId(jobId: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("delivery_batches")
+    .select("*")
+    .eq("job_id", jobId)
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<DeliveryBatch>();
+
+  if (error) {
+    throw new DeliveryTrackingError(
+      "Unable to lookup latest active delivery batch",
+      "BATCH_LOOKUP_FAILED",
+      error
+    );
+  }
+
+  return data;
+}
+
 export async function markTargetDeliveredByToken(args: {
   token: string;
   targetId: string;
