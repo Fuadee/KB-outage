@@ -15,6 +15,8 @@ type DeliveryTrackingModalProps = {
 
 type EditableTarget = DeliveryTargetInput & {
   tempId: string;
+  latitudeInput: string;
+  longitudeInput: string;
 };
 
 const createEmptyTarget = (): EditableTarget => ({
@@ -24,6 +26,8 @@ const createEmptyTarget = (): EditableTarget => ({
   note: "",
   latitude: null,
   longitude: null,
+  latitudeInput: "",
+  longitudeInput: "",
   map_link: ""
 });
 
@@ -39,6 +43,9 @@ export default function DeliveryTrackingModal({
   const [error, setError] = useState<string | null>(null);
   const [deliveryLink, setDeliveryLink] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ total: number; delivered: number; pending: number } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const hasJobId = jobId.trim().length > 0;
 
   const activeTargets = useMemo(
     () => targets.filter((target) => target.company_name.trim().length > 0),
@@ -46,6 +53,12 @@ export default function DeliveryTrackingModal({
   );
 
   const loadExisting = async () => {
+    if (!hasJobId) {
+      setError("ต้องบันทึกกำหนดการก่อน");
+      setTargets([createEmptyTarget()]);
+      return;
+    }
+    console.info("[delivery-modal] loadExisting jobId", { jobId });
     setError(null);
     const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, {
       method: "GET"
@@ -62,6 +75,8 @@ export default function DeliveryTrackingModal({
     const nextTargets = (payload?.targets ?? []).map((target: DeliveryTargetInput & { id: string }) => ({
       tempId: target.id,
       ...target,
+      latitudeInput: target.latitude === null || target.latitude === undefined ? "" : String(target.latitude),
+      longitudeInput: target.longitude === null || target.longitude === undefined ? "" : String(target.longitude),
       map_link: target.map_link ?? ""
     }));
 
@@ -81,9 +96,14 @@ export default function DeliveryTrackingModal({
   useEffect(() => {
     if (!open) return;
     loadExisting();
-  }, [open]);
+  }, [open, hasJobId]);
 
   const patchTarget = (tempId: string, patch: Partial<EditableTarget>) => {
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
     setTargets((prev) => prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target)));
   };
 
@@ -94,22 +114,100 @@ export default function DeliveryTrackingModal({
     });
   };
 
+  const parseCoordinate = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return { value: null as number | null, error: null as string | null };
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      return { value: null, error: "พิกัดต้องเป็นตัวเลข" };
+    }
+    return { value: parsed, error: null };
+  };
+
+  const normalizeOptionalText = (value?: string | null) => {
+    const trimmed = value?.trim() ?? "";
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  const normalizeMapLink = (value?: string | null) => {
+    const trimmed = value?.trim() ?? "";
+    if (!trimmed) return { value: null as string | null, error: null as string | null };
+    const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      const parsed = new URL(normalized);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return { value: null, error: "รูปแบบ map link ไม่ถูกต้อง" };
+      }
+      return { value: normalized, error: null };
+    } catch {
+      return { value: null, error: "รูปแบบ map link ไม่ถูกต้อง" };
+    }
+  };
+
   const saveTargets = async (regenerateToken = false) => {
+    if (!hasJobId) {
+      setError("ต้องบันทึกกำหนดการก่อน");
+      return false;
+    }
+
     setIsSaving(true);
     setError(null);
+    setFieldErrors({});
 
-    const payloadTargets = activeTargets.map((target, index) => ({
-      id: target.id,
-      company_name: target.company_name,
-      contact_name: target.contact_name,
-      note: target.note,
-      latitude:
-        typeof target.latitude === "number" ? target.latitude : target.latitude ? Number(target.latitude) : null,
-      longitude:
-        typeof target.longitude === "number" ? target.longitude : target.longitude ? Number(target.longitude) : null,
-      map_link: target.map_link,
-      sort_order: index
-    }));
+    const nextFieldErrors: Record<string, string> = {};
+    const payloadTargets = activeTargets.map((target, index) => {
+      const companyName = target.company_name.trim();
+      if (!companyName) {
+        nextFieldErrors[target.tempId] = "กรุณากรอกชื่อบริษัท/สถานที่";
+      }
+
+      const latitudeParsed = parseCoordinate(target.latitudeInput);
+      const longitudeParsed = parseCoordinate(target.longitudeInput);
+      if (latitudeParsed.error || longitudeParsed.error) {
+        nextFieldErrors[target.tempId] = "latitude/longitude ไม่ถูกต้อง";
+      }
+
+      const mapLink = normalizeMapLink(target.map_link);
+      if (mapLink.error) {
+        nextFieldErrors[target.tempId] = mapLink.error;
+      }
+
+      return {
+        id: target.id,
+        company_name: companyName,
+        contact_name: normalizeOptionalText(target.contact_name),
+        note: normalizeOptionalText(target.note),
+        latitude: latitudeParsed.value,
+        longitude: longitudeParsed.value,
+        map_link: mapLink.value,
+        sort_order: index
+      };
+    });
+
+    targets.forEach((target) => {
+      const hasOtherContent =
+        target.contact_name?.trim() ||
+        target.note?.trim() ||
+        target.latitudeInput.trim() ||
+        target.longitudeInput.trim() ||
+        target.map_link?.trim();
+      if (hasOtherContent && !target.company_name.trim()) {
+        nextFieldErrors[target.tempId] = "กรุณากรอกชื่อบริษัท/สถานที่";
+      }
+    });
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setError("กรุณาตรวจสอบข้อมูลรายการที่มีกรอบสีแดง");
+      setIsSaving(false);
+      return false;
+    }
+
+    console.info("[delivery-modal] submit payload", {
+      jobId,
+      regenerateToken,
+      payloadTargets
+    });
 
     const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, {
       method: "POST",
@@ -122,10 +220,12 @@ export default function DeliveryTrackingModal({
 
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
+      console.error("[delivery-modal] save error", { status: response.status, result });
       setError(result?.error ?? "บันทึกไม่สำเร็จ");
       setIsSaving(false);
       return false;
     }
+    console.info("[delivery-modal] save success", { result });
 
     const batch = result.data?.batch;
     const nextTargets = result.data?.targets ?? [];
@@ -134,6 +234,14 @@ export default function DeliveryTrackingModal({
         ? nextTargets.map((target: DeliveryTargetInput & { id: string }) => ({
             tempId: target.id,
             ...target,
+            latitudeInput:
+              target.latitude === null || target.latitude === undefined
+                ? ""
+                : String(target.latitude),
+            longitudeInput:
+              target.longitude === null || target.longitude === undefined
+                ? ""
+                : String(target.longitude),
             map_link: target.map_link ?? ""
           }))
         : [createEmptyTarget()]
@@ -192,6 +300,7 @@ export default function DeliveryTrackingModal({
                 value={target.company_name}
                 onChange={(event) => patchTarget(target.tempId, { company_name: event.target.value })}
                 placeholder="ชื่อบริษัท / สถานที่"
+                className={fieldErrors[target.tempId] ? "border-red-400 focus-visible:ring-red-300" : undefined}
               />
               <Input
                 type="text"
@@ -208,20 +317,20 @@ export default function DeliveryTrackingModal({
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="number"
-                  value={target.latitude ?? ""}
+                  value={target.latitudeInput}
                   onChange={(event) =>
                     patchTarget(target.tempId, {
-                      latitude: event.target.value ? Number(event.target.value) : null
+                      latitudeInput: event.target.value
                     })
                   }
                   placeholder="Latitude"
                 />
                 <Input
                   type="number"
-                  value={target.longitude ?? ""}
+                  value={target.longitudeInput}
                   onChange={(event) =>
                     patchTarget(target.tempId, {
-                      longitude: event.target.value ? Number(event.target.value) : null
+                      longitudeInput: event.target.value
                     })
                   }
                   placeholder="Longitude"
@@ -233,6 +342,9 @@ export default function DeliveryTrackingModal({
                 onChange={(event) => patchTarget(target.tempId, { map_link: event.target.value })}
                 placeholder="Google Maps link (ถ้ามี)"
               />
+              {fieldErrors[target.tempId] ? (
+                <p className="text-xs text-red-500">{fieldErrors[target.tempId]}</p>
+              ) : null}
             </div>
           </div>
         ))}
@@ -258,13 +370,16 @@ export default function DeliveryTrackingModal({
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             ปิด
           </Button>
-          <Button type="button" onClick={() => saveTargets(false)} disabled={isSaving || isGenerating}>
+          <Button type="button" onClick={() => saveTargets(false)} disabled={isSaving || isGenerating || !hasJobId}>
             {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
           </Button>
-          <Button type="button" onClick={handleGenerateLink} disabled={isSaving || isGenerating}>
+          <Button type="button" onClick={handleGenerateLink} disabled={isSaving || isGenerating || !hasJobId}>
             {isGenerating ? "กำลังสร้าง..." : "สร้างลิงก์สำหรับทีมแจก"}
           </Button>
         </div>
+        {!hasJobId ? (
+          <p className="text-xs text-amber-500">ต้องบันทึกกำหนดการก่อน จึงจะตั้งค่าการติดตามได้</p>
+        ) : null}
       </div>
     </Modal>
   );

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  DeliveryTrackingError,
   getDeliveryBatchWithTargetsByToken,
   markTargetDeliveredByToken,
   uploadDeliveryProof
@@ -17,6 +18,7 @@ export async function POST(
 ) {
   try {
     const { token, targetId } = await params;
+    console.info("[delivery-public] proof upload incoming", { token: `${token.slice(0, 8)}...`, targetId });
     const formData = await request.formData();
     const proofFile = formData.get("proof");
     const deliveredByName = formData.get("deliveredByName")?.toString();
@@ -81,7 +83,18 @@ export async function POST(
       }
     });
   } catch (error) {
-    console.error("Public delivery proof upload failed", error);
+    console.error("Public delivery proof upload failed", { error });
+    if (error instanceof DeliveryTrackingError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+          code: error.code,
+          details: error.details ?? null
+        },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { ok: false, error: "ส่งหลักฐานไม่สำเร็จ กรุณาลองใหม่" },
       { status: 500 }

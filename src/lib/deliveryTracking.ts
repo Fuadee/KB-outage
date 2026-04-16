@@ -8,6 +8,18 @@ import type {
   DeliveryTargetInput
 } from "@/types/deliveryTracking";
 
+export class DeliveryTrackingError extends Error {
+  code: string;
+  details?: unknown;
+
+  constructor(message: string, code: string, details?: unknown) {
+    super(message);
+    this.name = "DeliveryTrackingError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,7 +28,10 @@ export const DELIVERY_PROOFS_BUCKET = "delivery-proofs";
 
 const createAdminClient = () => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var.");
+    throw new DeliveryTrackingError(
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var.",
+      "MISSING_SUPABASE_ENV"
+    );
   }
 
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -56,7 +71,11 @@ const toSummary = (targets: DeliveryTarget[]): DeliverySummary => {
 export const generateDeliveryToken = () => randomBytes(24).toString("hex");
 
 export async function getOrCreateDeliveryBatchByJobId(jobId: string) {
+  if (!jobId?.trim()) {
+    throw new DeliveryTrackingError("Missing job id", "MISSING_JOB_ID");
+  }
   const supabase = createAdminClient();
+  console.info("[delivery] getOrCreateDeliveryBatchByJobId:start", { jobId });
 
   const { data: existing, error: findError } = await supabase
     .from("delivery_batches")
@@ -65,10 +84,24 @@ export async function getOrCreateDeliveryBatchByJobId(jobId: string) {
     .maybeSingle<DeliveryBatch>();
 
   if (findError) {
-    throw new Error(findError.message);
+    console.error("[delivery] getOrCreateDeliveryBatchByJobId:lookup_error", {
+      jobId,
+      findError
+    });
+    throw new DeliveryTrackingError(
+      "Cannot lookup delivery batch",
+      "BATCH_LOOKUP_FAILED",
+      findError
+    );
   }
 
-  if (existing) return existing;
+  if (existing) {
+    console.info("[delivery] getOrCreateDeliveryBatchByJobId:existing_batch", {
+      jobId,
+      batchId: existing.id
+    });
+    return existing;
+  }
 
   const token = generateDeliveryToken();
   const { data, error } = await supabase
@@ -82,9 +115,21 @@ export async function getOrCreateDeliveryBatchByJobId(jobId: string) {
     .single<DeliveryBatch>();
 
   if (error || !data) {
-    throw new Error(error?.message ?? "Unable to create delivery batch");
+    console.error("[delivery] getOrCreateDeliveryBatchByJobId:create_error", {
+      jobId,
+      error
+    });
+    throw new DeliveryTrackingError(
+      "Cannot create delivery batch",
+      "BATCH_CREATE_FAILED",
+      error
+    );
   }
 
+  console.info("[delivery] getOrCreateDeliveryBatchByJobId:created_batch", {
+    jobId,
+    batchId: data.id
+  });
   return data;
 }
 
@@ -100,7 +145,11 @@ export async function regenerateDeliveryBatchToken(jobId: string) {
     .single<DeliveryBatch>();
 
   if (error || !data) {
-    throw new Error(error?.message ?? "Unable to regenerate token");
+    throw new DeliveryTrackingError(
+      "Unable to regenerate token",
+      "TOKEN_REGENERATE_FAILED",
+      error
+    );
   }
 
   return data;
@@ -116,19 +165,33 @@ export async function listDeliveryTargetsByBatchId(batchId: string) {
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(error.message);
+    throw new DeliveryTrackingError(
+      "Unable to list delivery targets",
+      "TARGETS_LIST_FAILED",
+      error
+    );
   }
 
   return (data ?? []) as DeliveryTarget[];
 }
 
 export async function replaceDeliveryTargets(batchId: string, targets: DeliveryTargetInput[]) {
+  if (!batchId?.trim()) {
+    throw new DeliveryTrackingError("Missing batch id", "MISSING_BATCH_ID");
+  }
+
   const supabase = createAdminClient();
   const { data: existingTargets, error: existingError } = await supabase
     .from("delivery_targets")
     .select("id, status")
     .eq("batch_id", batchId);
-  if (existingError) throw new Error(existingError.message);
+  if (existingError) {
+    throw new DeliveryTrackingError(
+      "Unable to lookup existing targets",
+      "TARGETS_LOOKUP_FAILED",
+      existingError
+    );
+  }
 
   const existingStatusMap = new Map(
     (existingTargets ?? []).map((row) => [row.id as string, row.status as string])
@@ -169,25 +232,50 @@ export async function replaceDeliveryTargets(batchId: string, targets: DeliveryT
       .delete()
       .eq("batch_id", batchId)
       .in("id", deleteIds);
-    if (deleteError) throw new Error(deleteError.message);
+    if (deleteError) {
+      throw new DeliveryTrackingError(
+        "Unable to delete removed targets",
+        "TARGET_DELETE_FAILED",
+        deleteError
+      );
+    }
   }
 
   if (sanitized.length === 0) {
     return [] as DeliveryTarget[];
   }
 
-  const { data, error } = await supabase
-    .from("delivery_targets")
-    .upsert(sanitized, { onConflict: "id" })
-    .select("*")
-    .order("sort_order", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
+  const savedRows: DeliveryTarget[] = [];
+  for (let index = 0; index < sanitized.length; index += 1) {
+    const payload = sanitized[index];
+    const { data, error } = await supabase
+      .from("delivery_targets")
+      .upsert(payload, { onConflict: "id" })
+      .select("*")
+      .single<DeliveryTarget>();
 
-  if (error) {
-    throw new Error(error.message);
+    if (error || !data) {
+      console.error("[delivery] replaceDeliveryTargets:upsert_error", {
+        index,
+        payload,
+        error
+      });
+      throw new DeliveryTrackingError(
+        `Unable to save target at index ${index}`,
+        "TARGET_UPSERT_FAILED",
+        { index, payload, error }
+      );
+    }
+
+    savedRows.push(data);
   }
 
-  return (data ?? []) as DeliveryTarget[];
+  return savedRows.sort((a, b) => {
+    const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.created_at.localeCompare(b.created_at);
+  });
 }
 
 export async function getDeliveryBatchWithTargetsByJobId(jobId: string): Promise<DeliveryBatchWithTargets | null> {
@@ -199,7 +287,13 @@ export async function getDeliveryBatchWithTargetsByJobId(jobId: string): Promise
     .eq("job_id", jobId)
     .maybeSingle<DeliveryBatch>();
 
-  if (batchError) throw new Error(batchError.message);
+  if (batchError) {
+    throw new DeliveryTrackingError(
+      "Unable to load delivery batch by job",
+      "BATCH_LOOKUP_FAILED",
+      batchError
+    );
+  }
   if (!batch) return null;
 
   const targets = await listDeliveryTargetsByBatchId(batch.id);
@@ -221,7 +315,13 @@ export async function getDeliveryBatchWithTargetsByToken(token: string) {
     .eq("is_active", true)
     .maybeSingle<DeliveryBatch>();
 
-  if (batchError) throw new Error(batchError.message);
+  if (batchError) {
+    throw new DeliveryTrackingError(
+      "Unable to load delivery batch by token",
+      "BATCH_TOKEN_LOOKUP_FAILED",
+      batchError
+    );
+  }
   if (!batch) return null;
 
   const { data: job, error: jobError } = await supabase
@@ -231,7 +331,11 @@ export async function getDeliveryBatchWithTargetsByToken(token: string) {
     .single();
 
   if (jobError || !job) {
-    throw new Error(jobError?.message ?? "Unable to load outage job");
+    throw new DeliveryTrackingError(
+      "Unable to load outage job",
+      "OUTAGE_JOB_LOOKUP_FAILED",
+      jobError
+    );
   }
 
   const targets = await listDeliveryTargetsByBatchId(batch.id);
@@ -272,7 +376,11 @@ export async function markTargetDeliveredByToken(args: {
     .single<DeliveryTarget>();
 
   if (error || !data) {
-    throw new Error(error?.message ?? "Unable to update target status");
+    throw new DeliveryTrackingError(
+      "Unable to update target status",
+      "MARK_DELIVERED_FAILED",
+      error
+    );
   }
 
   return data;
@@ -296,7 +404,11 @@ export async function uploadDeliveryProof(args: {
     });
 
   if (error) {
-    throw new Error(error.message);
+    throw new DeliveryTrackingError(
+      "Unable to upload delivery proof image",
+      "PROOF_UPLOAD_FAILED",
+      error
+    );
   }
 
   const { data } = supabase.storage.from(DELIVERY_PROOFS_BUCKET).getPublicUrl(path);

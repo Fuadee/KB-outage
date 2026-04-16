@@ -97,6 +97,10 @@ export default function NoticeScheduleModal({
 
   useEffect(() => {
     if (!open || !job || job.notice_status !== "SCHEDULED") return;
+    console.info("[notice-modal] scheduled job ready for delivery tracking", {
+      jobId: job.id,
+      noticeStatus: job.notice_status
+    });
     fetchDeliverySummary();
   }, [open, job?.id, job?.notice_status]);
 
