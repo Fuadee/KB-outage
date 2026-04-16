@@ -17,7 +17,9 @@ export const createEmptyTarget = (): EditableTarget => ({
   latitudeInput: "",
   longitudeInput: "",
   map_link: "",
-  status: "pending"
+  status: "pending",
+  proof_image_url: null,
+  delivered_at: null
 });
 
 export const toEditableTarget = (target: DeliveryTargetInput & { id: string; status?: DeliveryStatus }): EditableTarget => ({
