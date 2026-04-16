@@ -10,6 +10,7 @@ type DeliveryPayload = {
   summary: { total: number; delivered: number; pending: number };
   targets: Array<{
     id: string;
+    batch_id: string;
     company_name: string;
     contact_name: string | null;
     note: string | null;
@@ -34,7 +35,11 @@ export default function DeliveryListClient({ token }: { token: string }) {
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
-      setError("ลิงก์ไม่ถูกต้อง หรือหมดอายุแล้ว");
+      if (result?.code === "TOKEN_NOT_LATEST" || result?.code === "TOKEN_INACTIVE") {
+        setError(result.error);
+      } else {
+        setError("ลิงก์ไม่ถูกต้อง หรือหมดอายุแล้ว");
+      }
       setData(null);
       return;
     }
@@ -56,9 +61,6 @@ export default function DeliveryListClient({ token }: { token: string }) {
   useEffect(() => {
     loadData();
   }, [token]);
-
-  const isDeliveredTarget = (target: DeliveryPayload["targets"][number]) =>
-    target.status === "delivered" || Boolean(target.delivered_at) || Boolean(target.proof_image_url);
 
   if (error) {
     return <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">{error}</div>;
@@ -89,7 +91,7 @@ export default function DeliveryListClient({ token }: { token: string }) {
 
       <div className="space-y-3">
         {data.targets.map((target) => {
-          const delivered = isDeliveredTarget(target);
+          const delivered = target.status === "delivered";
           return (
           <div key={target.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-start justify-between gap-2">
@@ -116,7 +118,7 @@ export default function DeliveryListClient({ token }: { token: string }) {
                   เปิดแผนที่
                 </a>
               ) : null}
-              {target.proof_image_url ? (
+              {delivered && target.proof_image_url ? (
                 <a
                   href={`/api/public-delivery/${token}/targets/${target.id}/proof`}
                   target="_blank"

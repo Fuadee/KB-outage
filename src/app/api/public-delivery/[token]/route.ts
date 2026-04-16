@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { getDeliveryBatchWithTargetsByToken, getDeliveryMapUrl } from "@/lib/deliveryTracking";
+import {
+  getDeliveryBatchByToken,
+  getDeliveryBatchWithTargetsByToken,
+  getDeliveryMapUrl,
+  getLatestActiveDeliveryBatchByJobId,
+  listDeliveryTargetsByBatchId
+} from "@/lib/deliveryTracking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const isDeliveredTarget = (target: {
-  status: string;
-  delivered_at: string | null;
-  proof_image_url: string | null;
-}) => target.status === "delivered" || Boolean(target.delivered_at) || Boolean(target.proof_image_url);
 
 export async function GET(
   _request: Request,
@@ -22,6 +22,57 @@ export async function GET(
         { status: 400 }
       );
     }
+    const tokenBatch = await getDeliveryBatchByToken(token);
+
+    console.info("[delivery-public] token lookup", {
+      token,
+      found: Boolean(tokenBatch),
+      batch_id: tokenBatch?.id ?? null,
+      job_id: tokenBatch?.job_id ?? null,
+      is_active: tokenBatch?.is_active ?? null
+    });
+
+    if (!tokenBatch) {
+      return NextResponse.json(
+        { ok: false, error: "invalid token", code: "TOKEN_NOT_FOUND" },
+        { status: 404 }
+      );
+    }
+
+    if (!tokenBatch.is_active) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "ลิงก์นี้เป็น token เก่าที่ถูกปิดใช้งานแล้ว",
+          code: "TOKEN_INACTIVE"
+        },
+        { status: 410 }
+      );
+    }
+
+    const latestActiveBatch = await getLatestActiveDeliveryBatchByJobId(tokenBatch.job_id);
+    if (latestActiveBatch && latestActiveBatch.access_token !== token) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "ลิงก์นี้ไม่ใช่ token ล่าสุด กรุณาขอลิงก์ใหม่จากผู้ดูแล",
+          code: "TOKEN_NOT_LATEST",
+          data: {
+            requested_batch_id: tokenBatch.id,
+            latest_batch_id: latestActiveBatch.id
+          }
+        },
+        { status: 409 }
+      );
+    }
+
+    const batchTargets = await listDeliveryTargetsByBatchId(tokenBatch.id);
+    console.info("[delivery-public] resolved batch targets", {
+      token,
+      batch_id: tokenBatch.id,
+      target_ids: batchTargets.map((target) => target.id)
+    });
+
     const data = await getDeliveryBatchWithTargetsByToken(token);
 
     if (!data) {
@@ -32,13 +83,13 @@ export async function GET(
     }
 
     const mappedTargets = data.targets.map((target) => {
-      const derivedDelivered = isDeliveredTarget(target);
       return {
         id: target.id,
+        batch_id: target.batch_id,
         company_name: target.company_name,
         contact_name: target.contact_name,
         note: target.note,
-        status: derivedDelivered ? "delivered" : "pending",
+        status: target.status,
         delivered_at: target.delivered_at,
         map_url: getDeliveryMapUrl(target),
         proof_image_url: target.proof_image_url
@@ -64,10 +115,12 @@ export async function GET(
     };
 
     console.info("[delivery-public] list payload fetched", {
-      token: `${token.slice(0, 8)}...`,
+      token,
+      resolved_batch_id: data.batch.id,
       summary: responsePayload.data.summary,
       targets: responsePayload.data.targets.map((target) => ({
         id: target.id,
+        batch_id: target.batch_id,
         company_name: target.company_name,
         status: target.status,
         delivered_at: target.delivered_at,
