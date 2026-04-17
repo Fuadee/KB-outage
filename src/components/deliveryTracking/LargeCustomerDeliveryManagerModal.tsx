@@ -54,11 +54,16 @@ export default function LargeCustomerDeliveryManagerModal({
   jobId,
   onSaved
 }: DeliveryTrackingModalProps) {
-  const [targets, setTargets] = useState<EditableTarget[]>([]);
+  const [localTargets, setLocalTargets] = useState<EditableTarget[]>([]);
+  const [persistedTargets, setPersistedTargets] = useState<EditableTarget[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isCreatingToken, setIsCreatingToken] = useState(false);
+  const [isRegeneratingToken, setIsRegeneratingToken] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deliveryLink, setDeliveryLink] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [hasToken, setHasToken] = useState(false);
+  const [currentToken, setCurrentToken] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DeliveryStatus>("all");
@@ -68,18 +73,18 @@ export default function LargeCustomerDeliveryManagerModal({
   const hasJobId = jobId.trim().length > 0;
 
   const summary = useMemo(() => {
-    const total = targets.length;
-    const delivered = targets.filter((item) => item.status === "delivered").length;
+    const total = localTargets.length;
+    const delivered = localTargets.filter((item) => item.status === "delivered").length;
     return {
       total,
       delivered,
       pending: total - delivered
     };
-  }, [targets]);
+  }, [localTargets]);
 
   const filteredTargets = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
-    return targets.filter((item) => {
+    return localTargets.filter((item) => {
       const statusMatch = statusFilter === "all" ? true : item.status === statusFilter;
       if (!statusMatch) return false;
       if (!keyword) return true;
@@ -87,12 +92,18 @@ export default function LargeCustomerDeliveryManagerModal({
         .map((value) => value?.toLowerCase() ?? "")
         .some((value) => value.includes(keyword));
     });
-  }, [searchText, statusFilter, targets]);
+  }, [localTargets, searchText, statusFilter]);
 
   const editingItem = useMemo(
-    () => targets.find((item) => item.tempId === editingId) ?? null,
-    [targets, editingId]
+    () => localTargets.find((item) => item.tempId === editingId) ?? null,
+    [localTargets, editingId]
   );
+
+  const deliveryLink = useMemo(() => {
+    if (!currentToken) return null;
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    return origin ? `${origin}/delivery/${currentToken}` : null;
+  }, [currentToken]);
 
   const clearFieldErrors = (tempId: string) => {
     setFieldErrors((prev) => {
@@ -106,7 +117,7 @@ export default function LargeCustomerDeliveryManagerModal({
 
   const patchTarget = (tempId: string, patch: Partial<EditableTarget>) => {
     clearFieldErrors(tempId);
-    setTargets((prev) => prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target)));
+    setLocalTargets((prev) => prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target)));
   };
 
   const validateItem = (item: EditableTarget) => {
@@ -153,31 +164,45 @@ export default function LargeCustomerDeliveryManagerModal({
     return payload;
   };
 
+  const hydrateFromServer = (payload: { batch?: { access_token?: string | null }; targets?: DeliveryTarget[] } | null) => {
+    const mappedTargets = (payload?.targets ?? []).map((target) => toEditableTarget(target));
+    setPersistedTargets(mappedTargets);
+    setLocalTargets(mappedTargets);
+
+    const token = payload?.batch?.access_token ?? null;
+    setCurrentToken(token);
+    setHasToken(Boolean(token));
+  };
+
   const loadExisting = async () => {
     if (!hasJobId) {
       setError("ต้องบันทึกกำหนดการก่อน");
-      setTargets([]);
+      setLocalTargets([]);
+      setPersistedTargets([]);
+      setCurrentToken(null);
+      setHasToken(false);
       return;
     }
+
     setError(null);
+    setSuccess(null);
+    setIsRefreshing(true);
+
     const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, { method: "GET" });
     const result = await response.json().catch(() => null);
 
     if (!response.ok || !result?.ok) {
       setError(result?.error ?? "โหลดข้อมูลไม่สำเร็จ");
-      setTargets([]);
+      setLocalTargets([]);
+      setPersistedTargets([]);
+      setCurrentToken(null);
+      setHasToken(false);
+      setIsRefreshing(false);
       return;
     }
 
-    const payload = result.data;
-    const nextTargets = (payload?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
-    setTargets(nextTargets);
-
-    if (payload?.batch?.access_token) {
-      setDeliveryLink(`${window.location.origin}/delivery/${payload.batch.access_token}`);
-    } else {
-      setDeliveryLink(null);
-    }
+    hydrateFromServer(result.data);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
@@ -185,18 +210,9 @@ export default function LargeCustomerDeliveryManagerModal({
     loadExisting();
   }, [open, hasJobId]);
 
-  const saveTargets = async (regenerateToken = false) => {
-    if (!hasJobId) {
-      setError("ต้องบันทึกกำหนดการก่อน");
-      return false;
-    }
-
-    setIsSaving(true);
-    setError(null);
-    setFieldErrors({});
-
+  const validateBeforeSave = () => {
     const nextFieldErrors: Record<string, string> = {};
-    targets.forEach((item) => {
+    localTargets.forEach((item) => {
       const validation = validateItem(item);
       Object.assign(nextFieldErrors, validation.nextErrors);
       const hasOtherContent =
@@ -213,14 +229,37 @@ export default function LargeCustomerDeliveryManagerModal({
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setError("กรุณาตรวจสอบข้อมูลรายการที่มีข้อผิดพลาด");
-      setIsSaving(false);
       return false;
     }
 
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, {
+    return true;
+  };
+
+  const saveTargets = async () => {
+    if (!hasJobId) {
+      setError("ต้องบันทึกกำหนดการก่อน");
+      return false;
+    }
+
+    if (!hasToken) {
+      setError("ต้องสร้างลิงก์ก่อน จึงจะบันทึกรายการได้");
+      return false;
+    }
+
+    setFieldErrors({});
+    setError(null);
+    setSuccess(null);
+
+    if (!validateBeforeSave()) {
+      return false;
+    }
+
+    setIsSaving(true);
+
+    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/targets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ regenerateToken, targets: mapPayload(targets) })
+      body: JSON.stringify({ targets: mapPayload(localTargets) })
     });
 
     const result = await response.json().catch(() => null);
@@ -230,16 +269,75 @@ export default function LargeCustomerDeliveryManagerModal({
       return false;
     }
 
-    const batch = result.data?.batch;
-    const nextTargets = result.data?.targets ?? [];
-    setTargets(nextTargets.map((target: DeliveryTarget) => toEditableTarget(target)));
-    if (batch?.access_token) {
-      setDeliveryLink(`${window.location.origin}/delivery/${batch.access_token}`);
-    }
-
+    const nextTargets = (result.data?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
+    setPersistedTargets(nextTargets);
+    setLocalTargets(nextTargets);
+    setSuccess("บันทึกรายการสำเร็จ");
     setIsSaving(false);
     onSaved?.();
     return true;
+  };
+
+  const createToken = async () => {
+    if (!hasJobId) {
+      setError("ต้องบันทึกกำหนดการก่อน");
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setIsCreatingToken(true);
+
+    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/token`, { method: "POST" });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      setError(result?.error ?? "ไม่สามารถสร้างลิงก์ได้");
+      setIsCreatingToken(false);
+      return;
+    }
+
+    const token = result.data?.batch?.access_token ?? null;
+    setCurrentToken(token);
+    setHasToken(Boolean(token));
+    setSuccess("สร้างลิงก์สำเร็จ สามารถคัดลอกลิงก์ได้ทันที");
+    setIsCreatingToken(false);
+    onSaved?.();
+  };
+
+  const regenerateToken = async () => {
+    if (!hasJobId) {
+      setError("ต้องบันทึกกำหนดการก่อน");
+      return;
+    }
+
+    if (!hasToken) {
+      setError("ยังไม่มีลิงก์เดิมให้รีเซ็ต กรุณากด “สร้างลิงก์” ก่อน");
+      return;
+    }
+
+    const confirmed = window.confirm("ลิงก์เดิมจะใช้งานไม่ได้ ต้องการสร้างใหม่หรือไม่?");
+    if (!confirmed) return;
+
+    setError(null);
+    setSuccess(null);
+    setIsRegeneratingToken(true);
+
+    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/token/regenerate`, { method: "POST" });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      setError(result?.error ?? "ไม่สามารถสร้างลิงก์ใหม่ได้");
+      setIsRegeneratingToken(false);
+      return;
+    }
+
+    const token = result.data?.batch?.access_token ?? null;
+    setCurrentToken(token);
+    setHasToken(Boolean(token));
+    setSuccess("สร้างลิงก์ใหม่สำเร็จ ลิงก์เดิมถูกรีเซ็ตแล้ว");
+    setIsRegeneratingToken(false);
+    onSaved?.();
   };
 
   const commitCreateItem = () => {
@@ -249,13 +347,14 @@ export default function LargeCustomerDeliveryManagerModal({
       setFieldErrors((prev) => ({ ...prev, ...validation.nextErrors }));
       return;
     }
-    setTargets((prev) => [...prev, creatingItem]);
+    setLocalTargets((prev) => [...prev, creatingItem]);
     setCreatingItem(null);
   };
 
   const copyLink = async () => {
-    if (!deliveryLink) return;
+    if (!deliveryLink || !hasToken) return;
     await navigator.clipboard.writeText(deliveryLink);
+    setSuccess("คัดลอกลิงก์เรียบร้อย");
   };
 
   return (
@@ -291,21 +390,53 @@ export default function LargeCustomerDeliveryManagerModal({
                 <Button type="button" variant="secondary" className="!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
                   เพิ่มรายการ
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!w-auto"
+                  onClick={loadExisting}
+                  disabled={isRefreshing || isSaving || isCreatingToken || isRegeneratingToken || !hasJobId}
+                >
+                  {isRefreshing ? "กำลังรีเฟรช..." : "รีเฟรชข้อมูล"}
+                </Button>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-700 pt-3">
-                {deliveryLink ? (
-                  <>
-                    <p className="text-xs text-slate-300">Public delivery link</p>
-                    <code className="max-w-full flex-1 truncate rounded bg-slate-950 px-2 py-1 text-xs text-emerald-200">{deliveryLink}</code>
-                    <Button type="button" size="sm" variant="secondary" className="!w-auto" onClick={copyLink}>
-                      Copy link
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="button" size="sm" onClick={() => saveTargets(true)} disabled={isSaving || isGenerating || !hasJobId} className="!w-auto">
-                    สร้างลิงก์สำหรับทีมภายนอก
+              <div className="mt-3 grid gap-2 border-t border-slate-700 pt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="!w-auto"
+                    onClick={createToken}
+                    disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId}
+                  >
+                    {isCreatingToken ? "กำลังสร้าง..." : "สร้างลิงก์"}
                   </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="!w-auto border border-red-500/60 text-red-200 hover:bg-red-500/10"
+                    onClick={regenerateToken}
+                    disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId || !hasToken}
+                  >
+                    {isRegeneratingToken ? "กำลังสร้าง..." : "สร้างลิงก์ใหม่ (รีเซ็ตลิงก์เดิม)"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="!w-auto"
+                    onClick={copyLink}
+                    disabled={!hasToken || !deliveryLink}
+                  >
+                    Copy link
+                  </Button>
+                </div>
+                {deliveryLink ? (
+                  <code className="max-w-full truncate rounded bg-slate-950 px-2 py-1 text-xs text-emerald-200">{deliveryLink}</code>
+                ) : (
+                  <p className="text-xs text-slate-400">ยังไม่มีลิงก์ กรุณากด “สร้างลิงก์”</p>
                 )}
               </div>
             </div>
@@ -314,36 +445,53 @@ export default function LargeCustomerDeliveryManagerModal({
           <LargeCustomerDeliveryList
             items={filteredTargets}
             onEdit={(item) => setEditingId(item.tempId)}
-            onDelete={(tempId) => setTargets((prev) => prev.filter((item) => item.tempId !== tempId))}
-            onToggleStatus={(tempId) =>
-              setTargets((prev) =>
-                prev.map((item) =>
-                  item.tempId === tempId
-                    ? { ...item, status: item.status === "delivered" ? "pending" : "delivered" }
-                    : item
-                )
-              )
-            }
+            onDelete={(tempId) => setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId))}
+            onToggleStatus={async (tempId) => {
+              const toggled: EditableTarget[] = localTargets.map((item) =>
+                item.tempId === tempId
+                  ? {
+                      ...item,
+                      status: (item.status === "delivered" ? "pending" : "delivered") as DeliveryStatus
+                    }
+                  : item
+              );
+
+              setLocalTargets(toggled);
+              if (!hasToken) {
+                setError("ต้องสร้างลิงก์ก่อน จึงจะอัปเดตสถานะได้");
+                return;
+              }
+
+              setError(null);
+              setSuccess(null);
+              const response = await fetch(`/api/jobs/${jobId}/delivery-batch/targets`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ targets: mapPayload(toggled) })
+              });
+              const result = await response.json().catch(() => null);
+
+              if (!response.ok || !result?.ok) {
+                setError(result?.error ?? "ไม่สามารถบันทึกสถานะได้");
+                setLocalTargets(persistedTargets);
+                return;
+              }
+
+              const nextTargets = (result.data?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
+              setPersistedTargets(nextTargets);
+              setLocalTargets(nextTargets);
+              setSuccess("อัปเดตสถานะเรียบร้อย");
+            }}
           />
 
           {error ? <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div> : null}
+          {success ? <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{success}</div> : null}
 
           <div className="mt-auto flex flex-wrap justify-end gap-2 border-t border-slate-700 pt-3">
             {!hasJobId ? <p className="mr-auto text-xs text-amber-300">ต้องบันทึกกำหนดการก่อน จึงจะตั้งค่าการติดตามได้</p> : null}
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>ปิด</Button>
-            <Button type="button" onClick={() => saveTargets(false)} disabled={isSaving || isGenerating || !hasJobId}>
-              {isSaving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
-            </Button>
-            <Button
-              type="button"
-              onClick={async () => {
-                setIsGenerating(true);
-                await saveTargets(true);
-                setIsGenerating(false);
-              }}
-              disabled={isSaving || isGenerating || !hasJobId}
-            >
-              {isGenerating ? "กำลังสร้าง..." : "สร้างลิงก์ใหม่"}
+            <Button type="button" onClick={saveTargets} disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId || !hasToken}>
+              {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
             </Button>
           </div>
         </div>
