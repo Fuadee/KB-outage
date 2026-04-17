@@ -211,10 +211,32 @@ export async function regenerateDeliveryBatchToken(jobId: string) {
   const supabase = createAdminClient();
   const token = generateDeliveryToken();
 
+  const { data: existing, error: lookupError } = await supabase
+    .from("delivery_batches")
+    .select("*")
+    .eq("job_id", jobId)
+    .maybeSingle<DeliveryBatch>();
+
+  if (lookupError) {
+    throw new DeliveryTrackingError(
+      "Unable to lookup delivery batch before regenerating token",
+      "BATCH_LOOKUP_FAILED",
+      lookupError
+    );
+  }
+
+  if (!existing) {
+    throw new DeliveryTrackingError(
+      "Cannot regenerate token before batch is created",
+      "BATCH_NOT_FOUND",
+      { jobId }
+    );
+  }
+
   const { data, error } = await supabase
     .from("delivery_batches")
     .update({ access_token: token })
-    .eq("job_id", jobId)
+    .eq("id", existing.id)
     .select("*")
     .single<DeliveryBatch>();
 
