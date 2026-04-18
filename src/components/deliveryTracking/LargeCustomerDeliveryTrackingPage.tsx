@@ -67,7 +67,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<EditableTarget | null>(null);
   const [selectedTempId, setSelectedTempId] = useState<string | null>(null);
-  const [entryMode, setEntryMode] = useState<"table" | "legacy">("table");
+  const [entryMode, setEntryMode] = useState<"table" | "legacy">("legacy");
 
   const isEmptyRow = (item: EditableTarget) =>
     !item.company_name.trim() &&
@@ -394,19 +394,19 @@ export default function LargeCustomerDeliveryTrackingPage({
           <div className="flex gap-2">
             <Button
               type="button"
-              variant={entryMode === "table" ? "primary" : "secondary"}
-              className="!w-auto"
-              onClick={() => setEntryMode("table")}
-            >
-              โหมดตาราง (Excel)
-            </Button>
-            <Button
-              type="button"
-              variant={entryMode === "legacy" ? "primary" : "secondary"}
+              variant="primary"
               className="!w-auto"
               onClick={() => setEntryMode("legacy")}
             >
-              โหมดเดิม (Fallback)
+              กรอกทีละรายการ (แนะนำ)
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="!w-auto"
+              onClick={() => setEntryMode("table")}
+            >
+              วางจาก Excel (ขั้นสูง)
             </Button>
           </div>
           <Button type="button" variant="secondary" className="!w-auto" onClick={loadExisting} disabled={isRefreshing || isSaving}>
