@@ -68,6 +68,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   const [creatingItem, setCreatingItem] = useState<EditableTarget | null>(null);
   const [selectedTempId, setSelectedTempId] = useState<string | null>(null);
   const [entryMode, setEntryMode] = useState<"table" | "legacy">("legacy");
+  const [pageMode, setPageMode] = useState<"setup" | "field">("field");
 
   const isEmptyRow = (item: EditableTarget) =>
     !item.company_name.trim() &&
@@ -365,7 +366,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   };
 
   return (
-    <div className="space-y-4 bg-[#0B1220] pb-[calc(120px+env(safe-area-inset-bottom))] text-gray-300">
+    <div className="space-y-4 bg-[#0B1220] pb-6 text-gray-300">
       <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-3.5 sm:p-4">
         <div className="space-y-3">
           <div className="space-y-1">
@@ -390,27 +391,23 @@ export default function LargeCustomerDeliveryTrackingPage({
       <LargeCustomerDeliverySummary total={summary.total} delivered={summary.delivered} pending={summary.pending} />
 
       <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
-              variant={entryMode === "legacy" ? "primary" : "secondary"}
+              variant={pageMode === "setup" ? "primary" : "secondary"}
               className="min-h-11 !w-full text-sm sm:!w-auto"
-              onClick={() => setEntryMode("legacy")}
+              onClick={() => setPageMode("setup")}
             >
-              กรอกทีละรายการ (แนะนำ)
+              หน้า Setup (จัดการลูกค้า)
             </Button>
             <Button
               type="button"
-              variant="ghost"
-              className={`min-h-11 !w-full rounded-lg border px-3 py-2 text-sm ${
-                entryMode === "table"
-                  ? "border-slate-500 bg-slate-700/40 text-slate-100"
-                  : "border-slate-700 bg-transparent text-slate-300 hover:border-slate-500 hover:text-white"
-              } sm:!w-auto`}
-              onClick={() => setEntryMode("table")}
+              variant={pageMode === "field" ? "primary" : "secondary"}
+              className="min-h-11 !w-full text-sm sm:!w-auto"
+              onClick={() => setPageMode("field")}
             >
-              วางจาก Excel (ขั้นสูง)
+              หน้า Field (ถ่ายรูป/แจ้งแล้ว)
             </Button>
           </div>
           <Button type="button" variant="secondary" className="min-h-10 !w-full text-xs sm:!w-auto sm:text-sm" onClick={loadExisting} disabled={isRefreshing || isSaving}>
@@ -419,17 +416,108 @@ export default function LargeCustomerDeliveryTrackingPage({
         </div>
       </div>
 
-      {entryMode === "table" ? (
-        <ExcelEditableTargetTable
-          rows={localTargets}
-          fieldErrors={fieldErrors}
-          isSaving={isSaving}
-          onCellChange={patchTarget}
-          onPasteFromClipboard={pasteFromExcel}
-          onClearAll={clearAllRows}
-          onAddRows={addRows}
-          onSaveAll={saveTargets}
-        />
+      {pageMode === "setup" ? (
+        <>
+          <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant={entryMode === "legacy" ? "primary" : "secondary"}
+                  className="min-h-11 !w-full text-sm sm:!w-auto"
+                  onClick={() => setEntryMode("legacy")}
+                >
+                  กรอกทีละรายการ (แนะนำ)
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`min-h-11 !w-full rounded-lg border px-3 py-2 text-sm ${
+                    entryMode === "table"
+                      ? "border-slate-500 bg-slate-700/40 text-slate-100"
+                      : "border-slate-700 bg-transparent text-slate-300 hover:border-slate-500 hover:text-white"
+                  } sm:!w-auto`}
+                  onClick={() => setEntryMode("table")}
+                >
+                  วางจาก Excel (ขั้นสูง)
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {entryMode === "table" ? (
+            <ExcelEditableTargetTable
+              rows={localTargets}
+              fieldErrors={fieldErrors}
+              isSaving={isSaving}
+              onCellChange={patchTarget}
+              onPasteFromClipboard={pasteFromExcel}
+              onClearAll={clearAllRows}
+              onAddRows={addRows}
+              onSaveAll={saveTargets}
+            />
+          ) : (
+            <>
+              <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    type="text"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="ค้นหาชื่อลูกค้า"
+                    className="min-w-[220px] flex-1"
+                  />
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value as "all" | DeliveryStatus)}
+                    className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-200"
+                  >
+                    <option value="all">ทุกสถานะ</option>
+                    <option value="delivered">แจ้งแล้ว</option>
+                    <option value="pending">ยังไม่แจ้ง</option>
+                  </select>
+                  <Button type="button" variant="secondary" className="min-h-10 !w-full sm:!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
+                    เพิ่มรายการ
+                  </Button>
+                </div>
+              </div>
+
+              <LargeCustomerDeliveryList
+                jobId={jobId}
+                items={filteredTargets}
+                selectedTempId={selectedTempId}
+                onRowSelect={setSelectedTempId}
+                onEdit={(item) => {
+                  console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
+                  setEditingId(item.tempId);
+                }}
+                onDelete={(tempId) => {
+                  console.info("[delivery-tracking-page] delete item", { jobId, tempId });
+                  setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+                }}
+                onMarkNotified={markItemAsNotified}
+                onProofSaved={(tempId, patch) => {
+                  setLocalTargets((prev) =>
+                    prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
+                  );
+                  setSuccess("บันทึกรูปหลักฐานสำเร็จ");
+                  setError(null);
+                }}
+              />
+            </>
+          )}
+
+          <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" className="min-h-10 !w-full rounded-xl px-3 py-2.5 sm:!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
+                ย้อนกลับ
+              </Button>
+              <Button type="button" className="min-h-10 !w-full rounded-xl px-3 py-2.5 sm:!w-auto" onClick={saveTargets} disabled={isSaving}>
+                {isSaving ? "กำลังบันทึก..." : "💾 บันทึกข้อมูลลูกค้า"}
+              </Button>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
@@ -450,10 +538,8 @@ export default function LargeCustomerDeliveryTrackingPage({
                 <option value="delivered">แจ้งแล้ว</option>
                 <option value="pending">ยังไม่แจ้ง</option>
               </select>
-              <Button type="button" variant="secondary" className="min-h-10 !w-full sm:!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
-                เพิ่มรายการ
-              </Button>
             </div>
+            <p className="mt-2 text-xs text-slate-400">โหมดหน้างานสำหรับถ่ายรูป/แจ้งแล้วเท่านั้น (ซ่อนปุ่มบันทึกข้อมูลลูกค้า)</p>
           </div>
 
           <div className="relative z-20">
@@ -464,11 +550,13 @@ export default function LargeCustomerDeliveryTrackingPage({
               onRowSelect={setSelectedTempId}
               onEdit={(item) => {
                 console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
+                setPageMode("setup");
                 setEditingId(item.tempId);
               }}
               onDelete={(tempId) => {
                 console.info("[delivery-tracking-page] delete item", { jobId, tempId });
-                setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+                setPageMode("setup");
+                setError("กรุณาไปที่หน้า Setup หากต้องการลบรายการลูกค้า");
               }}
               onMarkNotified={markItemAsNotified}
               onProofSaved={(tempId, patch) => {
@@ -480,6 +568,12 @@ export default function LargeCustomerDeliveryTrackingPage({
               }}
             />
           </div>
+
+          <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
+            <Button type="button" variant="secondary" className="min-h-10 !w-full rounded-xl px-3 py-2.5 sm:!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
+              ย้อนกลับ
+            </Button>
+          </div>
         </>
       )}
 
@@ -489,17 +583,6 @@ export default function LargeCustomerDeliveryTrackingPage({
 
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
       {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}
-
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/80 bg-slate-900/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_24px_-18px_rgba(15,23,42,1)] backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl gap-2 px-2.5 sm:px-4">
-          <Button type="button" variant="secondary" className="min-h-10 flex-1 rounded-xl px-3 py-2.5 text-base" onClick={() => router.push(`/job/${jobId}`)}>
-            ย้อนกลับ
-          </Button>
-          <Button type="button" className="min-h-10 flex-1 rounded-xl px-3 py-2.5 text-base" onClick={saveTargets} disabled={isSaving}>
-            {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
-          </Button>
-        </div>
-      </div>
 
       <EditLargeCustomerDeliveryItemModal
         open={Boolean(editingItem)}
