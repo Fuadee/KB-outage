@@ -365,19 +365,19 @@ export default function LargeCustomerDeliveryTrackingPage({
   };
 
   return (
-    <div className="space-y-4 bg-[#0B1220] text-gray-300">
-      <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4 bg-[#0B1220] pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-gray-300">
+      <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-3.5 sm:p-4">
+        <div className="space-y-3">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-gray-400">Major Customers</p>
-            <h1 className="text-xl font-semibold text-white">ติดตามการแจ้งผู้ใช้ไฟฟ้ารายใหญ่</h1>
-            <p className="text-sm text-gray-300">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Major Customers</p>
+            <h1 className="text-lg font-semibold leading-6 text-white sm:text-xl">ติดตามการแจ้งผู้ใช้ไฟฟ้ารายใหญ่</h1>
+            <p className="text-xs text-gray-300 sm:text-sm">
               งาน {job?.equipment_code ?? jobId} • วันที่ดับไฟ {formatThaiDate(job?.outage_date)}
             </p>
             {jobError ? <p className="text-xs text-amber-300">{jobError}</p> : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" className="!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            <Button type="button" variant="secondary" className="!w-auto px-3 py-1.5 text-xs" onClick={() => router.push(`/job/${jobId}`)}>
               ย้อนกลับหน้างาน
             </Button>
             <Link href={`/job/${jobId}`} className="text-xs text-gray-300 underline underline-offset-2 hover:text-white">
@@ -390,26 +390,30 @@ export default function LargeCustomerDeliveryTrackingPage({
       <LargeCustomerDeliverySummary total={summary.total} delivered={summary.delivered} pending={summary.pending} />
 
       <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
-              variant="primary"
-              className="!w-auto"
+              variant={entryMode === "legacy" ? "primary" : "secondary"}
+              className="min-h-11 !w-full text-sm sm:!w-auto"
               onClick={() => setEntryMode("legacy")}
             >
               กรอกทีละรายการ (แนะนำ)
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              className="!w-auto"
+              variant="ghost"
+              className={`min-h-11 !w-full rounded-lg border px-3 py-2 text-sm ${
+                entryMode === "table"
+                  ? "border-slate-500 bg-slate-700/40 text-slate-100"
+                  : "border-slate-700 bg-transparent text-slate-300 hover:border-slate-500 hover:text-white"
+              } sm:!w-auto`}
               onClick={() => setEntryMode("table")}
             >
               วางจาก Excel (ขั้นสูง)
             </Button>
           </div>
-          <Button type="button" variant="secondary" className="!w-auto" onClick={loadExisting} disabled={isRefreshing || isSaving}>
+          <Button type="button" variant="secondary" className="min-h-10 !w-full text-xs sm:!w-auto sm:text-sm" onClick={loadExisting} disabled={isRefreshing || isSaving}>
             {isRefreshing ? "กำลังรีเฟรช..." : "รีเฟรชข้อมูล"}
           </Button>
         </div>
@@ -429,7 +433,7 @@ export default function LargeCustomerDeliveryTrackingPage({
       ) : (
         <>
           <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 type="text"
                 value={searchText}
@@ -440,13 +444,13 @@ export default function LargeCustomerDeliveryTrackingPage({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as "all" | DeliveryStatus)}
-                className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-300"
+                className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-200"
               >
                 <option value="all">ทุกสถานะ</option>
                 <option value="delivered">แจ้งแล้ว</option>
                 <option value="pending">ยังไม่แจ้ง</option>
               </select>
-              <Button type="button" variant="secondary" className="!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
+              <Button type="button" variant="secondary" className="min-h-10 !w-full sm:!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
                 เพิ่มรายการ
               </Button>
             </div>
@@ -486,13 +490,15 @@ export default function LargeCustomerDeliveryTrackingPage({
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
       {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 border-t border-slate-700 bg-[#0B1220]/95 py-3 backdrop-blur">
-        <Button type="button" variant="secondary" className="!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
-          ย้อนกลับ
-        </Button>
-        <Button type="button" className="!w-auto" onClick={saveTargets} disabled={isSaving}>
-          {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
-        </Button>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700 bg-[#0B1220] pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_24px_-18px_rgba(15,23,42,1)] backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl gap-2 px-3 sm:px-4">
+          <Button type="button" variant="secondary" className="min-h-11 !w-[38%]" onClick={() => router.push(`/job/${jobId}`)}>
+            ย้อนกลับ
+          </Button>
+          <Button type="button" className="min-h-11 !w-[62%]" onClick={saveTargets} disabled={isSaving}>
+            {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
+          </Button>
+        </div>
       </div>
 
       <EditLargeCustomerDeliveryItemModal

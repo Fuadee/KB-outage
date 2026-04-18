@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LatLngBounds } from "leaflet";
 import type { EditableTarget } from "./types";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
@@ -55,6 +55,7 @@ function MapViewportController({ points }: { points: CustomerMapPoint[] }) {
 
 export default function CustomerMapSection({ items, selectedTempId, onMarkerSelect }: CustomerMapSectionProps) {
   void selectedTempId;
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const mapPoints = useMemo<CustomerMapPoint[]>(() => {
     return items.flatMap((item, index) => {
       if (!isValidCoordinate(item.latitude, item.longitude)) {
@@ -74,17 +75,28 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
   }, [items]);
 
   return (
-    <section className="relative isolate rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#101a2d] to-[#0d1627] p-4 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)]">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-white">แผนที่ลูกค้าทั้งหมด</h2>
+    <section className="relative isolate rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#101a2d] to-[#0d1627] p-3 sm:p-4 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)]">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-white sm:text-base">แผนที่ลูกค้าทั้งหมด</h2>
+        <button
+          type="button"
+          className="rounded-md px-2 py-1 text-xs font-medium text-slate-300 underline underline-offset-2 hover:text-white"
+          onClick={() => setIsCollapsed((prev) => !prev)}
+        >
+          {isCollapsed ? "เปิดแผนที่" : "ย่อแผนที่"}
+        </button>
       </div>
 
-      {mapPoints.length === 0 ? (
+      {isCollapsed ? (
+        <div className="rounded-xl border border-slate-600/70 bg-[#0B1220] px-4 py-3 text-sm text-slate-300">
+          แผนที่ถูกย่อไว้ เพื่อเน้นการทำงานรายการลูกค้า
+        </div>
+      ) : mapPoints.length === 0 ? (
         <div className="rounded-xl border border-slate-600/70 bg-[#0B1220] px-4 py-6 text-sm text-gray-300">
           ยังไม่มีพิกัดสำหรับแสดงบนแผนที่
         </div>
       ) : (
-        <div className="relative z-0 h-[360px] w-full overflow-hidden rounded-xl border border-slate-600/70 bg-[#0B1220]">
+        <div className="relative z-0 h-56 w-full overflow-hidden rounded-xl border border-slate-600/70 bg-[#0B1220] sm:h-64 md:h-[320px]">
           <MapContainer
             center={KRABI_CENTER}
             zoom={11}
@@ -121,7 +133,7 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
           </MapContainer>
         </div>
       )}
-      {mapPoints.length > 0 ? (
+      {!isCollapsed && mapPoints.length > 0 ? (
         <ol className="mt-3 space-y-1.5 text-sm text-slate-200">
           {mapPoints.map((point, index) => (
             <li key={point.tempId} className="flex items-center gap-2">
