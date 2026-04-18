@@ -321,13 +321,13 @@ export default function LargeCustomerDeliveryTrackingPage({
   };
 
   return (
-    <div className="space-y-4">
-      <header className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4">
+    <div className="space-y-4 bg-[#0B1220] text-gray-300">
+      <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Major Customers</p>
-            <h1 className="text-xl font-semibold text-slate-100">ติดตามการแจ้งผู้ใช้ไฟฟ้ารายใหญ่</h1>
-            <p className="text-sm text-slate-300">
+            <p className="text-xs uppercase tracking-[0.25em] text-gray-400">Major Customers</p>
+            <h1 className="text-xl font-semibold text-white">ติดตามการแจ้งผู้ใช้ไฟฟ้ารายใหญ่</h1>
+            <p className="text-sm text-gray-300">
               งาน {job?.equipment_code ?? jobId} • วันที่ดับไฟ {formatThaiDate(job?.outage_date)}
             </p>
             {jobError ? <p className="text-xs text-amber-300">{jobError}</p> : null}
@@ -336,7 +336,7 @@ export default function LargeCustomerDeliveryTrackingPage({
             <Button type="button" variant="secondary" className="!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
               ย้อนกลับหน้างาน
             </Button>
-            <Link href={`/job/${jobId}`} className="text-xs text-slate-300 underline underline-offset-2">
+            <Link href={`/job/${jobId}`} className="text-xs text-gray-300 underline underline-offset-2 hover:text-white">
               เปิดรายละเอียดงาน
             </Link>
           </div>
@@ -345,7 +345,7 @@ export default function LargeCustomerDeliveryTrackingPage({
 
       <LargeCustomerDeliverySummary total={summary.total} delivered={summary.delivered} pending={summary.pending} />
 
-      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+      <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="text"
@@ -357,7 +357,7 @@ export default function LargeCustomerDeliveryTrackingPage({
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as "all" | DeliveryStatus)}
-            className="h-10 rounded-lg border border-slate-600 bg-slate-900 px-3 text-sm text-slate-100"
+            className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-300"
           >
             <option value="all">ทุกสถานะ</option>
             <option value="delivered">แจ้งแล้ว</option>
@@ -385,10 +385,10 @@ export default function LargeCustomerDeliveryTrackingPage({
         onMarkNotified={markItemAsNotified}
       />
 
-      {error ? <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{success}</div> : null}
+      {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 border-t border-slate-700 bg-[#0b1220]/95 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 border-t border-slate-700 bg-[#0B1220]/95 py-3 backdrop-blur">
         <Button type="button" variant="secondary" className="!w-auto" onClick={() => router.push(`/job/${jobId}`)}>
           ย้อนกลับ
         </Button>
