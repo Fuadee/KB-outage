@@ -98,7 +98,7 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
             {mapPoints.map((point) => (
               <CircleMarker
                 key={point.tempId}
-                position={[point.latitude, point.longitude]}
+                center={[point.latitude, point.longitude]}
                 radius={MARKER_RADIUS}
                 pathOptions={{
                   color: "#ffffff",
