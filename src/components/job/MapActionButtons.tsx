@@ -52,7 +52,7 @@ export default function MapActionButtons({
   const iconClasses = "h-3.5 w-3.5";
   const mapButtonClasses = cn(
     buttonStyles({ variant: "primary", size: "sm" }),
-    "min-w-[10.5rem] justify-center"
+    "w-fit justify-center px-4 py-2"
   );
 
   return (
