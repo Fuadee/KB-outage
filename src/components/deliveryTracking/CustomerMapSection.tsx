@@ -9,7 +9,21 @@ type LeafletMap = {
   remove: () => void;
   fitBounds: (bounds: [[number, number], [number, number]], options?: { padding?: [number, number]; maxZoom?: number }) => void;
   setView: (center: [number, number], zoom: number, options?: { animate?: boolean }) => void;
-  panTo: (center: [number, number], options?: { animate?: boolean }) => void;
+  invalidateSize: (options?: { animate?: boolean; pan?: boolean }) => void;
+  on: (event: string, cb: () => void) => void;
+  off: (event: string, cb: () => void) => void;
+};
+
+type LeafletTileErrorEvent = {
+  tile: HTMLImageElement;
+  coords?: { x: number; y: number; z: number };
+};
+
+type LeafletTileLayer = {
+  addTo: (map: LeafletMap) => LeafletTileLayer;
+  remove: () => void;
+  on: (event: "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent) => void) => LeafletTileLayer;
+  off: (event: "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent) => void) => LeafletTileLayer;
 };
 
 type LeafletMarker = {
@@ -17,13 +31,12 @@ type LeafletMarker = {
   bindPopup: (content: string) => LeafletMarker;
   openPopup: () => LeafletMarker;
   on: (event: string, cb: () => void) => LeafletMarker;
-  setLatLng: (latLng: [number, number]) => LeafletMarker;
   remove: () => void;
 };
 
 type LeafletNamespace = {
   map: (element: HTMLElement, options: { zoomControl: boolean }) => LeafletMap;
-  tileLayer: (url: string, options: { attribution: string; maxZoom?: number }) => { addTo: (map: LeafletMap) => void };
+  tileLayer: (url: string, options: { attribution: string; maxZoom?: number }) => LeafletTileLayer;
   divIcon: (options: { html: string; className: string; iconAnchor: [number, number] }) => unknown;
   marker: (latLng: [number, number], options: { icon: unknown }) => LeafletMarker;
   latLngBounds: (points: [number, number][]) => { isValid: () => boolean; getSouthWest: () => { lat: number; lng: number }; getNorthEast: () => { lat: number; lng: number } };
@@ -42,7 +55,10 @@ type CustomerMapSectionProps = {
 };
 
 const LEAFLET_SCRIPT_ID = "leaflet-js-cdn";
-const LEAFLET_CSS_ID = "leaflet-css-cdn";
+const TILE_PRIMARY_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_PRIMARY_ATTRIBUTION = "&copy; OpenStreetMap contributors";
+const TILE_FALLBACK_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const TILE_FALLBACK_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; CARTO";
 
 const formatThaiDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -79,16 +95,8 @@ const buildPopupContent = (point: CustomerPoint) => {
   `;
 };
 
-const ensureLeafletAsset = () => {
+const ensureLeafletScript = () => {
   if (typeof document === "undefined") return;
-  if (!document.getElementById(LEAFLET_CSS_ID)) {
-    const css = document.createElement("link");
-    css.id = LEAFLET_CSS_ID;
-    css.rel = "stylesheet";
-    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    css.crossOrigin = "";
-    document.head.appendChild(css);
-  }
   if (!document.getElementById(LEAFLET_SCRIPT_ID)) {
     const script = document.createElement("script");
     script.id = LEAFLET_SCRIPT_ID;
@@ -101,26 +109,81 @@ const ensureLeafletAsset = () => {
 export default function CustomerMapSection({ items, selectedTempId, onMarkerSelect }: CustomerMapSectionProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const tileLayerRef = useRef<LeafletTileLayer | null>(null);
+  const isFallbackLayerRef = useRef(false);
   const markersRef = useRef<Record<string, LeafletMarker>>({});
   const loadedRef = useRef(false);
 
   const { points, missingCoordinateCount } = useMemo(() => buildCustomerPoints(items), [items]);
 
   useEffect(() => {
-    ensureLeafletAsset();
+    ensureLeafletScript();
 
     let timer = 0;
+    let mapResizeTimer = 0;
+    let switchedToFallback = false;
+    let tileErrorCount = 0;
+
+    const onTileLoad = () => {
+      if (tileErrorCount > 0) {
+        console.info("[customer-map] tile loaded after previous errors", { tileErrorCount });
+      }
+    };
+
+    const onTileError = (event: LeafletTileErrorEvent) => {
+      tileErrorCount += 1;
+      const tileSrc = event.tile?.currentSrc || event.tile?.src;
+      console.error("[customer-map] tile request failed", {
+        tileErrorCount,
+        src: tileSrc,
+        coords: event.coords
+      });
+      if (switchedToFallback || tileErrorCount < 3 || !window.L || !mapRef.current) return;
+      switchedToFallback = true;
+      isFallbackLayerRef.current = true;
+      tileLayerRef.current?.off("tileload", onTileLoad);
+      tileLayerRef.current?.off("tileerror", onTileError);
+      tileLayerRef.current?.remove();
+
+      const fallback = window.L.tileLayer(TILE_FALLBACK_URL, {
+        attribution: TILE_FALLBACK_ATTRIBUTION,
+        maxZoom: 19
+      }).addTo(mapRef.current);
+
+      fallback.on("tileload", onTileLoad);
+      fallback.on("tileerror", onTileError);
+      tileLayerRef.current = fallback;
+      console.warn("[customer-map] switched to fallback tile provider for debugging");
+    };
+
     const initMap = () => {
       if (loadedRef.current || !window.L || !mapContainerRef.current) return;
       loadedRef.current = true;
 
       const map = window.L.map(mapContainerRef.current, { zoomControl: true });
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+      const primaryLayer = window.L.tileLayer(TILE_PRIMARY_URL, {
+        attribution: TILE_PRIMARY_ATTRIBUTION,
         maxZoom: 19
       }).addTo(map);
 
+      primaryLayer.on("tileload", onTileLoad);
+      primaryLayer.on("tileerror", onTileError);
+
       mapRef.current = map;
+      tileLayerRef.current = primaryLayer;
+      isFallbackLayerRef.current = false;
+
+      map.on("load", () => {
+        console.info("[customer-map] map mounted");
+      });
+
+      window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false, pan: false });
+      });
+
+      mapResizeTimer = window.setTimeout(() => {
+        map.invalidateSize({ animate: false, pan: false });
+      }, 250);
     };
 
     if (window.L) {
@@ -131,8 +194,13 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
 
     return () => {
       if (timer) window.clearInterval(timer);
+      if (mapResizeTimer) window.clearTimeout(mapResizeTimer);
+      tileLayerRef.current?.off("tileload", onTileLoad);
+      tileLayerRef.current?.off("tileerror", onTileError);
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
+      tileLayerRef.current = null;
+      isFallbackLayerRef.current = false;
       mapRef.current?.remove();
       mapRef.current = null;
       loadedRef.current = false;
@@ -165,20 +233,33 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
     });
 
     const bounds = L.latLngBounds(points.map((point) => [point.latitude, point.longitude] as [number, number]));
-    if (bounds.isValid()) {
-      const southWest = bounds.getSouthWest();
-      const northEast = bounds.getNorthEast();
+    if (!bounds.isValid()) return;
+
+    const southWest = bounds.getSouthWest();
+    const northEast = bounds.getNorthEast();
+
+    if (points.length === 1) {
+      map.setView([points[0].latitude, points[0].longitude], 15, { animate: true });
+      console.info("[customer-map] single-point center resolved", {
+        point: [points[0].latitude, points[0].longitude]
+      });
+    } else {
       map.fitBounds(
         [
           [southWest.lat, southWest.lng],
           [northEast.lat, northEast.lng]
         ],
-        { padding: [28, 28], maxZoom: points.length === 1 ? 15 : 13 }
+        { padding: [28, 28], maxZoom: 13 }
       );
-      if (points.length === 1) {
-        map.setView([points[0].latitude, points[0].longitude], 15, { animate: true });
-      }
+      console.info("[customer-map] bounds resolved", {
+        southWest: [southWest.lat, southWest.lng],
+        northEast: [northEast.lat, northEast.lng]
+      });
     }
+
+    map.invalidateSize({ animate: false, pan: false });
+    console.info("[customer-map] tile layer added", { provider: isFallbackLayerRef.current ? "fallback" : "primary" });
+    console.info("[customer-map] markers rendered", { count: points.length });
   }, [points, selectedTempId, onMarkerSelect]);
 
   useEffect(() => {
@@ -212,17 +293,12 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
         </div>
       </div>
 
-      {points.length === 0 ? (
-        <div className="flex h-[360px] items-center justify-center rounded-xl border border-dashed border-slate-600/80 bg-[#0B1220] text-sm text-slate-400">
-          ไม่พบพิกัดสำหรับรายการที่แสดงอยู่
-        </div>
-      ) : (
-        <div
-          ref={mapContainerRef}
-          className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-600/70 bg-[#0B1220]"
-          aria-label="แผนที่ลูกค้าทั้งหมด"
-        />
-      )}
+      <div className="relative h-[360px] w-full overflow-hidden rounded-xl border border-slate-600/70 bg-[#0B1220]">
+        <div ref={mapContainerRef} className="h-full w-full" aria-label="แผนที่ลูกค้าทั้งหมด" />
+        {points.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0B1220]/90 text-sm text-slate-400">ไม่พบพิกัดสำหรับรายการที่แสดงอยู่</div>
+        ) : null}
+      </div>
     </section>
   );
 }
