@@ -5,7 +5,6 @@ import Modal from "./Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import type { OutageJob } from "@/lib/jobsRepo";
-import DeliveryTrackingModal from "./DeliveryTrackingModal";
 
 const TOAST_TIMEOUT_MS = 2000;
 
@@ -33,7 +32,6 @@ export default function NoticeScheduleModal({
   }>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [deliverySummary, setDeliverySummary] = useState<{
     total: number;
     delivered: number;
@@ -54,7 +52,6 @@ export default function NoticeScheduleModal({
     setErrors({});
     setToastMessage(null);
     setIsSaving(false);
-    setShowDeliveryModal(false);
   }, [open, job]);
 
   const fetchDeliverySummary = async () => {
@@ -263,9 +260,17 @@ export default function NoticeScheduleModal({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => setShowDeliveryModal(true)}
+                onClick={() => {
+                  if (!job) return;
+                  const trackingUrl = `/job/${job.id}/major-customers`;
+                  console.info("[notice-modal] navigate to major customer tracking page", {
+                    jobId: job.id,
+                    url: trackingUrl
+                  });
+                  window.open(trackingUrl, "_blank", "noopener,noreferrer");
+                }}
               >
-                ติดตามการแจ้งผู้ใช้ไฟรายใหญ่
+                ติดตามการแจ้งผู้ใช้ไฟฟ้ารายใหญ่
               </Button>
             </div>
             {deliverySummary ? (
@@ -303,14 +308,6 @@ export default function NoticeScheduleModal({
           </div>
         ) : null}
       </div>
-      {job ? (
-        <DeliveryTrackingModal
-          open={showDeliveryModal}
-          onOpenChange={setShowDeliveryModal}
-          jobId={job.id}
-          onSaved={fetchDeliverySummary}
-        />
-      ) : null}
     </Modal>
   );
 }
