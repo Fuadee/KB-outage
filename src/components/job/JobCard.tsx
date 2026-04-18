@@ -75,7 +75,7 @@ export default function JobCard({
           </div>
           <p className="line-clamp-2 text-sm text-slate-100">{job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}</p>
           <p className="line-clamp-2 text-xs text-slate-400">{job.note?.trim() || "ไม่มีหมายเหตุเพิ่มเติม"}</p>
-          <MapActionButtons googleUrl={job.map_link} className="pt-1" />
+          <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
 
         <section className="space-y-2 border-b border-slate-700 pb-3 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-3">
