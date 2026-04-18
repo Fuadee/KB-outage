@@ -25,11 +25,6 @@ type DeliveryTrackingPageProps = {
   initialJob?: JobContext | null;
 };
 
-const normalizeOptionalText = (value?: string | null) => {
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
-};
-
 const parseCoordinate = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return { value: null as number | null, error: null as string | null };
@@ -38,21 +33,6 @@ const parseCoordinate = (value: string) => {
     return { value: null, error: "พิกัดต้องเป็นตัวเลข" };
   }
   return { value: parsed, error: null };
-};
-
-const normalizeMapLink = (value?: string | null) => {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) return { value: null as string | null, error: null as string | null };
-  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const parsed = new URL(normalized);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return { value: null, error: "รูปแบบ map link ไม่ถูกต้อง" };
-    }
-    return { value: normalized, error: null };
-  } catch {
-    return { value: null, error: "รูปแบบ map link ไม่ถูกต้อง" };
-  }
 };
 
 const formatThaiDate = (value?: string) => {
@@ -101,7 +81,7 @@ export default function LargeCustomerDeliveryTrackingPage({
       const statusMatch = statusFilter === "all" ? true : item.status === statusFilter;
       if (!statusMatch) return false;
       if (!keyword) return true;
-      return [item.company_name, item.contact_name, item.note]
+      return [item.company_name]
         .map((value) => value?.toLowerCase() ?? "")
         .some((value) => value.includes(keyword));
     });
@@ -142,9 +122,11 @@ export default function LargeCustomerDeliveryTrackingPage({
     if (longitudeParsed.error) {
       nextErrors[`${item.tempId}:longitude`] = longitudeParsed.error;
     }
-    const mapLink = normalizeMapLink(item.map_link);
-    if (mapLink.error) {
-      nextErrors[`${item.tempId}:map_link`] = mapLink.error;
+    const hasLatitude = item.latitudeInput.trim().length > 0;
+    const hasLongitude = item.longitudeInput.trim().length > 0;
+    if (hasLatitude !== hasLongitude) {
+      nextErrors[`${item.tempId}:latitude`] = "กรุณากรอก Latitude และ Longitude ให้ครบคู่";
+      nextErrors[`${item.tempId}:longitude`] = "กรุณากรอก Latitude และ Longitude ให้ครบคู่";
     }
     return { nextErrors };
   };
@@ -156,16 +138,12 @@ export default function LargeCustomerDeliveryTrackingPage({
       if (!companyName) return;
       const latitudeParsed = parseCoordinate(item.latitudeInput);
       const longitudeParsed = parseCoordinate(item.longitudeInput);
-      const mapLink = normalizeMapLink(item.map_link);
 
       payload.push({
         id: item.id,
         company_name: companyName,
-        contact_name: normalizeOptionalText(item.contact_name),
-        note: normalizeOptionalText(item.note),
         latitude: latitudeParsed.value,
         longitude: longitudeParsed.value,
-        map_link: mapLink.value,
         sort_order: index,
         status: item.status,
         proof_image_url: item.proof_image_url ?? null,
@@ -240,11 +218,8 @@ export default function LargeCustomerDeliveryTrackingPage({
       const validation = validateItem(item);
       Object.assign(nextFieldErrors, validation.nextErrors);
       const hasOtherContent =
-        item.contact_name?.trim() ||
-        item.note?.trim() ||
         item.latitudeInput.trim() ||
-        item.longitudeInput.trim() ||
-        item.map_link?.trim();
+        item.longitudeInput.trim();
       if (hasOtherContent && !item.company_name.trim()) {
         nextFieldErrors[`${item.tempId}:company_name`] = "กรุณากรอกชื่อบริษัท/สถานที่";
       }
@@ -351,7 +326,7 @@ export default function LargeCustomerDeliveryTrackingPage({
             type="text"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            placeholder="ค้นหารายการ / ลูกค้า / ผู้รับผิดชอบ"
+            placeholder="ค้นหาชื่อลูกค้า"
             className="min-w-[220px] flex-1"
           />
           <select

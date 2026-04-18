@@ -29,18 +29,14 @@ export default function EditLargeCustomerDeliveryItemModal({
   return (
     <Modal isOpen={open} onClose={onClose} title={title} panelClassName="max-w-2xl">
       <div className="grid gap-3">
-        <Input type="text" value={item.company_name} onChange={(event) => onChange({ company_name: event.target.value })} placeholder="ชื่อรายการ / ชื่อลูกค้า" className={getError("company_name") ? "border-red-400" : undefined} />
+        <Input type="text" value={item.company_name} onChange={(event) => onChange({ company_name: event.target.value })} placeholder="ชื่อลูกค้า" className={getError("company_name") ? "border-red-400" : undefined} />
         {getError("company_name") ? <p className="text-xs text-red-400">{getError("company_name")}</p> : null}
-        <Input type="text" value={item.contact_name ?? ""} onChange={(event) => onChange({ contact_name: event.target.value })} placeholder="ผู้รับผิดชอบ" />
-        <Input type="text" value={item.note ?? ""} onChange={(event) => onChange({ note: event.target.value })} placeholder="หมายเหตุ" />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Input type="number" value={item.latitudeInput} onChange={(event) => onChange({ latitudeInput: event.target.value })} placeholder="Latitude" className={getError("latitude") ? "border-red-400" : undefined} />
           <Input type="number" value={item.longitudeInput} onChange={(event) => onChange({ longitudeInput: event.target.value })} placeholder="Longitude" className={getError("longitude") ? "border-red-400" : undefined} />
         </div>
         {getError("latitude") ? <p className="text-xs text-red-400">{getError("latitude")}</p> : null}
         {getError("longitude") ? <p className="text-xs text-red-400">{getError("longitude")}</p> : null}
-        <Input type="url" value={item.map_link ?? ""} onChange={(event) => onChange({ map_link: event.target.value })} placeholder="Google Maps link" className={getError("map_link") ? "border-red-400" : undefined} />
-        {getError("map_link") ? <p className="text-xs text-red-400">{getError("map_link")}</p> : null}
 
         <div className="mt-2 flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>ยกเลิก</Button>
