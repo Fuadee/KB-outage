@@ -8,6 +8,7 @@ import Input from "@/components/ui/Input";
 import LargeCustomerDeliverySummary from "./LargeCustomerDeliverySummary";
 import LargeCustomerDeliveryList from "./LargeCustomerDeliveryList";
 import CustomerMapSection from "./CustomerMapSection";
+import ExcelEditableTargetTable from "./ExcelEditableTargetTable";
 import EditLargeCustomerDeliveryItemModal from "./EditLargeCustomerDeliveryItemModal";
 import CreateLargeCustomerDeliveryItemModal from "./CreateLargeCustomerDeliveryItemModal";
 import { fetchDeliveryTargetsByJobId, persistDeliveryTargetsByJobId } from "./service";
@@ -66,10 +67,18 @@ export default function LargeCustomerDeliveryTrackingPage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<EditableTarget | null>(null);
   const [selectedTempId, setSelectedTempId] = useState<string | null>(null);
+  const [entryMode, setEntryMode] = useState<"table" | "legacy">("table");
+
+  const isEmptyRow = (item: EditableTarget) =>
+    !item.company_name.trim() &&
+    !item.customerTypeInput.trim() &&
+    !item.latitudeInput.trim() &&
+    !item.longitudeInput.trim();
 
   const summary = useMemo(() => {
-    const delivered = localTargets.filter((item) => item.status === "delivered").length;
-    const total = localTargets.length;
+    const nonEmptyTargets = localTargets.filter((item) => !isEmptyRow(item));
+    const delivered = nonEmptyTargets.filter((item) => item.status === "delivered").length;
+    const total = nonEmptyTargets.length;
     return {
       total,
       delivered,
@@ -80,6 +89,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   const filteredTargets = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     return localTargets.filter((item) => {
+      if (isEmptyRow(item)) return false;
       const statusMatch = statusFilter === "all" ? true : item.status === statusFilter;
       if (!statusMatch) return false;
       if (!keyword) return true;
@@ -121,22 +131,23 @@ export default function LargeCustomerDeliveryTrackingPage({
 
   const validateItem = (item: EditableTarget) => {
     const nextErrors: Record<string, string> = {};
+    if (isEmptyRow(item)) {
+      return { nextErrors };
+    }
     if (!item.company_name.trim()) {
       nextErrors[`${item.tempId}:company_name`] = "กรุณากรอกชื่อบริษัท/สถานที่";
     }
     const latitudeParsed = parseCoordinate(item.latitudeInput);
     const longitudeParsed = parseCoordinate(item.longitudeInput);
-    if (latitudeParsed.error) {
+    if (!item.latitudeInput.trim()) {
+      nextErrors[`${item.tempId}:latitude`] = "กรุณากรอก Latitude";
+    } else if (latitudeParsed.error) {
       nextErrors[`${item.tempId}:latitude`] = latitudeParsed.error;
     }
-    if (longitudeParsed.error) {
+    if (!item.longitudeInput.trim()) {
+      nextErrors[`${item.tempId}:longitude`] = "กรุณากรอก Longitude";
+    } else if (longitudeParsed.error) {
       nextErrors[`${item.tempId}:longitude`] = longitudeParsed.error;
-    }
-    const hasLatitude = item.latitudeInput.trim().length > 0;
-    const hasLongitude = item.longitudeInput.trim().length > 0;
-    if (hasLatitude !== hasLongitude) {
-      nextErrors[`${item.tempId}:latitude`] = "กรุณากรอก Latitude และ Longitude ให้ครบคู่";
-      nextErrors[`${item.tempId}:longitude`] = "กรุณากรอก Latitude และ Longitude ให้ครบคู่";
     }
     return { nextErrors };
   };
@@ -144,14 +155,16 @@ export default function LargeCustomerDeliveryTrackingPage({
   const mapPayload = (items: EditableTarget[]): DeliveryTargetInput[] => {
     const payload: DeliveryTargetInput[] = [];
     items.forEach((item, index) => {
+      if (isEmptyRow(item)) return;
       const companyName = item.company_name.trim();
-      if (!companyName) return;
       const latitudeParsed = parseCoordinate(item.latitudeInput);
       const longitudeParsed = parseCoordinate(item.longitudeInput);
+      if (!companyName || latitudeParsed.value === null || longitudeParsed.value === null) return;
 
       payload.push({
         id: item.id,
         company_name: companyName,
+        note: item.customerTypeInput.trim() || null,
         latitude: latitudeParsed.value,
         longitude: longitudeParsed.value,
         sort_order: index,
@@ -175,11 +188,11 @@ export default function LargeCustomerDeliveryTrackingPage({
         count: targets.length
       });
       console.info("[delivery-tracking-page] refetch success", { jobId, count: targets.length });
-      setLocalTargets(targets);
+      setLocalTargets(targets.length > 0 ? targets : [createEmptyTarget()]);
     } catch (loadError) {
       console.error("[delivery-tracking-page] load failed", { jobId, error: loadError });
       setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลไม่สำเร็จ");
-      setLocalTargets([]);
+      setLocalTargets([createEmptyTarget()]);
     } finally {
       setIsRefreshing(false);
     }
@@ -227,12 +240,6 @@ export default function LargeCustomerDeliveryTrackingPage({
     localTargets.forEach((item) => {
       const validation = validateItem(item);
       Object.assign(nextFieldErrors, validation.nextErrors);
-      const hasOtherContent =
-        item.latitudeInput.trim() ||
-        item.longitudeInput.trim();
-      if (hasOtherContent && !item.company_name.trim()) {
-        nextFieldErrors[`${item.tempId}:company_name`] = "กรุณากรอกชื่อบริษัท/สถานที่";
-      }
     });
 
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -242,6 +249,58 @@ export default function LargeCustomerDeliveryTrackingPage({
     }
 
     return true;
+  };
+
+  const addRows = (count = 1) => {
+    setLocalTargets((prev) => [...prev, ...Array.from({ length: count }, () => createEmptyTarget())]);
+  };
+
+  const clearAllRows = () => {
+    setFieldErrors({});
+    setLocalTargets([createEmptyTarget()]);
+  };
+
+  const pasteFromExcel = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        setError("ไม่พบข้อมูลในคลิปบอร์ด");
+        return;
+      }
+      const lines = text
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .filter((line) => line.trim().length > 0);
+
+      if (lines.length === 0) {
+        setError("ไม่พบข้อมูลที่วางได้");
+        return;
+      }
+
+      const pastedRows = lines.map((line) => {
+        const [companyName = "", customerType = "", latitude = "", longitude = ""] = line.split("\t");
+        return {
+          ...createEmptyTarget(),
+          company_name: companyName.trim(),
+          customerTypeInput: customerType.trim(),
+          note: customerType.trim() || null,
+          latitudeInput: latitude.trim(),
+          longitudeInput: longitude.trim()
+        };
+      });
+
+      setLocalTargets((prev) => {
+        const hasOnlyBlankSeed = prev.length === 1 && isEmptyRow(prev[0]);
+        return hasOnlyBlankSeed ? pastedRows : [...prev, ...pastedRows];
+      });
+      setSuccess(`วางข้อมูลสำเร็จ ${pastedRows.length} แถว`);
+    } catch (clipboardError) {
+      console.error("[delivery-tracking-page] paste failed", { clipboardError });
+      setError("วางข้อมูลไม่สำเร็จ กรุณาอนุญาตสิทธิ์คลิปบอร์ด");
+    }
   };
 
   const saveTargets = async () => {
@@ -263,7 +322,7 @@ export default function LargeCustomerDeliveryTrackingPage({
 
       const refetchedTargets = await fetchDeliveryTargetsByJobId(jobId);
       console.info("[delivery-tracking-page] refetch success", { jobId, count: refetchedTargets.length });
-      setLocalTargets(refetchedTargets);
+      setLocalTargets(refetchedTargets.length > 0 ? refetchedTargets : [createEmptyTarget()]);
       setSuccess("บันทึกรายการสำเร็จ");
       return true;
     } catch (saveError) {
@@ -331,56 +390,94 @@ export default function LargeCustomerDeliveryTrackingPage({
       <LargeCustomerDeliverySummary total={summary.total} delivered={summary.delivered} pending={summary.pending} />
 
       <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="text"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder="ค้นหาชื่อลูกค้า"
-            className="min-w-[220px] flex-1"
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as "all" | DeliveryStatus)}
-            className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-300"
-          >
-            <option value="all">ทุกสถานะ</option>
-            <option value="delivered">แจ้งแล้ว</option>
-            <option value="pending">ยังไม่แจ้ง</option>
-          </select>
-          <Button type="button" variant="secondary" className="!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
-            เพิ่มรายการ
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={entryMode === "table" ? "primary" : "secondary"}
+              className="!w-auto"
+              onClick={() => setEntryMode("table")}
+            >
+              โหมดตาราง (Excel)
+            </Button>
+            <Button
+              type="button"
+              variant={entryMode === "legacy" ? "primary" : "secondary"}
+              className="!w-auto"
+              onClick={() => setEntryMode("legacy")}
+            >
+              โหมดเดิม (Fallback)
+            </Button>
+          </div>
           <Button type="button" variant="secondary" className="!w-auto" onClick={loadExisting} disabled={isRefreshing || isSaving}>
             {isRefreshing ? "กำลังรีเฟรช..." : "รีเฟรชข้อมูล"}
           </Button>
         </div>
       </div>
 
-      <div className="relative z-20">
-        <LargeCustomerDeliveryList
-          jobId={jobId}
-          items={filteredTargets}
-          selectedTempId={selectedTempId}
-          onRowSelect={setSelectedTempId}
-          onEdit={(item) => {
-            console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
-            setEditingId(item.tempId);
-          }}
-          onDelete={(tempId) => {
-            console.info("[delivery-tracking-page] delete item", { jobId, tempId });
-            setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
-          }}
-          onMarkNotified={markItemAsNotified}
-          onProofSaved={(tempId, patch) => {
-            setLocalTargets((prev) =>
-              prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
-            );
-            setSuccess("บันทึกรูปหลักฐานสำเร็จ");
-            setError(null);
-          }}
+      {entryMode === "table" ? (
+        <ExcelEditableTargetTable
+          rows={localTargets}
+          fieldErrors={fieldErrors}
+          isSaving={isSaving}
+          onCellChange={patchTarget}
+          onPasteFromClipboard={pasteFromExcel}
+          onClearAll={clearAllRows}
+          onAddRows={addRows}
+          onSaveAll={saveTargets}
         />
-      </div>
+      ) : (
+        <>
+          <div className="rounded-xl border border-slate-700/80 bg-[#111827] p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="text"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="ค้นหาชื่อลูกค้า"
+                className="min-w-[220px] flex-1"
+              />
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as "all" | DeliveryStatus)}
+                className="h-10 rounded-lg border border-slate-600 bg-[#0B1220] px-3 text-sm text-gray-300"
+              >
+                <option value="all">ทุกสถานะ</option>
+                <option value="delivered">แจ้งแล้ว</option>
+                <option value="pending">ยังไม่แจ้ง</option>
+              </select>
+              <Button type="button" variant="secondary" className="!w-auto" onClick={() => setCreatingItem(createEmptyTarget())}>
+                เพิ่มรายการ
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative z-20">
+            <LargeCustomerDeliveryList
+              jobId={jobId}
+              items={filteredTargets}
+              selectedTempId={selectedTempId}
+              onRowSelect={setSelectedTempId}
+              onEdit={(item) => {
+                console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
+                setEditingId(item.tempId);
+              }}
+              onDelete={(tempId) => {
+                console.info("[delivery-tracking-page] delete item", { jobId, tempId });
+                setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+              }}
+              onMarkNotified={markItemAsNotified}
+              onProofSaved={(tempId, patch) => {
+                setLocalTargets((prev) =>
+                  prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
+                );
+                setSuccess("บันทึกรูปหลักฐานสำเร็จ");
+                setError(null);
+              }}
+            />
+          </div>
+        </>
+      )}
 
       <div className="relative z-0">
         <CustomerMapSection items={filteredTargets} selectedTempId={selectedTempId} onMarkerSelect={setSelectedTempId} />
