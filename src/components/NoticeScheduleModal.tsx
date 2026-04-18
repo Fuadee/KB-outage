@@ -23,11 +23,9 @@ export default function NoticeScheduleModal({
 }: NoticeScheduleModalProps) {
   const [noticeDate, setNoticeDate] = useState("");
   const [noticeBy, setNoticeBy] = useState("");
-  const [mymapsUrl, setMymapsUrl] = useState("");
   const [errors, setErrors] = useState<{
     noticeDate?: string;
     noticeBy?: string;
-    mymapsUrl?: string;
     submit?: string;
   }>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +46,6 @@ export default function NoticeScheduleModal({
     if (!open) return;
     setNoticeDate(job?.notice_date ?? "");
     setNoticeBy(job?.notice_by ?? "");
-    setMymapsUrl(job?.mymaps_url ?? "");
     setErrors({});
     setToastMessage(null);
     setIsSaving(false);
@@ -110,27 +107,11 @@ export default function NoticeScheduleModal({
   const handleSubmit = async () => {
     if (!job) return;
     const nextErrors: typeof errors = {};
-    const trimmedMymapsUrl = mymapsUrl.trim();
     if (!noticeDate) {
       nextErrors.noticeDate = "กรุณาระบุวันที่จะไปดำเนินการแจ้ง";
     }
     if (!noticeBy.trim()) {
       nextErrors.noticeBy = "กรุณาระบุผู้แจ้ง";
-    }
-    if (!trimmedMymapsUrl) {
-      nextErrors.mymapsUrl = "กรุณาระบุลิ้ง my map";
-    } else {
-      const normalizedMymapsUrl = /^https?:\/\//i.test(trimmedMymapsUrl)
-        ? trimmedMymapsUrl
-        : `https://${trimmedMymapsUrl}`;
-      try {
-        const parsedUrl = new URL(normalizedMymapsUrl);
-        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-          throw new Error("invalid protocol");
-        }
-      } catch {
-        nextErrors.mymapsUrl = "ลิ้งไม่ถูกต้อง";
-      }
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -142,14 +123,10 @@ export default function NoticeScheduleModal({
     setErrors({});
 
     try {
-      const normalizedMymapsUrl = /^https?:\/\//i.test(trimmedMymapsUrl)
-        ? trimmedMymapsUrl
-        : `https://${trimmedMymapsUrl}`;
       const payload = {
         jobId: job.id,
         notice_date: noticeDate,
-        notice_by: noticeBy.trim(),
-        mymaps_url: normalizedMymapsUrl
+        notice_by: noticeBy.trim()
       };
       const response = await fetch("/api/jobs/notice-schedule", {
         method: "POST",
@@ -169,7 +146,6 @@ export default function NoticeScheduleModal({
         notice_status: "SCHEDULED",
         notice_date: payload.notice_date,
         notice_by: payload.notice_by,
-        mymaps_url: payload.mymaps_url,
         notice_scheduled_at: scheduledAt
       });
 
@@ -219,19 +195,6 @@ export default function NoticeScheduleModal({
           />
           {errors.noticeBy ? (
             <span className="text-xs text-red-600">{errors.noticeBy}</span>
-          ) : null}
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
-          ลิ้ง my map
-          <Input
-            type="url"
-            value={mymapsUrl}
-            onChange={(event) => setMymapsUrl(event.target.value)}
-            placeholder="https://"
-            required
-          />
-          {errors.mymapsUrl ? (
-            <span className="text-xs text-red-600">{errors.mymapsUrl}</span>
           ) : null}
         </label>
         {errors.submit ? (

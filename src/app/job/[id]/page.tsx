@@ -368,7 +368,6 @@ export default function JobDetailPage() {
             <CardContent>
               <MapActionButtons
                 googleUrl={job?.map_link}
-                myMapUrl={job?.mymaps_url}
                 className="mt-3"
               />
             </CardContent>

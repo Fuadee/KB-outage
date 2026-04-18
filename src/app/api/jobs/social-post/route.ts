@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     const { data: job, error: jobError } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, mymaps_url, notice_scheduled_at"
+        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
       )
       .eq("id", jobId)
       .single();
@@ -84,7 +84,6 @@ export async function POST(request: Request) {
           notice_status: job.notice_status,
           notice_date: job.notice_date,
           notice_by: job.notice_by,
-          mymaps_url: job.mymaps_url,
           notice_scheduled_at: job.notice_scheduled_at
         }
       });
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
       })
       .eq("id", jobId)
       .select(
-        "social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, mymaps_url, notice_scheduled_at"
+        "social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
       )
       .single();
 
@@ -132,7 +131,6 @@ export async function POST(request: Request) {
         notice_status: job.notice_status,
         notice_date: job.notice_date,
         notice_by: job.notice_by,
-        mymaps_url: job.mymaps_url,
         notice_scheduled_at: job.notice_scheduled_at
       }
     });
