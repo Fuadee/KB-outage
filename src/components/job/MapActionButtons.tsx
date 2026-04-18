@@ -2,7 +2,7 @@
 
 import type { ReactElement, SyntheticEvent } from "react";
 import { MapPin } from "lucide-react";
-import Button, { buttonStyles } from "@/components/ui/Button";
+import { buttonStyles } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 type MapActionButtonsProps = {
@@ -52,19 +52,11 @@ export default function MapActionButtons({
   const iconClasses = "h-3.5 w-3.5";
   const mapButtonClasses = cn(
     buttonStyles({ variant: "primary", size: "sm" }),
-    "w-full justify-center md:w-auto"
+    "min-w-[10.5rem] justify-center"
   );
-  const handleCopyLink = async (event: SyntheticEvent) => {
-    stopPropagation(event);
-    try {
-      await navigator.clipboard.writeText(googleMap);
-    } catch (error) {
-      console.error("Failed to copy Google Maps link", error);
-    }
-  };
 
   return (
-    <div className={cn("flex flex-wrap gap-2", className)}>
+    <div className={cn("flex justify-center", className)}>
       <a
         href={googleMap}
         target="_blank"
@@ -76,15 +68,6 @@ export default function MapActionButtons({
         <MapPin className={iconClasses} aria-hidden="true" />
         <span className="whitespace-nowrap">📍 เปิดแผนที่</span>
       </a>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={(event) => void handleCopyLink(event)}
-        onPointerDownCapture={stopPropagation}
-      >
-        คัดลอกลิงก์
-      </Button>
     </div>
   );
 }
