@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Clock3, FileText, MapPin, Route, TriangleAlert } from "lucide-react";
+import { Clock3, FileText, MapPin, TriangleAlert } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
@@ -75,9 +75,7 @@ export default function JobCard({
           </div>
           <p className="line-clamp-2 text-sm text-slate-100">{job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}</p>
           <p className="line-clamp-2 text-xs text-slate-400">{job.note?.trim() || "ไม่มีหมายเหตุเพิ่มเติม"}</p>
-          <div className="pt-1">
-            <MapActionButtons googleUrl={job.map_link} myMapUrl={job.mymaps_url} className="!mt-0" />
-          </div>
+          <MapActionButtons googleUrl={job.map_link} className="pt-1" />
         </section>
 
         <section className="space-y-2 border-b border-slate-700 pb-3 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-3">
@@ -95,7 +93,7 @@ export default function JobCard({
 
           {secondaryActions.map((action) => (
             <Button key={action.id} type="button" size="sm" variant="secondary" className="w-full justify-start" onClick={action.onClick} disabled={action.disabled}>
-              {action.id.includes("doc") ? <FileText className="h-3.5 w-3.5" /> : action.id.includes("map") ? <MapPin className="h-3.5 w-3.5" /> : action.id.includes("mymap") ? <Route className="h-3.5 w-3.5" /> : null}
+              {action.id.includes("doc") ? <FileText className="h-3.5 w-3.5" /> : action.id.includes("map") ? <MapPin className="h-3.5 w-3.5" /> : null}
               {action.label}
             </Button>
           ))}

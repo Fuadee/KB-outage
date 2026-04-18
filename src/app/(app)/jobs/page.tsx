@@ -48,6 +48,22 @@ type DocForm = {
   map_link: string;
 };
 
+const isValidGoogleMapsUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const normalized = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  try {
+    const parsed = new URL(normalized);
+    const hostname = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+    return (hostname.includes("google.") && pathname.includes("map")) || hostname === "maps.app.goo.gl";
+  } catch {
+    return false;
+  }
+};
+
 const getFilenameFromContentDisposition = (
   headerValue: string | null
 ): string | null => {
@@ -443,7 +459,9 @@ export default function JobsPage() {
       nextErrors.doc_area_detail = "กรุณาระบุรายละเอียดพื้นที่ดับไฟ";
     }
     if (!docForm.map_link.trim()) {
-      nextErrors.map_link = "กรุณาระบุลิ้ง google map";
+      nextErrors.map_link = "กรุณาระบุตำแหน่ง Google Map";
+    } else if (!isValidGoogleMapsUrl(docForm.map_link)) {
+      nextErrors.map_link = "กรุณาใส่ลิงก์ Google Map ที่ถูกต้อง";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -1093,7 +1111,7 @@ export default function JobsPage() {
             ) : null}
           </label>
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
-            ลิ้ง google map
+            ตำแหน่งสถานที่ (Google Map)
             <Input
               ref={mapLinkRef}
               type="url"
@@ -1105,6 +1123,7 @@ export default function JobsPage() {
                 }))
               }
               className="h-10"
+              placeholder="https://maps.google.com/..."
               required
             />
             {docErrors.map_link ? (

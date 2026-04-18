@@ -125,10 +125,7 @@ export default function SocialPostPreviewModal({
           </p>
         </div>
         <div className="rounded-xl border border-slate-200/70 bg-white p-3">
-          <MapActionButtons
-            googleUrl={job?.map_link}
-            myMapUrl={job?.mymaps_url}
-          />
+          <MapActionButtons googleUrl={job?.map_link} />
         </div>
         <div className="flex flex-wrap justify-end gap-3">
           <Button

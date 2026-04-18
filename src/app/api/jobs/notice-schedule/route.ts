@@ -23,13 +23,11 @@ export async function POST(request: Request) {
       jobId?: string | number;
       notice_date?: string;
       notice_by?: string;
-      mymaps_url?: string;
     };
 
     const jobId = body?.jobId;
     const noticeDate = body?.notice_date;
     const noticeBy = body?.notice_by?.trim();
-    const mymapsUrl = body?.mymaps_url?.trim();
 
     if (!jobId) {
       return NextResponse.json(
@@ -38,16 +36,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!noticeDate || !noticeBy || !mymapsUrl) {
+    if (!noticeDate || !noticeBy) {
       return NextResponse.json(
         { ok: false, error: "missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    if (!/^https?:\/\//i.test(mymapsUrl)) {
-      return NextResponse.json(
-        { ok: false, error: "invalid mymaps_url" },
         { status: 400 }
       );
     }
@@ -61,7 +52,6 @@ export async function POST(request: Request) {
         notice_status: "SCHEDULED",
         notice_date: noticeDate,
         notice_by: noticeBy,
-        mymaps_url: mymapsUrl,
         notice_scheduled_at: scheduledAt
       })
       .eq("id", jobId);
