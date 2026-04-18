@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { EditableTarget } from "./types";
 import { buildCustomerPoints, getGoogleMapsDirectionLink, type CustomerPoint } from "./customerMapHelpers";
 import { markerStatusStyles } from "./markerStatusStyles";
@@ -11,6 +11,7 @@ type LeafletMap = {
   setView: (center: [number, number], zoom: number, options?: { animate?: boolean }) => void;
   invalidateSize: (options?: { animate?: boolean; pan?: boolean }) => void;
   on: (event: string, cb: () => void) => void;
+  off: (event: string, cb: () => void) => void;
 };
 
 type LeafletTileErrorEvent = {
@@ -18,16 +19,11 @@ type LeafletTileErrorEvent = {
   coords?: { x: number; y: number; z: number };
 };
 
-type LeafletTileLoadEvent = {
-  tile: HTMLImageElement;
-  coords?: { x: number; y: number; z: number };
-};
-
 type LeafletTileLayer = {
   addTo: (map: LeafletMap) => LeafletTileLayer;
   remove: () => void;
-  on: (event: "tileloadstart" | "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent | LeafletTileLoadEvent) => void) => LeafletTileLayer;
-  off: (event: "tileloadstart" | "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent | LeafletTileLoadEvent) => void) => LeafletTileLayer;
+  on: (event: "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent) => void) => LeafletTileLayer;
+  off: (event: "tileload" | "tileerror", cb: (event: LeafletTileErrorEvent) => void) => LeafletTileLayer;
 };
 
 type LeafletMarker = {
@@ -58,36 +54,11 @@ type CustomerMapSectionProps = {
   onMarkerSelect: (tempId: string) => void;
 };
 
-type ProviderKey = "osm" | "carto";
-
-type ProviderConfig = {
-  key: ProviderKey;
-  label: string;
-  url: string;
-  attribution: string;
-};
-
-type RuntimeLog = {
-  id: number;
-  message: string;
-  detail?: Record<string, unknown>;
-};
-
 const LEAFLET_SCRIPT_ID = "leaflet-js-cdn";
-const TILE_PROVIDERS: ProviderConfig[] = [
-  {
-    key: "osm",
-    label: "OpenStreetMap",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: "&copy; OpenStreetMap contributors"
-  },
-  {
-    key: "carto",
-    label: "CARTO Light",
-    url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-  }
-];
+const TILE_PRIMARY_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_PRIMARY_ATTRIBUTION = "&copy; OpenStreetMap contributors";
+const TILE_FALLBACK_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const TILE_FALLBACK_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; CARTO";
 
 const formatThaiDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -135,196 +106,106 @@ const ensureLeafletScript = () => {
   }
 };
 
-const createDomReport = (container: HTMLDivElement) => {
-  const mapPane = container.querySelector(".leaflet-map-pane");
-  const tilePane = container.querySelector(".leaflet-tile-pane");
-  const overlayPane = container.querySelector(".leaflet-overlay-pane");
-  const markerPane = container.querySelector(".leaflet-marker-pane");
-  const tileImages = tilePane?.querySelectorAll("img").length ?? 0;
-  const rect = container.getBoundingClientRect();
-  const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-
-  return {
-    panes: {
-      mapPane: Boolean(mapPane),
-      tilePane: Boolean(tilePane),
-      overlayPane: Boolean(overlayPane),
-      markerPane: Boolean(markerPane)
-    },
-    tileImages,
-    tilePaneStyle: tilePane instanceof HTMLElement
-      ? {
-          opacity: getComputedStyle(tilePane).opacity,
-          visibility: getComputedStyle(tilePane).visibility,
-          zIndex: getComputedStyle(tilePane).zIndex,
-          transform: getComputedStyle(tilePane).transform
-        }
-      : null,
-    topElementTag: topElement?.tagName ?? null,
-    topElementClass: topElement?.className ?? null
-  };
-};
-
-function MinimalLeafletProbeMap({ provider }: { provider: ProviderConfig }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    ensureLeafletScript();
-    let timer = 0;
-    let map: LeafletMap | null = null;
-    let layer: LeafletTileLayer | null = null;
-
-    const init = () => {
-      if (!window.L || !containerRef.current || map) return;
-      map = window.L.map(containerRef.current, { zoomControl: true });
-      layer = window.L.tileLayer(provider.url, {
-        attribution: provider.attribution,
-        maxZoom: 19
-      }).addTo(map);
-      map.setView([8.0863, 98.9063], 11, { animate: false });
-      map.invalidateSize({ animate: false, pan: false });
-      layer.on("tileerror", (event) => {
-        const e = event as LeafletTileErrorEvent;
-        console.error("[minimal-map] tileerror", {
-          src: e.tile?.currentSrc || e.tile?.src,
-          coords: e.coords
-        });
-      });
-      layer.on("tileload", (event) => {
-        const e = event as LeafletTileLoadEvent;
-        console.info("[minimal-map] tileload", {
-          src: e.tile?.currentSrc || e.tile?.src,
-          coords: e.coords
-        });
-      });
-    };
-
-    if (window.L) {
-      init();
-    } else {
-      timer = window.setInterval(init, 100);
-    }
-
-    return () => {
-      if (timer) window.clearInterval(timer);
-      layer?.remove();
-      map?.remove();
-    };
-  }, [provider]);
-
-  return (
-    <div className="mt-4 rounded-xl border border-slate-600/70 bg-[#0B1220] p-3">
-      <p className="mb-2 text-xs text-slate-300">Minimal isolated map (MapContainer + TileLayer equivalent)</p>
-      <div ref={containerRef} className="h-[360px] w-full overflow-hidden rounded-lg border border-slate-700" />
-    </div>
-  );
-}
-
 export default function CustomerMapSection({ items, selectedTempId, onMarkerSelect }: CustomerMapSectionProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const tileLayerRef = useRef<LeafletTileLayer | null>(null);
+  const isFallbackLayerRef = useRef(false);
   const markersRef = useRef<Record<string, LeafletMarker>>({});
   const loadedRef = useRef(false);
-  const [providerKey, setProviderKey] = useState<ProviderKey>("osm");
-  const [runtimeLogs, setRuntimeLogs] = useState<RuntimeLog[]>([]);
 
-  const provider = useMemo(() => TILE_PROVIDERS.find((item) => item.key === providerKey) ?? TILE_PROVIDERS[0], [providerKey]);
   const { points, missingCoordinateCount } = useMemo(() => buildCustomerPoints(items), [items]);
-
-  const appendRuntimeLog = (message: string, detail?: Record<string, unknown>) => {
-    setRuntimeLogs((prev) => [{ id: Date.now() + Math.random(), message, detail }, ...prev].slice(0, 12));
-  };
 
   useEffect(() => {
     ensureLeafletScript();
 
     let timer = 0;
+    let mapResizeTimer = 0;
+    let switchedToFallback = false;
+    let tileErrorCount = 0;
 
-    const onTileLoadStart = (event: LeafletTileErrorEvent | LeafletTileLoadEvent) => {
-      const e = event as LeafletTileLoadEvent;
-      const src = e.tile?.currentSrc || e.tile?.src;
-      console.info("[customer-map] tileloadstart", { src, coords: e.coords, provider: provider.key });
+    const onTileLoad = () => {
+      if (tileErrorCount > 0) {
+        console.info("[customer-map] tile loaded after previous errors", { tileErrorCount });
+      }
     };
 
-    const onTileLoad = (event: LeafletTileErrorEvent | LeafletTileLoadEvent) => {
-      const e = event as LeafletTileLoadEvent;
-      const src = e.tile?.currentSrc || e.tile?.src;
-      console.info("[customer-map] tileload", { src, coords: e.coords, provider: provider.key });
-    };
-
-    const onTileError = (event: LeafletTileErrorEvent | LeafletTileLoadEvent) => {
-      const e = event as LeafletTileErrorEvent;
-      const src = e.tile?.currentSrc || e.tile?.src;
-      console.error("[customer-map] tileerror", { src, coords: e.coords, provider: provider.key });
-      appendRuntimeLog("tileerror", {
-        src,
-        coords: e.coords,
-        provider: provider.key
+    const onTileError = (event: LeafletTileErrorEvent) => {
+      tileErrorCount += 1;
+      const tileSrc = event.tile?.currentSrc || event.tile?.src;
+      console.error("[customer-map] tile request failed", {
+        tileErrorCount,
+        src: tileSrc,
+        coords: event.coords
       });
-    };
-
-    const mountTileLayer = (map: LeafletMap) => {
-      tileLayerRef.current?.off("tileloadstart", onTileLoadStart);
+      if (switchedToFallback || tileErrorCount < 3 || !window.L || !mapRef.current) return;
+      switchedToFallback = true;
+      isFallbackLayerRef.current = true;
       tileLayerRef.current?.off("tileload", onTileLoad);
       tileLayerRef.current?.off("tileerror", onTileError);
       tileLayerRef.current?.remove();
 
-      const layer = window.L!.tileLayer(provider.url, {
-        attribution: provider.attribution,
+      const fallback = window.L.tileLayer(TILE_FALLBACK_URL, {
+        attribution: TILE_FALLBACK_ATTRIBUTION,
         maxZoom: 19
-      }).addTo(map);
-      layer.on("tileloadstart", onTileLoadStart);
-      layer.on("tileload", onTileLoad);
-      layer.on("tileerror", onTileError);
-      tileLayerRef.current = layer;
+      }).addTo(mapRef.current);
 
-      appendRuntimeLog("tile layer switched", {
-        provider: provider.key,
-        url: provider.url
-      });
+      fallback.on("tileload", onTileLoad);
+      fallback.on("tileerror", onTileError);
+      tileLayerRef.current = fallback;
+      console.warn("[customer-map] switched to fallback tile provider for debugging");
     };
 
     const initMap = () => {
-      if (!window.L || !mapContainerRef.current) return;
+      if (loadedRef.current || !window.L || !mapContainerRef.current) return;
+      loadedRef.current = true;
 
-      if (!loadedRef.current) {
-        loadedRef.current = true;
-        mapRef.current = window.L.map(mapContainerRef.current, { zoomControl: true });
-        mapRef.current.on("load", () => {
-          appendRuntimeLog("map mounted");
-        });
-      }
+      const map = window.L.map(mapContainerRef.current, { zoomControl: true });
+      const primaryLayer = window.L.tileLayer(TILE_PRIMARY_URL, {
+        attribution: TILE_PRIMARY_ATTRIBUTION,
+        maxZoom: 19
+      }).addTo(map);
 
-      const map = mapRef.current;
-      if (!map) return;
+      primaryLayer.on("tileload", onTileLoad);
+      primaryLayer.on("tileerror", onTileError);
 
-      mountTileLayer(map);
+      mapRef.current = map;
+      tileLayerRef.current = primaryLayer;
+      isFallbackLayerRef.current = false;
+
+      map.on("load", () => {
+        console.info("[customer-map] map mounted");
+      });
 
       window.requestAnimationFrame(() => {
         map.invalidateSize({ animate: false, pan: false });
-        if (!mapContainerRef.current) return;
-        const domReport = createDomReport(mapContainerRef.current);
-        appendRuntimeLog("leaflet DOM report", domReport as unknown as Record<string, unknown>);
-        console.info("[customer-map] leaflet DOM report", domReport);
       });
+
+      mapResizeTimer = window.setTimeout(() => {
+        map.invalidateSize({ animate: false, pan: false });
+      }, 250);
     };
 
     if (window.L) {
       initMap();
     } else {
-      timer = window.setInterval(initMap, 100);
+      timer = window.setInterval(initMap, 80);
     }
 
     return () => {
       if (timer) window.clearInterval(timer);
-      tileLayerRef.current?.off("tileloadstart", onTileLoadStart);
+      if (mapResizeTimer) window.clearTimeout(mapResizeTimer);
       tileLayerRef.current?.off("tileload", onTileLoad);
       tileLayerRef.current?.off("tileerror", onTileError);
-      tileLayerRef.current?.remove();
+      Object.values(markersRef.current).forEach((marker) => marker.remove());
+      markersRef.current = {};
       tileLayerRef.current = null;
+      isFallbackLayerRef.current = false;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      loadedRef.current = false;
     };
-  }, [provider]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -359,6 +240,9 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
 
     if (points.length === 1) {
       map.setView([points[0].latitude, points[0].longitude], 15, { animate: true });
+      console.info("[customer-map] single-point center resolved", {
+        point: [points[0].latitude, points[0].longitude]
+      });
     } else {
       map.fitBounds(
         [
@@ -367,10 +251,15 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
         ],
         { padding: [28, 28], maxZoom: 13 }
       );
+      console.info("[customer-map] bounds resolved", {
+        southWest: [southWest.lat, southWest.lng],
+        northEast: [northEast.lat, northEast.lng]
+      });
     }
 
     map.invalidateSize({ animate: false, pan: false });
-    appendRuntimeLog("markers rendered", { count: points.length });
+    console.info("[customer-map] tile layer added", { provider: isFallbackLayerRef.current ? "fallback" : "primary" });
+    console.info("[customer-map] markers rendered", { count: points.length });
   }, [points, selectedTempId, onMarkerSelect]);
 
   useEffect(() => {
@@ -384,16 +273,6 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
     map.setView([selectedPoint.latitude, selectedPoint.longitude], 15, { animate: true });
     selectedMarker.openPopup();
   }, [selectedTempId, points]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(markersRef.current).forEach((marker) => marker.remove());
-      markersRef.current = {};
-      mapRef.current?.remove();
-      mapRef.current = null;
-      loadedRef.current = false;
-    };
-  }, []);
 
   if (items.length === 0) {
     return (
@@ -414,40 +293,11 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-300">Tile provider:</span>
-        {TILE_PROVIDERS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setProviderKey(option.key)}
-            className={`rounded-full border px-3 py-1 ${providerKey === option.key ? "border-sky-400 bg-sky-500/20 text-sky-200" : "border-slate-600 text-slate-300"}`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       <div className="relative h-[360px] w-full overflow-hidden rounded-xl border border-slate-600/70 bg-[#0B1220]">
         <div ref={mapContainerRef} className="h-full w-full" aria-label="แผนที่ลูกค้าทั้งหมด" />
         {points.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0B1220]/90 text-sm text-slate-400">ไม่พบพิกัดสำหรับรายการที่แสดงอยู่</div>
         ) : null}
-      </div>
-
-      <MinimalLeafletProbeMap provider={provider} />
-
-      <div className="mt-4 rounded-xl border border-slate-700/80 bg-slate-900/70 p-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Runtime debug logs</p>
-        <ul className="space-y-2 text-[11px] text-slate-300">
-          {runtimeLogs.length === 0 ? <li>ยังไม่มี log</li> : null}
-          {runtimeLogs.map((log) => (
-            <li key={log.id}>
-              <p className="font-medium text-slate-200">{log.message}</p>
-              {log.detail ? <pre className="whitespace-pre-wrap text-slate-400">{JSON.stringify(log.detail, null, 2)}</pre> : null}
-            </li>
-          ))}
-        </ul>
       </div>
     </section>
   );

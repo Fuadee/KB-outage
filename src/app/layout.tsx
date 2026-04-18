@@ -1,5 +1,4 @@
 import "./globals.css";
-import "./leaflet.css";
 import type { Metadata } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
 
@@ -20,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="th">
       <head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossOrigin="" />
         <link rel="preconnect" href="https://tile.openstreetmap.org" />
         <link rel="preconnect" href="https://a.tile.openstreetmap.org" />
         <link rel="preconnect" href="https://b.tile.openstreetmap.org" />
