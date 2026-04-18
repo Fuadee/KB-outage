@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import Modal from "@/components/Modal";
@@ -36,6 +37,7 @@ export default function JobDetailPage() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [workflowExpanded, setWorkflowExpanded] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -201,6 +203,39 @@ export default function JobDetailPage() {
   const isClosed = job?.is_closed ?? false;
   const canCloseJob =
     (job?.notice_status ?? "NONE") === "SCHEDULED" && !isClosed;
+  const isDocGenerated =
+    job?.doc_status === "GENERATED" || Boolean(job?.doc_generated_at);
+  const isUsersNotified = (job?.notice_status ?? "NONE") === "SCHEDULED";
+  const workflowSteps: JobStep[] = [
+    {
+      id: "doc",
+      label: "สร้างเอกสาร",
+      state: isDocGenerated ? "done" : "current"
+    },
+    {
+      id: "notify",
+      label: "แจ้งผู้ใช้ไฟ",
+      state: !isDocGenerated
+        ? "locked"
+        : isUsersNotified
+          ? "done"
+          : "current"
+    },
+    {
+      id: "work",
+      label: "ดำเนินงาน",
+      state: !isUsersNotified
+        ? "locked"
+        : isClosed
+          ? "done"
+          : "current"
+    },
+    {
+      id: "close",
+      label: "ปิดงาน",
+      state: isClosed ? "done" : isUsersNotified ? "current" : "locked"
+    }
+  ];
 
   return (
     <div className="space-y-6">
@@ -286,130 +321,164 @@ export default function JobDetailPage() {
         ) : null}
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>รายละเอียดงาน</CardTitle>
-            <CardDescription>ข้อมูลพื้นฐานและหมายเหตุเพิ่มเติม</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSave} className="flex flex-col gap-6">
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
-                วันที่ดับไฟ
-                <Input
-                  type="date"
-                  value={outageDate}
-                  onChange={(event) => setOutageDate(event.target.value)}
-                  disabled={isClosed}
-                  required
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
-                รหัสอุปกรณ์
-                <Input
-                  type="text"
-                  value={equipmentCode}
-                  onChange={(event) => setEquipmentCode(event.target.value)}
-                  disabled={isClosed}
-                  required
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
-                หมายเหตุเพิ่มเติม
-                <textarea
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  rows={4}
-                  disabled={isClosed}
-                  className={textareaStyles}
-                />
-              </label>
-
-              {error ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {error}
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-3">
-                {!isClosed ? (
-                  <>
-                    <Button type="submit" disabled={saving}>
-                      {saving ? "กำลังบันทึก..." : "บันทึก"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={saving}
-                      onClick={handleDelete}
-                      className="border-rose-200 text-rose-600 hover:bg-rose-50"
-                    >
-                      ลบงาน
-                    </Button>
-                  </>
-                ) : null}
-                <Link
-                  href="/"
-                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-200/90 shadow-sm transition hover:bg-slate-100"
-                >
-                  กลับ
-                </Link>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>ลิงก์แผนที่</CardTitle>
-              <CardDescription>เข้าถึงแผนที่และจุดงาน</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <MapActionButtons
-                googleUrl={job?.map_link}
-                className="mt-3"
+      <Card>
+        <CardHeader>
+          <CardTitle>รายละเอียดงาน</CardTitle>
+          <CardDescription>ข้อมูลพื้นฐานและหมายเหตุเพิ่มเติม</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="flex flex-col gap-6">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+              วันที่ดับไฟ
+              <Input
+                type="date"
+                value={outageDate}
+                onChange={(event) => setOutageDate(event.target.value)}
+                disabled={isClosed}
+                required
               />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>การดำเนินการ</CardTitle>
-              <CardDescription>งานที่เกี่ยวข้องกับสถานะนี้</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {job?.social_status === "POSTED" && !isClosed ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => setNoticeOpen(true)}
-                >
-                  {(job.notice_status ?? "NONE") === "SCHEDULED"
-                    ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                    : "แจ้งหนังสือดับไฟ"}
-                </Button>
-              ) : (
-                <Badge variant="default">รอการโพสต์ Social</Badge>
-              )}
-              {canCloseJob ? (
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => {
-                    setCloseError(null);
-                    setCloseOpen(true);
-                  }}
-                >
-                  ปิดงาน
-                </Button>
-              ) : (
-                <Badge variant="neutral">ยังไม่พร้อมปิดงาน</Badge>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+              รหัสอุปกรณ์
+              <Input
+                type="text"
+                value={equipmentCode}
+                onChange={(event) => setEquipmentCode(event.target.value)}
+                disabled={isClosed}
+                required
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+              หมายเหตุเพิ่มเติม
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={4}
+                disabled={isClosed}
+                className={textareaStyles}
+              />
+            </label>
+
+            {error ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              {!isClosed ? (
+                <>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={saving}
+                    onClick={handleDelete}
+                    className="border-rose-200 text-rose-600 hover:bg-rose-50"
+                  >
+                    ลบงาน
+                  </Button>
+                </>
+              ) : null}
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-200/90 shadow-sm transition hover:bg-slate-100"
+              >
+                กลับ
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle>Workflow</CardTitle>
+              <CardDescription>สรุปขั้นตอนสำคัญแบบกระชับ</CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="md:hidden"
+              onClick={() => setWorkflowExpanded((prev) => !prev)}
+            >
+              {workflowExpanded ? "ซ่อนขั้นตอน" : "ดูขั้นตอน"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className={`${workflowExpanded ? "block" : "hidden"} md:block`}>
+          <JobStatusStepper steps={workflowSteps} className="space-y-3" />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>ลิงก์แผนที่</CardTitle>
+          <CardDescription>เข้าถึงแผนที่และจุดงาน</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MapActionButtons
+            googleUrl={job?.map_link}
+            className="mt-3"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Action bar</CardTitle>
+          <CardDescription>การดำเนินการหลักของงานนี้</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          {isDocGenerated ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (job?.doc_url) {
+                  window.open(job.doc_url, "_blank", "noopener,noreferrer");
+                }
+              }}
+              disabled={!job?.doc_url}
+            >
+              ดาวน์โหลดเอกสาร
+            </Button>
+          ) : (
+            <Badge variant="neutral">ยังไม่มีเอกสารที่สร้างแล้ว</Badge>
+          )}
+          {job?.social_status === "POSTED" && !isClosed ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setNoticeOpen(true)}
+            >
+              {(job.notice_status ?? "NONE") === "SCHEDULED"
+                ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
+                : "แจ้งหนังสือดับไฟ"}
+            </Button>
+          ) : (
+            <Badge variant="default">รอการโพสต์ Social</Badge>
+          )}
+          {canCloseJob ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setCloseError(null);
+                setCloseOpen(true);
+              }}
+            >
+              ปิดงาน
+            </Button>
+          ) : (
+            <Badge variant="neutral">ยังไม่พร้อมปิดงาน</Badge>
+          )}
+        </CardContent>
+      </Card>
 
       <NoticeScheduleModal
         job={job}
