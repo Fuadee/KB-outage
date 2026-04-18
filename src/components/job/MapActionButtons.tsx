@@ -52,22 +52,24 @@ export default function MapActionButtons({
   const iconClasses = "h-3.5 w-3.5";
   const mapButtonClasses = cn(
     buttonStyles({ variant: "primary", size: "sm" }),
-    "w-fit justify-center px-4 py-2"
+    "!inline-flex !w-fit !max-w-max !shrink-0 !flex-none justify-center !px-4 !py-2"
   );
 
   return (
-    <div className={cn("flex justify-center", className)}>
-      <a
-        href={googleMap}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={stopPropagation}
-        onPointerDownCapture={stopPropagation}
-        className={mapButtonClasses}
-      >
-        <MapPin className={iconClasses} aria-hidden="true" />
-        <span className="whitespace-nowrap">📍 เปิดแผนที่</span>
-      </a>
+    <div className={cn("w-full", className)}>
+      <div className="flex w-full justify-center">
+        <a
+          href={googleMap}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={stopPropagation}
+          onPointerDownCapture={stopPropagation}
+          className={mapButtonClasses}
+        >
+          <MapPin className={iconClasses} aria-hidden="true" />
+          <span className="whitespace-nowrap">📍 เปิดแผนที่</span>
+        </a>
+      </div>
     </div>
   );
 }
