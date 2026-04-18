@@ -8,8 +8,10 @@ import LargeCustomerDeliverySummary from "./LargeCustomerDeliverySummary";
 import LargeCustomerDeliveryList from "./LargeCustomerDeliveryList";
 import EditLargeCustomerDeliveryItemModal from "./EditLargeCustomerDeliveryItemModal";
 import CreateLargeCustomerDeliveryItemModal from "./CreateLargeCustomerDeliveryItemModal";
-import { createEmptyTarget, toEditableTarget, type EditableTarget } from "./types";
-import type { DeliveryStatus, DeliveryTarget, DeliveryTargetInput } from "@/types/deliveryTracking";
+import { calculateDeliverySummary } from "./summary";
+import { fetchDeliveryTargetsByJobId, persistDeliveryTargetsByJobId } from "./service";
+import { createEmptyTarget, type EditableTarget } from "./types";
+import type { DeliveryStatus, DeliveryTargetInput } from "@/types/deliveryTracking";
 
 type DeliveryTrackingModalProps = {
   open: boolean;
@@ -55,15 +57,10 @@ export default function LargeCustomerDeliveryManagerModal({
   onSaved
 }: DeliveryTrackingModalProps) {
   const [localTargets, setLocalTargets] = useState<EditableTarget[]>([]);
-  const [persistedTargets, setPersistedTargets] = useState<EditableTarget[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [isCreatingToken, setIsCreatingToken] = useState(false);
-  const [isRegeneratingToken, setIsRegeneratingToken] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [hasToken, setHasToken] = useState(false);
-  const [currentToken, setCurrentToken] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DeliveryStatus>("all");
@@ -71,16 +68,7 @@ export default function LargeCustomerDeliveryManagerModal({
   const [creatingItem, setCreatingItem] = useState<EditableTarget | null>(null);
 
   const hasJobId = jobId.trim().length > 0;
-
-  const summary = useMemo(() => {
-    const total = localTargets.length;
-    const delivered = localTargets.filter((item) => item.status === "delivered").length;
-    return {
-      total,
-      delivered,
-      pending: total - delivered
-    };
-  }, [localTargets]);
+  const summary = useMemo(() => calculateDeliverySummary(localTargets), [localTargets]);
 
   const filteredTargets = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -98,12 +86,6 @@ export default function LargeCustomerDeliveryManagerModal({
     () => localTargets.find((item) => item.tempId === editingId) ?? null,
     [localTargets, editingId]
   );
-
-  const deliveryLink = useMemo(() => {
-    if (!currentToken) return null;
-    const origin = typeof window === "undefined" ? "" : window.location.origin;
-    return origin ? `${origin}/delivery/${currentToken}` : null;
-  }, [currentToken]);
 
   const clearFieldErrors = (tempId: string) => {
     setFieldErrors((prev) => {
@@ -137,7 +119,7 @@ export default function LargeCustomerDeliveryManagerModal({
     if (mapLink.error) {
       nextErrors[`${item.tempId}:map_link`] = mapLink.error;
     }
-    return { nextErrors, latitudeParsed, longitudeParsed, mapLink };
+    return { nextErrors };
   };
 
   const mapPayload = (items: EditableTarget[]): DeliveryTargetInput[] => {
@@ -158,29 +140,22 @@ export default function LargeCustomerDeliveryManagerModal({
         longitude: longitudeParsed.value,
         map_link: mapLink.value,
         sort_order: index,
-        status: item.status
+        status: item.status,
+        proof_image_url: item.proof_image_url ?? null,
+        delivered_at: item.delivered_at ?? null
       });
     });
     return payload;
   };
 
-  const hydrateFromServer = (payload: { batch?: { access_token?: string | null }; targets?: DeliveryTarget[] } | null) => {
-    const mappedTargets = (payload?.targets ?? []).map((target) => toEditableTarget(target));
-    setPersistedTargets(mappedTargets);
-    setLocalTargets(mappedTargets);
-
-    const token = payload?.batch?.access_token ?? null;
-    setCurrentToken(token);
-    setHasToken(Boolean(token));
+  const syncFromServer = (targets: EditableTarget[]) => {
+    setLocalTargets(targets);
   };
 
   const loadExisting = async () => {
     if (!hasJobId) {
       setError("ต้องบันทึกกำหนดการก่อน");
       setLocalTargets([]);
-      setPersistedTargets([]);
-      setCurrentToken(null);
-      setHasToken(false);
       return;
     }
 
@@ -188,27 +163,39 @@ export default function LargeCustomerDeliveryManagerModal({
     setSuccess(null);
     setIsRefreshing(true);
 
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, { method: "GET" });
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok || !result?.ok) {
-      setError(result?.error ?? "โหลดข้อมูลไม่สำเร็จ");
+    try {
+      const targets = await fetchDeliveryTargetsByJobId(jobId);
+      console.info("[delivery-tracking] refetch success", { jobId, count: targets.length });
+      syncFromServer(targets);
+    } catch (loadError) {
+      console.error("[delivery-tracking] refetch failed", { jobId, error: loadError });
+      setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลไม่สำเร็จ");
       setLocalTargets([]);
-      setPersistedTargets([]);
-      setCurrentToken(null);
-      setHasToken(false);
+    } finally {
       setIsRefreshing(false);
-      return;
     }
-
-    hydrateFromServer(result.data);
-    setIsRefreshing(false);
   };
 
   useEffect(() => {
     if (!open) return;
-    loadExisting();
+    void loadExisting();
   }, [open, hasJobId]);
+
+  useEffect(() => {
+    if (!open) return;
+    console.info("[delivery-tracking] modal opened with N items", { jobId, count: localTargets.length });
+  }, [open, jobId, localTargets.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    console.info("[delivery-tracking] final rendered counts", {
+      jobId,
+      total: summary.total,
+      delivered: summary.delivered,
+      pending: summary.pending,
+      progress: summary.progress
+    });
+  }, [open, jobId, summary]);
 
   const validateBeforeSave = () => {
     const nextFieldErrors: Record<string, string> = {};
@@ -241,11 +228,6 @@ export default function LargeCustomerDeliveryManagerModal({
       return false;
     }
 
-    if (!hasToken) {
-      setError("ต้องสร้างลิงก์ก่อน จึงจะบันทึกรายการได้");
-      return false;
-    }
-
     setFieldErrors({});
     setError(null);
     setSuccess(null);
@@ -255,89 +237,24 @@ export default function LargeCustomerDeliveryManagerModal({
     }
 
     setIsSaving(true);
+    console.info("[delivery-tracking] save started", { jobId, localCount: localTargets.length });
 
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/targets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targets: mapPayload(localTargets) })
-    });
-
-    const result = await response.json().catch(() => null);
-    if (!response.ok || !result?.ok) {
-      setError(result?.error ?? "บันทึกไม่สำเร็จ");
-      setIsSaving(false);
+    try {
+      const payload = mapPayload(localTargets);
+      console.info("[delivery-tracking] save payload", { jobId, payloadCount: payload.length, payload });
+      const nextTargets = await persistDeliveryTargetsByJobId(jobId, payload);
+      console.info("[delivery-tracking] save success", { jobId, count: nextTargets.length });
+      syncFromServer(nextTargets);
+      setSuccess("บันทึกรายการสำเร็จ");
+      onSaved?.();
+      return true;
+    } catch (saveError) {
+      console.error("[delivery-tracking] save failed", { jobId, error: saveError });
+      setError(saveError instanceof Error ? saveError.message : "บันทึกไม่สำเร็จ");
       return false;
+    } finally {
+      setIsSaving(false);
     }
-
-    const nextTargets = (result.data?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
-    setPersistedTargets(nextTargets);
-    setLocalTargets(nextTargets);
-    setSuccess("บันทึกรายการสำเร็จ");
-    setIsSaving(false);
-    onSaved?.();
-    return true;
-  };
-
-  const createToken = async () => {
-    if (!hasJobId) {
-      setError("ต้องบันทึกกำหนดการก่อน");
-      return;
-    }
-
-    setError(null);
-    setSuccess(null);
-    setIsCreatingToken(true);
-
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/token`, { method: "POST" });
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok || !result?.ok) {
-      setError(result?.error ?? "ไม่สามารถสร้างลิงก์ได้");
-      setIsCreatingToken(false);
-      return;
-    }
-
-    const token = result.data?.batch?.access_token ?? null;
-    setCurrentToken(token);
-    setHasToken(Boolean(token));
-    setSuccess("สร้างลิงก์สำเร็จ สามารถคัดลอกลิงก์ได้ทันที");
-    setIsCreatingToken(false);
-    onSaved?.();
-  };
-
-  const regenerateToken = async () => {
-    if (!hasJobId) {
-      setError("ต้องบันทึกกำหนดการก่อน");
-      return;
-    }
-
-    if (!hasToken) {
-      setError("ยังไม่มีลิงก์เดิมให้รีเซ็ต กรุณากด “สร้างลิงก์” ก่อน");
-      return;
-    }
-
-    const confirmed = window.confirm("ลิงก์เดิมจะใช้งานไม่ได้ ต้องการสร้างใหม่หรือไม่?");
-    if (!confirmed) return;
-
-    setError(null);
-    setSuccess(null);
-    setIsRegeneratingToken(true);
-
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/token/regenerate`, { method: "POST" });
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok || !result?.ok) {
-      setError(result?.error ?? "ไม่สามารถสร้างลิงก์ใหม่ได้");
-      setIsRegeneratingToken(false);
-      return;
-    }
-
-    const token = result.data?.batch?.access_token ?? null;
-    setCurrentToken(token);
-    setHasToken(Boolean(token));
-    setSuccess("สร้างลิงก์ใหม่สำเร็จ ลิงก์เดิมถูกรีเซ็ตแล้ว");
-    setIsRegeneratingToken(false);
-    onSaved?.();
   };
 
   const commitCreateItem = () => {
@@ -347,14 +264,30 @@ export default function LargeCustomerDeliveryManagerModal({
       setFieldErrors((prev) => ({ ...prev, ...validation.nextErrors }));
       return;
     }
+    console.info("[delivery-tracking] add item", { jobId, tempId: creatingItem.tempId });
     setLocalTargets((prev) => [...prev, creatingItem]);
     setCreatingItem(null);
   };
 
-  const copyLink = async () => {
-    if (!deliveryLink || !hasToken) return;
-    await navigator.clipboard.writeText(deliveryLink);
-    setSuccess("คัดลอกลิงก์เรียบร้อย");
+  const markItemAsNotified = (tempId: string) => {
+    const nowIso = new Date().toISOString();
+    const target = localTargets.find((item) => item.tempId === tempId);
+    if (!target || target.status === "delivered") return;
+
+    console.info("[delivery-tracking] mark item notified", { jobId, tempId });
+    setLocalTargets((prev) =>
+      prev.map((item) =>
+        item.tempId === tempId
+          ? {
+              ...item,
+              status: "delivered",
+              delivered_at: item.delivered_at ?? nowIso
+            }
+          : item
+      )
+    );
+    setSuccess("อัปเดตสถานะเป็นแจ้งแล้ว (รอบันทึกลงฐานข้อมูล)");
+    setError(null);
   };
 
   return (
@@ -367,7 +300,7 @@ export default function LargeCustomerDeliveryManagerModal({
       >
         <div className="flex max-h-[82vh] flex-col gap-4">
           <div className="sticky top-0 z-10 grid gap-3 bg-[#111827] pb-1">
-            <LargeCustomerDeliverySummary {...summary} />
+            <LargeCustomerDeliverySummary total={summary.total} delivered={summary.delivered} pending={summary.pending} />
 
             <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -395,93 +328,25 @@ export default function LargeCustomerDeliveryManagerModal({
                   variant="secondary"
                   className="!w-auto"
                   onClick={loadExisting}
-                  disabled={isRefreshing || isSaving || isCreatingToken || isRegeneratingToken || !hasJobId}
+                  disabled={isRefreshing || isSaving || !hasJobId}
                 >
                   {isRefreshing ? "กำลังรีเฟรช..." : "รีเฟรชข้อมูล"}
                 </Button>
-              </div>
-
-              <div className="mt-3 grid gap-2 border-t border-slate-700 pt-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="!w-auto"
-                    onClick={createToken}
-                    disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId}
-                  >
-                    {isCreatingToken ? "กำลังสร้าง..." : "สร้างลิงก์"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="!w-auto border border-red-500/60 text-red-200 hover:bg-red-500/10"
-                    onClick={regenerateToken}
-                    disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId || !hasToken}
-                  >
-                    {isRegeneratingToken ? "กำลังสร้าง..." : "สร้างลิงก์ใหม่ (รีเซ็ตลิงก์เดิม)"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="!w-auto"
-                    onClick={copyLink}
-                    disabled={!hasToken || !deliveryLink}
-                  >
-                    Copy link
-                  </Button>
-                </div>
-                {deliveryLink ? (
-                  <code className="max-w-full truncate rounded bg-slate-950 px-2 py-1 text-xs text-emerald-200">{deliveryLink}</code>
-                ) : (
-                  <p className="text-xs text-slate-400">ยังไม่มีลิงก์ กรุณากด “สร้างลิงก์”</p>
-                )}
               </div>
             </div>
           </div>
 
           <LargeCustomerDeliveryList
             items={filteredTargets}
-            onEdit={(item) => setEditingId(item.tempId)}
-            onDelete={(tempId) => setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId))}
-            onToggleStatus={async (tempId) => {
-              const toggled: EditableTarget[] = localTargets.map((item) =>
-                item.tempId === tempId
-                  ? {
-                      ...item,
-                      status: (item.status === "delivered" ? "pending" : "delivered") as DeliveryStatus
-                    }
-                  : item
-              );
-
-              setLocalTargets(toggled);
-              if (!hasToken) {
-                setError("ต้องสร้างลิงก์ก่อน จึงจะอัปเดตสถานะได้");
-                return;
-              }
-
-              setError(null);
-              setSuccess(null);
-              const response = await fetch(`/api/jobs/${jobId}/delivery-batch/targets`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ targets: mapPayload(toggled) })
-              });
-              const result = await response.json().catch(() => null);
-
-              if (!response.ok || !result?.ok) {
-                setError(result?.error ?? "ไม่สามารถบันทึกสถานะได้");
-                setLocalTargets(persistedTargets);
-                return;
-              }
-
-              const nextTargets = (result.data?.targets ?? []).map((target: DeliveryTarget) => toEditableTarget(target));
-              setPersistedTargets(nextTargets);
-              setLocalTargets(nextTargets);
-              setSuccess("อัปเดตสถานะเรียบร้อย");
+            onEdit={(item) => {
+              console.info("[delivery-tracking] edit item", { jobId, tempId: item.tempId });
+              setEditingId(item.tempId);
             }}
+            onDelete={(tempId) => {
+              console.info("[delivery-tracking] delete item", { jobId, tempId });
+              setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+            }}
+            onMarkNotified={markItemAsNotified}
           />
 
           {error ? <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div> : null}
@@ -490,7 +355,7 @@ export default function LargeCustomerDeliveryManagerModal({
           <div className="mt-auto flex flex-wrap justify-end gap-2 border-t border-slate-700 pt-3">
             {!hasJobId ? <p className="mr-auto text-xs text-amber-300">ต้องบันทึกกำหนดการก่อน จึงจะตั้งค่าการติดตามได้</p> : null}
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>ปิด</Button>
-            <Button type="button" onClick={saveTargets} disabled={isSaving || isCreatingToken || isRegeneratingToken || !hasJobId || !hasToken}>
+            <Button type="button" onClick={saveTargets} disabled={isSaving || !hasJobId}>
               {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
             </Button>
           </div>

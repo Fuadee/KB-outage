@@ -8,14 +8,14 @@ type LargeCustomerDeliveryListProps = {
   items: EditableTarget[];
   onEdit: (item: EditableTarget) => void;
   onDelete: (tempId: string) => void;
-  onToggleStatus: (tempId: string) => void;
+  onMarkNotified: (tempId: string) => void;
 };
 
 export default function LargeCustomerDeliveryList({
   items,
   onEdit,
   onDelete,
-  onToggleStatus
+  onMarkNotified
 }: LargeCustomerDeliveryListProps) {
   const [previewTarget, setPreviewTarget] = useState<EditableTarget | null>(null);
 
@@ -74,7 +74,7 @@ export default function LargeCustomerDeliveryList({
                   index={index}
                   onEdit={onEdit}
                   onDelete={onDelete}
-                  onToggleStatus={onToggleStatus}
+                  onMarkNotified={onMarkNotified}
                   onPreviewProof={setPreviewTarget}
                 />
               ))}
@@ -120,8 +120,8 @@ export default function LargeCustomerDeliveryList({
               <Button type="button" size="sm" variant="secondary" className="!w-auto" onClick={() => onEdit(item)}>
                 แก้ไข
               </Button>
-              <Button type="button" size="sm" variant="ghost" className="!w-auto" onClick={() => onToggleStatus(item.tempId)}>
-                สลับสถานะ
+              <Button type="button" size="sm" variant="ghost" className="!w-auto" onClick={() => onMarkNotified(item.tempId)} disabled={item.status === "delivered"}>
+                {item.status === "delivered" ? "แจ้งแล้ว" : "บันทึกว่าแจ้งแล้ว"}
               </Button>
               <Button type="button" size="sm" variant="ghost" className="!w-auto text-red-300" onClick={() => onDelete(item.tempId)}>
                 ลบ

@@ -6,7 +6,7 @@ type LargeCustomerDeliveryRowProps = {
   index: number;
   onEdit: (item: EditableTarget) => void;
   onDelete: (tempId: string) => void;
-  onToggleStatus: (tempId: string) => void;
+  onMarkNotified: (tempId: string) => void;
   onPreviewProof: (item: EditableTarget) => void;
 };
 
@@ -51,7 +51,7 @@ export default function LargeCustomerDeliveryRow({
   index,
   onEdit,
   onDelete,
-  onToggleStatus,
+  onMarkNotified,
   onPreviewProof
 }: LargeCustomerDeliveryRowProps) {
   const statusMeta = getDeliveryStatusMeta(item);
@@ -121,8 +121,8 @@ export default function LargeCustomerDeliveryRow({
           <Button type="button" size="sm" variant="secondary" className="!w-auto" onClick={() => onEdit(item)}>
             แก้ไข
           </Button>
-          <Button type="button" size="sm" variant="ghost" className="!w-auto" onClick={() => onToggleStatus(item.tempId)}>
-            {item.status === "delivered" ? "เปลี่ยนเป็นยังไม่แจ้ง" : "บันทึกว่าแจ้งแล้ว"}
+          <Button type="button" size="sm" variant="ghost" className="!w-auto" onClick={() => onMarkNotified(item.tempId)} disabled={item.status === "delivered"}>
+            {item.status === "delivered" ? "แจ้งแล้ว" : "บันทึกว่าแจ้งแล้ว"}
           </Button>
           <Button type="button" size="sm" variant="ghost" className="!w-auto text-red-300 hover:bg-red-500/10 hover:text-red-200" onClick={() => onDelete(item.tempId)}>
             ลบ
