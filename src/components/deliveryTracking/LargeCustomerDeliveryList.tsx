@@ -254,7 +254,7 @@ export default function LargeCustomerDeliveryList({
           <Button
             type="button"
             size="sm"
-            className="!w-fit rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 !w-full rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => beginCapture(item)}
             disabled={uploading}
           >
@@ -441,45 +441,72 @@ export default function LargeCustomerDeliveryList({
         </div>
       </div>
 
-      <div className="grid gap-2 md:hidden">
+      <div className="grid gap-3 md:hidden">
         {items.map((item, index) => {
           const googleMapsUrl = getGoogleMapsUrl(item);
+          const notified = item.status === "delivered";
           return (
             <div
               key={item.tempId}
-              className={`rounded-xl border border-slate-700/80 bg-[#111827] p-3 text-sm text-gray-300 ${
+              className={`rounded-2xl border border-slate-700/80 bg-[#111827] p-3.5 text-sm text-gray-300 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.9)] ${
                 selectedTempId === item.tempId ? markerStatusStyles[item.status].rowHighlightClass : ""
               }`}
               onClick={() => onRowSelect?.(item.tempId)}
             >
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium text-white">{item.company_name || `รายการ ${index + 1}`}</p>
-                <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${getStatusClass(item)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="pr-2 text-base font-semibold leading-6 text-white">
+                  {item.company_name || `รายการ ${index + 1}`}
+                </p>
+                <span className={`inline-flex shrink-0 rounded-full border px-2 py-1 text-xs font-medium ${getStatusClass(item)}`}>
                   {getStatusLabel(item)}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
-              <p className="mt-1 text-xs text-gray-400" onClick={(event) => event.stopPropagation()}>
-                แผนที่:{" "}
-                {googleMapsUrl ? (
-                  <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
-                    เปิดแผนที่
-                  </a>
-                ) : (
-                  "ไม่มีพิกัด"
-                )}
-              </p>
-              <div className="mt-2" onClick={(event) => event.stopPropagation()}>{proofCell(item, index)}</div>
-              <div className="mt-3 flex flex-wrap gap-1.5" onClick={(event) => event.stopPropagation()}>
-                <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-gray-500 px-3 py-2 text-gray-200 hover:border-gray-300 hover:bg-gray-800/40 hover:text-white" onClick={() => onEdit(item)}>
-                  แก้ไข
+
+              <div className="mt-2 space-y-1.5 text-xs text-slate-300">
+                <p>
+                  เวลาแจ้ง: <span className="text-slate-200">{formatThaiDateTime(item.delivered_at)}</span>
+                </p>
+                <p onClick={(event) => event.stopPropagation()}>
+                  แผนที่:{" "}
+                  {googleMapsUrl ? (
+                    <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="font-medium text-blue-300 underline underline-offset-2">
+                      เปิดแผนที่
+                    </a>
+                  ) : (
+                    <span className="text-slate-500">ไม่มีพิกัด</span>
+                  )}
+                </p>
+              </div>
+
+              <div className="mt-3" onClick={(event) => event.stopPropagation()}>{proofCell(item, index)}</div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2" onClick={(event) => event.stopPropagation()}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-11 !w-full rounded-xl border border-green-500/60 bg-green-500/20 px-3 py-2 text-sm font-medium text-green-300 hover:bg-green-500/30 hover:text-green-200"
+                  onClick={() => onMarkNotified(item.tempId)}
+                  disabled={notified}
+                >
+                  {notified ? "แจ้งแล้ว" : "บันทึกว่าแจ้งแล้ว"}
                 </Button>
-                <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-green-500/60 bg-green-500/20 px-3 py-2 text-green-300 hover:bg-green-500/30 hover:text-green-200" onClick={() => onMarkNotified(item.tempId)} disabled={item.status === "delivered"}>
-                  {item.status === "delivered" ? "แจ้งแล้ว" : "บันทึกว่าแจ้งแล้ว"}
-                </Button>
-                <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-red-500/60 bg-red-500/20 px-3 py-2 text-red-300 hover:bg-red-500/30 hover:text-red-200" onClick={() => onDelete(item.tempId)}>
-                  ลบ
-                </Button>
+                <div className="flex items-center justify-end gap-3 pt-0.5">
+                  <button
+                    type="button"
+                    className="rounded-md px-2 py-1 text-xs font-medium text-slate-300 underline underline-offset-2 hover:text-white"
+                    onClick={() => onEdit(item)}
+                  >
+                    แก้ไข
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md px-2 py-1 text-xs font-medium text-red-300 underline underline-offset-2 hover:text-red-200"
+                    onClick={() => onDelete(item.tempId)}
+                  >
+                    ลบ
+                  </button>
+                </div>
               </div>
             </div>
           );
