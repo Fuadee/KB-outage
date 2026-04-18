@@ -3,7 +3,8 @@
 import { useEffect, useMemo } from "react";
 import { LatLngBounds } from "leaflet";
 import type { EditableTarget } from "./types";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
+import { markerStatusStyles } from "./markerStatusStyles";
 
 type CustomerMapSectionProps = {
   items: EditableTarget[];
@@ -22,6 +23,9 @@ type CustomerMapPoint = {
 const KRABI_CENTER: [number, number] = [8.0863, 98.9063];
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const MAP_MAX_ZOOM = 16;
+const SINGLE_POINT_ZOOM = 15;
+const MARKER_RADIUS = 7;
 
 const isValidCoordinate = (latitude: number | null | undefined, longitude: number | null | undefined) => {
   if (typeof latitude !== "number" || typeof longitude !== "number") return false;
@@ -38,12 +42,12 @@ function MapViewportController({ points }: { points: CustomerMapPoint[] }) {
 
     if (points.length === 1) {
       const onlyPoint = points[0];
-      map.setView([onlyPoint.latitude, onlyPoint.longitude], 14);
+      map.setView([onlyPoint.latitude, onlyPoint.longitude], Math.min(SINGLE_POINT_ZOOM, MAP_MAX_ZOOM));
       return;
     }
 
     const bounds = new LatLngBounds(points.map((point) => [point.latitude, point.longitude] as [number, number]));
-    map.fitBounds(bounds, { padding: [30, 30] });
+    map.fitBounds(bounds, { padding: [30, 30], maxZoom: MAP_MAX_ZOOM });
   }, [map, points]);
 
   return null;
@@ -84,6 +88,7 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
           <MapContainer
             center={KRABI_CENTER}
             zoom={11}
+            maxZoom={MAP_MAX_ZOOM}
             scrollWheelZoom
             className="h-full w-full"
             aria-label="แผนที่ลูกค้าทั้งหมด"
@@ -91,9 +96,16 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
             <TileLayer attribution={OSM_ATTRIBUTION} url={OSM_TILE_URL} />
             <MapViewportController points={mapPoints} />
             {mapPoints.map((point) => (
-              <Marker
+              <CircleMarker
                 key={point.tempId}
                 position={[point.latitude, point.longitude]}
+                radius={MARKER_RADIUS}
+                pathOptions={{
+                  color: "#ffffff",
+                  weight: 2,
+                  fillColor: markerStatusStyles[point.status].color,
+                  fillOpacity: 1
+                }}
                 eventHandlers={{
                   click: () => onMarkerSelect(point.tempId)
                 }}
@@ -101,14 +113,29 @@ export default function CustomerMapSection({ items, selectedTempId, onMarkerSele
                 <Popup>
                   <div className="text-sm">
                     <div className="font-medium">{point.companyName}</div>
-                    <div>{point.status === "delivered" ? "แจ้งแล้ว" : "ยังไม่แจ้ง"}</div>
-                                      </div>
+                    <div>{markerStatusStyles[point.status].label}</div>
+                  </div>
                 </Popup>
-              </Marker>
+              </CircleMarker>
             ))}
           </MapContainer>
         </div>
       )}
+      {mapPoints.length > 0 ? (
+        <ol className="mt-3 space-y-1.5 text-sm text-slate-200">
+          {mapPoints.map((point, index) => (
+            <li key={point.tempId} className="flex items-center gap-2">
+              <span
+                className="inline-block h-3 w-3 rounded-full border border-white"
+                style={{ backgroundColor: markerStatusStyles[point.status].color }}
+                aria-hidden="true"
+              />
+              <span className="text-slate-400">{index + 1}.</span>
+              <span className="truncate">{point.companyName}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </section>
   );
 }
