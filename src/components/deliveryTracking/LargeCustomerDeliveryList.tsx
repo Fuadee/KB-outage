@@ -106,16 +106,6 @@ export default function LargeCustomerDeliveryList({
     streamRef.current = null;
   };
 
-  const isMobileDevice = () => {
-    if (typeof window === "undefined") return false;
-
-    const userAgent = navigator.userAgent || "";
-    const mobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
-
-    return mobileUserAgent || coarsePointer;
-  };
-
   const openFilePickerWithFallbackMessage = (item: EditableTarget, message: string) => {
     setInlineErrorByTempId((prev) => ({ ...prev, [item.tempId]: message }));
     setToast({ tone: "error", message });
@@ -173,18 +163,7 @@ export default function LargeCustomerDeliveryList({
   const beginCapture = (item: EditableTarget) => {
     if (isUploading(item.tempId)) return;
     setInlineErrorByTempId((prev) => ({ ...prev, [item.tempId]: "" }));
-
-    if (isMobileDevice()) {
-      fileInputRefs.current[item.tempId]?.click();
-      return;
-    }
-
-    setCaptureTarget(item);
-    setCaptureMode("camera");
-    setCaptureFile(null);
-    setCapturePreviewUrl(null);
-    setCameraError(null);
-    void startCameraForTarget(item);
+    fileInputRefs.current[item.tempId]?.click();
   };
 
   const onSelectCaptureFile = (item: EditableTarget, file: File | null) => {
@@ -431,8 +410,8 @@ export default function LargeCustomerDeliveryList({
                       </span>
                       <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
                     </td>
-                    <td className="px-4 py-4" onClickCapture={(event) => event.stopPropagation()}>{proofCell(item, index)}</td>
-                    <td className="px-4 py-4 text-xs text-gray-300" onClickCapture={(event) => event.stopPropagation()}>
+                    <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>{proofCell(item, index)}</td>
+                    <td className="px-4 py-4 text-xs text-gray-300" onClick={(event) => event.stopPropagation()}>
                       {googleMapsUrl ? (
                         <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
                           เปิดแผนที่
@@ -441,7 +420,7 @@ export default function LargeCustomerDeliveryList({
                         <span className="text-gray-500">ไม่มีพิกัด</span>
                       )}
                     </td>
-                    <td className="px-4 py-4" onClickCapture={(event) => event.stopPropagation()}>
+                    <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
                       <div className="flex flex-wrap justify-end gap-1.5">
                         <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-gray-500 px-3 py-2 text-gray-200 hover:border-gray-300 hover:bg-gray-800/40 hover:text-white" onClick={() => onEdit(item)}>
                           แก้ไข
@@ -480,7 +459,7 @@ export default function LargeCustomerDeliveryList({
                 </span>
               </div>
               <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
-              <p className="mt-1 text-xs text-gray-400" onClickCapture={(event) => event.stopPropagation()}>
+              <p className="mt-1 text-xs text-gray-400" onClick={(event) => event.stopPropagation()}>
                 แผนที่:{" "}
                 {googleMapsUrl ? (
                   <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
@@ -490,8 +469,8 @@ export default function LargeCustomerDeliveryList({
                   "ไม่มีพิกัด"
                 )}
               </p>
-              <div className="mt-2" onClickCapture={(event) => event.stopPropagation()}>{proofCell(item, index)}</div>
-              <div className="mt-3 flex flex-wrap gap-1.5" onClickCapture={(event) => event.stopPropagation()}>
+              <div className="mt-2" onClick={(event) => event.stopPropagation()}>{proofCell(item, index)}</div>
+              <div className="mt-3 flex flex-wrap gap-1.5" onClick={(event) => event.stopPropagation()}>
                 <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-gray-500 px-3 py-2 text-gray-200 hover:border-gray-300 hover:bg-gray-800/40 hover:text-white" onClick={() => onEdit(item)}>
                   แก้ไข
                 </Button>
