@@ -365,7 +365,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   };
 
   return (
-    <div className="space-y-4 bg-[#0B1220] pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-gray-300">
+    <div className="space-y-4 bg-[#0B1220] pb-[calc(100px+env(safe-area-inset-bottom))] text-gray-300">
       <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-3.5 sm:p-4">
         <div className="space-y-3">
           <div className="space-y-1">
@@ -490,12 +490,12 @@ export default function LargeCustomerDeliveryTrackingPage({
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
       {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700 bg-[#0B1220] pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_24px_-18px_rgba(15,23,42,1)] backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/80 bg-slate-900/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_24px_-18px_rgba(15,23,42,1)] backdrop-blur">
         <div className="mx-auto flex w-full max-w-5xl gap-2 px-3 sm:px-4">
-          <Button type="button" variant="secondary" className="min-h-11 !w-[38%]" onClick={() => router.push(`/job/${jobId}`)}>
+          <Button type="button" variant="secondary" className="min-h-11 flex-1" onClick={() => router.push(`/job/${jobId}`)}>
             ย้อนกลับ
           </Button>
-          <Button type="button" className="min-h-11 !w-[62%]" onClick={saveTargets} disabled={isSaving}>
+          <Button type="button" className="min-h-11 flex-1" onClick={saveTargets} disabled={isSaving}>
             {isSaving ? "กำลังบันทึก..." : "บันทึกรายการ"}
           </Button>
         </div>
