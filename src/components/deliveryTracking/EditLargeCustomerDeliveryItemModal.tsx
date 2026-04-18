@@ -31,6 +31,12 @@ export default function EditLargeCustomerDeliveryItemModal({
       <div className="grid gap-3">
         <Input type="text" value={item.company_name} onChange={(event) => onChange({ company_name: event.target.value })} placeholder="ชื่อลูกค้า" className={getError("company_name") ? "border-red-400" : undefined} />
         {getError("company_name") ? <p className="text-xs text-red-400">{getError("company_name")}</p> : null}
+        <Input
+          type="text"
+          value={item.customerTypeInput}
+          onChange={(event) => onChange({ customerTypeInput: event.target.value, note: event.target.value.trim() || null })}
+          placeholder="ประเภท (ไม่บังคับ)"
+        />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Input type="number" value={item.latitudeInput} onChange={(event) => onChange({ latitudeInput: event.target.value })} placeholder="Latitude" className={getError("latitude") ? "border-red-400" : undefined} />
           <Input type="number" value={item.longitudeInput} onChange={(event) => onChange({ longitudeInput: event.target.value })} placeholder="Longitude" className={getError("longitude") ? "border-red-400" : undefined} />
