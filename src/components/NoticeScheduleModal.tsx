@@ -38,7 +38,6 @@ export default function NoticeScheduleModal({
     total: number;
     delivered: number;
     pending: number;
-    token: string | null;
     targets: Array<{
       id: string;
       company_name: string;
@@ -78,7 +77,6 @@ export default function NoticeScheduleModal({
       total: targets.length,
       delivered,
       pending: targets.length - delivered,
-      token: result.data.batch?.access_token ?? null,
       targets: targets.map(
         (target: {
           id: string;
@@ -277,21 +275,6 @@ export default function NoticeScheduleModal({
                   {deliverySummary.delivered} ราย | ยังไม่แจ้ง{" "}
                   {deliverySummary.pending} ราย
                 </p>
-                {deliverySummary.token ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={async () => {
-                        const link = `${window.location.origin}/delivery/${deliverySummary.token}`;
-                        await navigator.clipboard.writeText(link);
-                      }}
-                    >
-                      copy public delivery link
-                    </Button>
-                  </div>
-                ) : null}
                 {deliverySummary.targets.length > 0 ? (
                   <ul className="space-y-1">
                     {deliverySummary.targets.slice(0, 5).map((target) => (

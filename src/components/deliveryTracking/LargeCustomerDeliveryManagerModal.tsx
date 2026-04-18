@@ -71,15 +71,23 @@ export default function LargeCustomerDeliveryManagerModal({
   const summary = useMemo(() => calculateDeliverySummary(localTargets), [localTargets]);
 
   const filteredTargets = useMemo(() => {
-    const keyword = searchText.trim().toLowerCase();
-    return localTargets.filter((item) => {
-      const statusMatch = statusFilter === "all" ? true : item.status === statusFilter;
-      if (!statusMatch) return false;
-      if (!keyword) return true;
-      return [item.company_name, item.contact_name, item.note]
-        .map((value) => value?.toLowerCase() ?? "")
-        .some((value) => value.includes(keyword));
-    });
+    try {
+      const keyword = searchText.trim().toLowerCase();
+      return localTargets.filter((item) => {
+        const statusMatch = statusFilter === "all" ? true : item.status === statusFilter;
+        if (!statusMatch) return false;
+        if (!keyword) return true;
+        return [item.company_name, item.contact_name, item.note]
+          .map((value) => value?.toLowerCase() ?? "")
+          .some((value) => value.includes(keyword));
+      });
+    } catch (mappingError) {
+      console.error("[delivery-tracking] render mapping failed", {
+        jobId,
+        error: mappingError
+      });
+      return [];
+    }
   }, [localTargets, searchText, statusFilter]);
 
   const editingItem = useMemo(
@@ -99,7 +107,20 @@ export default function LargeCustomerDeliveryManagerModal({
 
   const patchTarget = (tempId: string, patch: Partial<EditableTarget>) => {
     clearFieldErrors(tempId);
-    setLocalTargets((prev) => prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target)));
+    const found = localTargets.some((target) => target.tempId === tempId);
+    if (!found) {
+      console.error("[delivery-tracking] local state update failed", {
+        jobId,
+        action: "edit item",
+        tempId,
+        reason: "item not found"
+      });
+      return;
+    }
+
+    setLocalTargets((prev) =>
+      prev.map((target) => (target.tempId === tempId ? { ...target, ...patch } : target))
+    );
   };
 
   const validateItem = (item: EditableTarget) => {
@@ -169,6 +190,7 @@ export default function LargeCustomerDeliveryManagerModal({
       syncFromServer(targets);
     } catch (loadError) {
       console.error("[delivery-tracking] refetch failed", { jobId, error: loadError });
+      console.error("[delivery-tracking] load failed", { jobId, error: loadError });
       setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลไม่สำเร็จ");
       setLocalTargets([]);
     } finally {
@@ -242,9 +264,12 @@ export default function LargeCustomerDeliveryManagerModal({
     try {
       const payload = mapPayload(localTargets);
       console.info("[delivery-tracking] save payload", { jobId, payloadCount: payload.length, payload });
-      const nextTargets = await persistDeliveryTargetsByJobId(jobId, payload);
-      console.info("[delivery-tracking] save success", { jobId, count: nextTargets.length });
-      syncFromServer(nextTargets);
+      await persistDeliveryTargetsByJobId(jobId, payload);
+      console.info("[delivery-tracking] save success", { jobId });
+
+      const refetchedTargets = await fetchDeliveryTargetsByJobId(jobId);
+      console.info("[delivery-tracking] refetch success", { jobId, count: refetchedTargets.length });
+      syncFromServer(refetchedTargets);
       setSuccess("บันทึกรายการสำเร็จ");
       onSaved?.();
       return true;
@@ -262,6 +287,13 @@ export default function LargeCustomerDeliveryManagerModal({
     const validation = validateItem(creatingItem);
     if (Object.keys(validation.nextErrors).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...validation.nextErrors }));
+      console.error("[delivery-tracking] local state update failed", {
+        jobId,
+        action: "add item",
+        tempId: creatingItem.tempId,
+        reason: "validation failed",
+        errors: validation.nextErrors
+      });
       return;
     }
     console.info("[delivery-tracking] add item", { jobId, tempId: creatingItem.tempId });
@@ -272,7 +304,15 @@ export default function LargeCustomerDeliveryManagerModal({
   const markItemAsNotified = (tempId: string) => {
     const nowIso = new Date().toISOString();
     const target = localTargets.find((item) => item.tempId === tempId);
-    if (!target || target.status === "delivered") return;
+    if (!target || target.status === "delivered") {
+      console.error("[delivery-tracking] local state update failed", {
+        jobId,
+        action: "mark item notified",
+        tempId,
+        reason: !target ? "item not found" : "already delivered"
+      });
+      return;
+    }
 
     console.info("[delivery-tracking] mark item notified", { jobId, tempId });
     setLocalTargets((prev) =>
@@ -344,7 +384,18 @@ export default function LargeCustomerDeliveryManagerModal({
             }}
             onDelete={(tempId) => {
               console.info("[delivery-tracking] delete item", { jobId, tempId });
-              setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+              setLocalTargets((prev) => {
+                const next = prev.filter((item) => item.tempId !== tempId);
+                if (next.length === prev.length) {
+                  console.error("[delivery-tracking] local state update failed", {
+                    jobId,
+                    action: "delete item",
+                    tempId,
+                    reason: "item not found"
+                  });
+                }
+                return next;
+              });
             }}
             onMarkNotified={markItemAsNotified}
           />
