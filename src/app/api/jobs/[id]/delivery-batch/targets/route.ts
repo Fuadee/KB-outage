@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   DeliveryTrackingError,
   getDeliveryBatchWithTargetsByJobId,
+  getOrCreateDeliveryBatchByJobId,
   replaceDeliveryTargets
 } from "@/lib/deliveryTracking";
 import type { DeliveryTargetInput } from "@/types/deliveryTracking";
@@ -42,22 +43,13 @@ export async function POST(
     }
 
     const existing = await getDeliveryBatchWithTargetsByJobId(jobId);
-    if (!existing?.batch?.id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "ยังไม่มีลิงก์สำหรับงานนี้ กรุณากด “สร้างลิงก์” ก่อนบันทึกรายการ",
-          code: "BATCH_NOT_FOUND"
-        },
-        { status: 400 }
-      );
-    }
+    const batch = existing?.batch ?? (await getOrCreateDeliveryBatchByJobId(jobId));
 
-    const targets = await replaceDeliveryTargets(existing.batch.id, body.targets);
+    const targets = await replaceDeliveryTargets(batch.id, body.targets);
     return NextResponse.json({
       ok: true,
       data: {
-        batch: existing.batch,
+        batch,
         targets
       }
     });
