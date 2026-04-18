@@ -20,8 +20,8 @@ export default function JobPrimaryAction({
     <Button
       type="button"
       size="sm"
-      variant="secondary"
-      className="h-9 w-full justify-start rounded-md border-slate-500 bg-slate-800/80 px-3 text-xs font-semibold tracking-normal"
+      variant="primary"
+      className="w-full uppercase tracking-wide"
       onClick={onClick}
       disabled={disabled || loading}
     >
