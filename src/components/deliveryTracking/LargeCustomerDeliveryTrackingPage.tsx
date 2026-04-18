@@ -25,16 +25,6 @@ type DeliveryTrackingPageProps = {
   initialJob?: JobContext | null;
 };
 
-type TokenResponse = {
-  ok: boolean;
-  error?: string;
-  data?: {
-    batch?: {
-      access_token: string;
-    };
-  };
-};
-
 const normalizeOptionalText = (value?: string | null) => {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
@@ -82,13 +72,11 @@ export default function LargeCustomerDeliveryTrackingPage({
 }: DeliveryTrackingPageProps) {
   const router = useRouter();
   const [job, setJob] = useState<JobContext | null>(initialJob ?? null);
-  const [jobLoading, setJobLoading] = useState(!initialJob);
   const [jobError, setJobError] = useState<string | null>(null);
 
   const [localTargets, setLocalTargets] = useState<EditableTarget[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isCopyingLink, setIsCopyingLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -187,17 +175,6 @@ export default function LargeCustomerDeliveryTrackingPage({
     return payload;
   };
 
-  const ensureBatchToken = async () => {
-    const response = await fetch(`/api/jobs/${jobId}/delivery-batch/token`, {
-      method: "POST"
-    });
-    const result = (await response.json().catch(() => null)) as TokenResponse | null;
-    if (!response.ok || !result?.ok || !result.data?.batch?.access_token) {
-      throw new Error(result?.error ?? "ไม่สามารถสร้างลิงก์สำหรับติดตามได้");
-    }
-    return result.data.batch.access_token;
-  };
-
   const loadExisting = async () => {
     setError(null);
     setSuccess(null);
@@ -232,7 +209,6 @@ export default function LargeCustomerDeliveryTrackingPage({
     if (initialJob) return;
     let mounted = true;
     const loadJob = async () => {
-      setJobLoading(true);
       setJobError(null);
       try {
         const { data, error } = await getJob(jobId);
@@ -248,8 +224,6 @@ export default function LargeCustomerDeliveryTrackingPage({
       } catch (loadError) {
         if (!mounted) return;
         setJobError(loadError instanceof Error ? loadError.message : "โหลดข้อมูลงานไม่สำเร็จ");
-      } finally {
-        if (mounted) setJobLoading(false);
       }
     };
 
@@ -298,7 +272,6 @@ export default function LargeCustomerDeliveryTrackingPage({
     console.info("[delivery-tracking-page] save started", { jobId, localCount: localTargets.length });
 
     try {
-      await ensureBatchToken();
       const payload = mapPayload(localTargets);
       await persistDeliveryTargetsByJobId(jobId, payload);
       console.info("[delivery-tracking-page] save success", { jobId });
@@ -314,24 +287,6 @@ export default function LargeCustomerDeliveryTrackingPage({
       return false;
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const copyPublicLink = async () => {
-    setError(null);
-    setSuccess(null);
-    setIsCopyingLink(true);
-
-    try {
-      const token = await ensureBatchToken();
-      const publicUrl = `${window.location.origin}/delivery/${token}`;
-      await navigator.clipboard.writeText(publicUrl);
-      console.info("[delivery-tracking-page] copy link clicked", { jobId, publicUrl });
-      setSuccess("คัดลอกลิงก์สำหรับกรอกข้อมูลแล้ว");
-    } catch (copyError) {
-      setError(copyError instanceof Error ? copyError.message : "คัดลอกลิงก์ไม่สำเร็จ");
-    } finally {
-      setIsCopyingLink(false);
     }
   };
 
@@ -414,18 +369,7 @@ export default function LargeCustomerDeliveryTrackingPage({
           <Button type="button" variant="secondary" className="!w-auto" onClick={loadExisting} disabled={isRefreshing || isSaving}>
             {isRefreshing ? "กำลังรีเฟรช..." : "รีเฟรชข้อมูล"}
           </Button>
-          <Button
-            type="button"
-            className="!w-auto"
-            onClick={copyPublicLink}
-            disabled={isCopyingLink || isSaving || jobLoading}
-          >
-            {isCopyingLink ? "กำลังคัดลอก..." : "คัดลอกลิงก์ส่งให้ผู้ปฏิบัติงาน"}
-          </Button>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          ลิงก์นี้ใช้ส่งให้ผู้เกี่ยวข้องเปิดหน้า public สำหรับกรอกหรืออัปเดตข้อมูลการแจ้งรายรายการ
-        </p>
       </div>
 
       <LargeCustomerDeliveryList
