@@ -10,13 +10,10 @@ export type EditableTarget = DeliveryTargetInput & {
 export const createEmptyTarget = (): EditableTarget => ({
   tempId: crypto.randomUUID(),
   company_name: "",
-  contact_name: "",
-  note: "",
   latitude: null,
   longitude: null,
   latitudeInput: "",
   longitudeInput: "",
-  map_link: "",
   status: "pending",
   proof_image_url: null,
   delivered_at: null
@@ -27,6 +24,5 @@ export const toEditableTarget = (target: DeliveryTargetInput & { id: string; sta
   ...target,
   latitudeInput: target.latitude === null || target.latitude === undefined ? "" : String(target.latitude),
   longitudeInput: target.longitude === null || target.longitude === undefined ? "" : String(target.longitude),
-  map_link: target.map_link ?? "",
   status: target.status ?? "pending"
 });

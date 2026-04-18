@@ -18,6 +18,10 @@ export default function LargeCustomerDeliveryList({
   onMarkNotified
 }: LargeCustomerDeliveryListProps) {
   const [previewTarget, setPreviewTarget] = useState<EditableTarget | null>(null);
+  const getGoogleMapsUrl = (item: EditableTarget) =>
+    item.latitudeInput.trim() && item.longitudeInput.trim()
+      ? `https://www.google.com/maps?q=${item.latitudeInput.trim()},${item.longitudeInput.trim()}`
+      : null;
 
   const getStatusLabel = (item: EditableTarget) => {
     const hasProof = Boolean(item.proof_image_url);
@@ -58,8 +62,7 @@ export default function LargeCustomerDeliveryList({
           <table className="min-w-full bg-[#111827]">
             <thead className="sticky top-0 bg-[#0B1220] text-left text-xs uppercase tracking-wide text-gray-300">
               <tr>
-                <th className="px-4 py-3">รายการ</th>
-                <th className="px-4 py-3">ผู้รับผิดชอบ</th>
+                <th className="px-4 py-3">ชื่อลูกค้า</th>
                 <th className="px-4 py-3">สถานะ</th>
                 <th className="px-4 py-3">หลักฐาน</th>
                 <th className="px-4 py-3">แผนที่</th>
@@ -84,8 +87,10 @@ export default function LargeCustomerDeliveryList({
       </div>
 
       <div className="grid gap-2 md:hidden">
-        {items.map((item, index) => (
-          <div key={item.tempId} className="rounded-xl border border-slate-700/80 bg-[#111827] p-3 text-sm text-gray-300">
+        {items.map((item, index) => {
+          const googleMapsUrl = getGoogleMapsUrl(item);
+          return (
+            <div key={item.tempId} className="rounded-xl border border-slate-700/80 bg-[#111827] p-3 text-sm text-gray-300">
             <div className="flex items-center justify-between gap-3">
               <p className="font-medium text-white">{item.company_name || `รายการ ${index + 1}`}</p>
               <span
@@ -94,8 +99,17 @@ export default function LargeCustomerDeliveryList({
                 {getStatusLabel(item)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-gray-400">ผู้รับผิดชอบ: {item.contact_name?.trim() || "-"}</p>
             <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
+            <p className="mt-1 text-xs text-gray-400">
+              แผนที่:{" "}
+              {googleMapsUrl ? (
+                <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
+                  เปิดแผนที่
+                </a>
+              ) : (
+                "ไม่มีพิกัด"
+              )}
+            </p>
             <div className="mt-2 flex items-center gap-2">
               <span
                 className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${
@@ -127,8 +141,9 @@ export default function LargeCustomerDeliveryList({
                 ลบ
               </Button>
             </div>
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
 
       <Modal

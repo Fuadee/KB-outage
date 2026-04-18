@@ -46,6 +46,11 @@ const formatThaiDateTime = (value?: string | null) => {
   });
 };
 
+const getGoogleMapsUrl = (item: EditableTarget) => {
+  if (!item.latitudeInput.trim() || !item.longitudeInput.trim()) return null;
+  return `https://www.google.com/maps?q=${item.latitudeInput.trim()},${item.longitudeInput.trim()}`;
+};
+
 export default function LargeCustomerDeliveryRow({
   item,
   index,
@@ -56,6 +61,7 @@ export default function LargeCustomerDeliveryRow({
 }: LargeCustomerDeliveryRowProps) {
   const statusMeta = getDeliveryStatusMeta(item);
   const hasProof = Boolean(item.proof_image_url);
+  const googleMapsUrl = getGoogleMapsUrl(item);
 
   return (
     <tr
@@ -65,9 +71,7 @@ export default function LargeCustomerDeliveryRow({
     >
       <td className="px-4 py-4">
         <p className="font-medium text-white">{item.company_name || `รายการ ${index + 1}`}</p>
-        {item.note ? <p className="mt-1 text-xs text-gray-400 line-clamp-2">{item.note}</p> : null}
       </td>
-      <td className="px-4 py-4 text-gray-300">{item.contact_name?.trim() || "-"}</td>
       <td className="px-4 py-4">
         <span
           className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${statusMeta.badgeClass}`}
@@ -110,14 +114,12 @@ export default function LargeCustomerDeliveryRow({
         </div>
       </td>
       <td className="px-4 py-4 text-xs text-gray-300">
-        {item.map_link ? (
-          <a href={item.map_link} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
+        {googleMapsUrl ? (
+          <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
             เปิดแผนที่
           </a>
-        ) : item.latitudeInput || item.longitudeInput ? (
-          <span>{`${item.latitudeInput || "-"}, ${item.longitudeInput || "-"}`}</span>
         ) : (
-          <span className="text-gray-500">ไม่มีข้อมูล</span>
+          <span className="text-gray-500">ไม่มีพิกัด</span>
         )}
       </td>
       <td className="px-4 py-4">
