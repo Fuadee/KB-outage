@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import LargeCustomerDeliverySummary from "./LargeCustomerDeliverySummary";
 import LargeCustomerDeliveryList from "./LargeCustomerDeliveryList";
+import CustomerMapSection from "./CustomerMapSection";
 import EditLargeCustomerDeliveryItemModal from "./EditLargeCustomerDeliveryItemModal";
 import CreateLargeCustomerDeliveryItemModal from "./CreateLargeCustomerDeliveryItemModal";
 import { fetchDeliveryTargetsByJobId, persistDeliveryTargetsByJobId } from "./service";
@@ -64,6 +65,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   const [statusFilter, setStatusFilter] = useState<"all" | DeliveryStatus>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creatingItem, setCreatingItem] = useState<EditableTarget | null>(null);
+  const [selectedTempId, setSelectedTempId] = useState<string | null>(null);
 
   const summary = useMemo(() => {
     const delivered = localTargets.filter((item) => item.status === "delivered").length;
@@ -91,6 +93,14 @@ export default function LargeCustomerDeliveryTrackingPage({
     () => localTargets.find((item) => item.tempId === editingId) ?? null,
     [localTargets, editingId]
   );
+
+  useEffect(() => {
+    if (!selectedTempId) return;
+    const stillVisible = filteredTargets.some((item) => item.tempId === selectedTempId);
+    if (!stillVisible) {
+      setSelectedTempId(null);
+    }
+  }, [filteredTargets, selectedTempId]);
 
   const clearFieldErrors = (tempId: string) => {
     setFieldErrors((prev) => {
@@ -350,6 +360,8 @@ export default function LargeCustomerDeliveryTrackingPage({
       <LargeCustomerDeliveryList
         jobId={jobId}
         items={filteredTargets}
+        selectedTempId={selectedTempId}
+        onRowSelect={setSelectedTempId}
         onEdit={(item) => {
           console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
           setEditingId(item.tempId);
@@ -367,6 +379,8 @@ export default function LargeCustomerDeliveryTrackingPage({
           setError(null);
         }}
       />
+
+      <CustomerMapSection items={filteredTargets} selectedTempId={selectedTempId} onMarkerSelect={setSelectedTempId} />
 
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
       {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}

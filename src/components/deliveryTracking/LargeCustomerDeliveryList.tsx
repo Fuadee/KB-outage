@@ -3,6 +3,7 @@ import Modal from "@/components/Modal";
 import Button from "@/components/ui/Button";
 import { uploadDeliveryProofForJobId } from "./service";
 import type { EditableTarget } from "./types";
+import { markerStatusStyles } from "./markerStatusStyles";
 
 type LargeCustomerDeliveryListProps = {
   jobId: string;
@@ -11,6 +12,8 @@ type LargeCustomerDeliveryListProps = {
   onDelete: (tempId: string) => void;
   onMarkNotified: (tempId: string) => void;
   onProofSaved: (tempId: string, patch: Pick<EditableTarget, "proof_image_url" | "status" | "delivered_at">) => void;
+  selectedTempId?: string | null;
+  onRowSelect?: (tempId: string) => void;
 };
 
 type UploadingState = Record<string, boolean>;
@@ -24,7 +27,9 @@ export default function LargeCustomerDeliveryList({
   onEdit,
   onDelete,
   onMarkNotified,
-  onProofSaved
+  onProofSaved,
+  selectedTempId,
+  onRowSelect
 }: LargeCustomerDeliveryListProps) {
   const [previewTarget, setPreviewTarget] = useState<EditableTarget | null>(null);
   const [captureTarget, setCaptureTarget] = useState<EditableTarget | null>(null);
@@ -408,8 +413,11 @@ export default function LargeCustomerDeliveryList({
                 return (
                   <tr
                     key={item.tempId}
+                    onClick={() => onRowSelect?.(item.tempId)}
                     className={`align-top text-sm text-gray-300 transition-colors hover:bg-blue-500/10 ${
                       index % 2 === 0 ? "bg-[#111827]" : "bg-[#0F172A]"
+                    } ${
+                      selectedTempId === item.tempId ? markerStatusStyles[item.status].rowHighlightClass : ""
                     }`}
                   >
                     <td className="px-4 py-4">
@@ -423,8 +431,8 @@ export default function LargeCustomerDeliveryList({
                       </span>
                       <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
                     </td>
-                    <td className="px-4 py-4">{proofCell(item, index)}</td>
-                    <td className="px-4 py-4 text-xs text-gray-300">
+                    <td className="px-4 py-4" onClickCapture={(event) => event.stopPropagation()}>{proofCell(item, index)}</td>
+                    <td className="px-4 py-4 text-xs text-gray-300" onClickCapture={(event) => event.stopPropagation()}>
                       {googleMapsUrl ? (
                         <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
                           เปิดแผนที่
@@ -433,7 +441,7 @@ export default function LargeCustomerDeliveryList({
                         <span className="text-gray-500">ไม่มีพิกัด</span>
                       )}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4" onClickCapture={(event) => event.stopPropagation()}>
                       <div className="flex flex-wrap justify-end gap-1.5">
                         <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-gray-500 px-3 py-2 text-gray-200 hover:border-gray-300 hover:bg-gray-800/40 hover:text-white" onClick={() => onEdit(item)}>
                           แก้ไข
@@ -458,7 +466,13 @@ export default function LargeCustomerDeliveryList({
         {items.map((item, index) => {
           const googleMapsUrl = getGoogleMapsUrl(item);
           return (
-            <div key={item.tempId} className="rounded-xl border border-slate-700/80 bg-[#111827] p-3 text-sm text-gray-300">
+            <div
+              key={item.tempId}
+              className={`rounded-xl border border-slate-700/80 bg-[#111827] p-3 text-sm text-gray-300 ${
+                selectedTempId === item.tempId ? markerStatusStyles[item.status].rowHighlightClass : ""
+              }`}
+              onClick={() => onRowSelect?.(item.tempId)}
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className="font-medium text-white">{item.company_name || `รายการ ${index + 1}`}</p>
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${getStatusClass(item)}`}>
@@ -466,7 +480,7 @@ export default function LargeCustomerDeliveryList({
                 </span>
               </div>
               <p className="mt-1 text-xs text-gray-400">เวลาแจ้ง: {formatThaiDateTime(item.delivered_at)}</p>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-gray-400" onClickCapture={(event) => event.stopPropagation()}>
                 แผนที่:{" "}
                 {googleMapsUrl ? (
                   <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline underline-offset-2">
@@ -476,8 +490,8 @@ export default function LargeCustomerDeliveryList({
                   "ไม่มีพิกัด"
                 )}
               </p>
-              <div className="mt-2">{proofCell(item, index)}</div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
+              <div className="mt-2" onClickCapture={(event) => event.stopPropagation()}>{proofCell(item, index)}</div>
+              <div className="mt-3 flex flex-wrap gap-1.5" onClickCapture={(event) => event.stopPropagation()}>
                 <Button type="button" size="sm" variant="ghost" className="!w-auto rounded-md border border-gray-500 px-3 py-2 text-gray-200 hover:border-gray-300 hover:bg-gray-800/40 hover:text-white" onClick={() => onEdit(item)}>
                   แก้ไข
                 </Button>
