@@ -14,6 +14,7 @@ type LargeCustomerDeliveryListProps = {
 };
 
 type UploadingState = Record<string, boolean>;
+type CaptureMode = "camera" | "file";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -27,13 +28,19 @@ export default function LargeCustomerDeliveryList({
 }: LargeCustomerDeliveryListProps) {
   const [previewTarget, setPreviewTarget] = useState<EditableTarget | null>(null);
   const [captureTarget, setCaptureTarget] = useState<EditableTarget | null>(null);
+  const [captureMode, setCaptureMode] = useState<CaptureMode | null>(null);
   const [captureFile, setCaptureFile] = useState<File | null>(null);
   const [capturePreviewUrl, setCapturePreviewUrl] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [uploadingByTempId, setUploadingByTempId] = useState<UploadingState>({});
   const [inlineErrorByTempId, setInlineErrorByTempId] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -50,6 +57,13 @@ export default function LargeCustomerDeliveryList({
     setCapturePreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [captureFile]);
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
 
   const getGoogleMapsUrl = (item: EditableTarget) =>
     item.latitudeInput.trim() && item.longitudeInput.trim()
@@ -82,10 +96,90 @@ export default function LargeCustomerDeliveryList({
 
   const isUploading = (tempId: string) => Boolean(uploadingByTempId[tempId]);
 
+  const stopCameraStream = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  };
+
+  const isMobileDevice = () => {
+    if (typeof window === "undefined") return false;
+
+    const userAgent = navigator.userAgent || "";
+    const mobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+
+    return mobileUserAgent || coarsePointer;
+  };
+
+  const openFilePickerWithFallbackMessage = (item: EditableTarget, message: string) => {
+    setInlineErrorByTempId((prev) => ({ ...prev, [item.tempId]: message }));
+    setToast({ tone: "error", message });
+    fileInputRefs.current[item.tempId]?.click();
+  };
+
+  const startCameraForTarget = async (item: EditableTarget) => {
+    setCameraError(null);
+    setIsStartingCamera(true);
+
+    try {
+      if (typeof window === "undefined" || !window.isSecureContext) {
+        throw new Error("บริบทไม่ปลอดภัย");
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("เบราว์เซอร์ไม่รองรับ");
+      }
+
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (error) {
+      stopCameraStream();
+
+      let message = "ไม่สามารถเปิดกล้องได้ กรุณาเลือกรูปจากเครื่อง";
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        message = "ไม่ได้รับสิทธิ์ใช้กล้อง กรุณาเลือกรูปจากเครื่อง";
+      } else if (error instanceof DOMException && (error.name === "NotFoundError" || error.name === "OverconstrainedError")) {
+        message = "ไม่พบกล้องในอุปกรณ์ กรุณาเลือกรูปจากเครื่อง";
+      } else if (error instanceof Error && error.message === "บริบทไม่ปลอดภัย") {
+        message = "เปิดกล้องได้เฉพาะหน้าเว็บที่ปลอดภัย (HTTPS) กรุณาเลือกรูปจากเครื่อง";
+      } else if (error instanceof Error && error.message === "เบราว์เซอร์ไม่รองรับ") {
+        message = "เบราว์เซอร์ไม่รองรับการเปิดกล้อง กรุณาเลือกรูปจากเครื่อง";
+      }
+
+      setCameraError(message);
+      setCaptureTarget(null);
+      setCaptureMode(null);
+      setCaptureFile(null);
+      openFilePickerWithFallbackMessage(item, message);
+    } finally {
+      setIsStartingCamera(false);
+    }
+  };
+
   const beginCapture = (item: EditableTarget) => {
     if (isUploading(item.tempId)) return;
     setInlineErrorByTempId((prev) => ({ ...prev, [item.tempId]: "" }));
-    fileInputRefs.current[item.tempId]?.click();
+
+    if (isMobileDevice()) {
+      fileInputRefs.current[item.tempId]?.click();
+      return;
+    }
+
+    setCaptureTarget(item);
+    setCaptureMode("camera");
+    setCaptureFile(null);
+    setCapturePreviewUrl(null);
+    setCameraError(null);
+    void startCameraForTarget(item);
   };
 
   const onSelectCaptureFile = (item: EditableTarget, file: File | null) => {
@@ -109,14 +203,20 @@ export default function LargeCustomerDeliveryList({
     }
 
     setCaptureTarget(item);
+    setCaptureMode("file");
     setCaptureFile(file);
+    setCameraError(null);
+    stopCameraStream();
     setInlineErrorByTempId((prev) => ({ ...prev, [item.tempId]: "" }));
   };
 
   const closeCapturePreview = () => {
+    stopCameraStream();
     setCaptureTarget(null);
+    setCaptureMode(null);
     setCaptureFile(null);
     setCapturePreviewUrl(null);
+    setCameraError(null);
   };
 
   const uploadSelectedProof = async () => {
@@ -217,6 +317,54 @@ export default function LargeCustomerDeliveryList({
     () => (previewTarget ? `หลักฐานการแจ้ง: ${previewTarget.company_name || "รายการ"}` : "หลักฐานการแจ้ง"),
     [previewTarget]
   );
+
+  const captureTitle = useMemo(() => {
+    if (!captureTarget) return "ยืนยันรูปหลักฐาน";
+    if (captureMode === "camera") return `ถ่ายรูปหลักฐาน: ${captureTarget.company_name || "รายการ"}`;
+    return `ยืนยันรูปหลักฐาน: ${captureTarget.company_name || "รายการ"}`;
+  }, [captureMode, captureTarget]);
+
+  const capturePhotoFromCamera = async () => {
+    const videoEl = videoRef.current;
+    const canvasEl = canvasRef.current;
+    if (!videoEl || !canvasEl || !captureTarget) return;
+
+    const width = videoEl.videoWidth;
+    const height = videoEl.videoHeight;
+    if (!width || !height) {
+      setCameraError("ยังไม่พร้อมถ่ายภาพ กรุณาลองใหม่");
+      return;
+    }
+
+    canvasEl.width = width;
+    canvasEl.height = height;
+    const context = canvasEl.getContext("2d");
+    if (!context) {
+      setCameraError("ไม่สามารถประมวลผลภาพจากกล้องได้ กรุณาเลือกรูปจากเครื่อง");
+      return;
+    }
+
+    context.drawImage(videoEl, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvasEl.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) {
+      setCameraError("ไม่สามารถถ่ายภาพได้ กรุณาลองใหม่");
+      return;
+    }
+
+    const capturedFile = new File([blob], `delivery-proof-${captureTarget.tempId}-${Date.now()}.jpg`, {
+      type: "image/jpeg"
+    });
+    stopCameraStream();
+    onSelectCaptureFile(captureTarget, capturedFile);
+  };
+
+  const retakePhoto = async () => {
+    if (!captureTarget) return;
+    setCaptureFile(null);
+    setCapturePreviewUrl(null);
+    setCameraError(null);
+    await startCameraForTarget(captureTarget);
+  };
 
   if (items.length === 0) {
     return (
@@ -375,13 +523,22 @@ export default function LargeCustomerDeliveryList({
       </Modal>
 
       <Modal
-        isOpen={Boolean(captureTarget && captureFile)}
-        title={captureTarget ? `ยืนยันรูปหลักฐาน: ${captureTarget.company_name || "รายการ"}` : "ยืนยันรูปหลักฐาน"}
+        isOpen={Boolean(captureTarget)}
+        title={captureTitle}
         onClose={closeCapturePreview}
         panelClassName="max-w-2xl"
         bodyClassName="bg-[#0B1220]"
       >
         <div className="space-y-3">
+          {captureMode === "camera" && !captureFile ? (
+            <div className="space-y-3">
+              <div className="overflow-hidden rounded-xl border border-slate-700/80 bg-black">
+                <video ref={videoRef} autoPlay playsInline muted className="max-h-[60vh] w-full object-contain" />
+              </div>
+              <canvas ref={canvasRef} className="hidden" />
+              {isStartingCamera ? <p className="text-xs text-gray-300">กำลังเปิดกล้อง...</p> : null}
+            </div>
+          ) : null}
           {capturePreviewUrl ? (
             <img
               src={capturePreviewUrl}
@@ -393,18 +550,31 @@ export default function LargeCustomerDeliveryList({
             <p className="truncate">ไฟล์: {captureFile?.name ?? "-"}</p>
             <p>ขนาด: {captureFile ? `${(captureFile.size / 1024 / 1024).toFixed(2)} MB` : "-"}</p>
           </div>
+          {cameraError ? <p className="text-xs text-red-300">{cameraError}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" className="!w-auto" onClick={closeCapturePreview}>
               ยกเลิก
             </Button>
-            <Button
-              type="button"
-              className="!w-auto"
-              onClick={uploadSelectedProof}
-              disabled={Boolean(captureTarget && isUploading(captureTarget.tempId))}
-            >
-              {captureTarget && isUploading(captureTarget.tempId) ? "กำลังบันทึก..." : "ใช้รูปนี้"}
-            </Button>
+            {captureMode === "camera" && !captureFile ? (
+              <Button type="button" className="!w-auto" onClick={capturePhotoFromCamera} disabled={isStartingCamera}>
+                ถ่ายภาพ
+              </Button>
+            ) : null}
+            {captureMode === "camera" && captureFile ? (
+              <Button type="button" variant="secondary" className="!w-auto" onClick={() => void retakePhoto()}>
+                ถ่ายใหม่
+              </Button>
+            ) : null}
+            {captureFile ? (
+              <Button
+                type="button"
+                className="!w-auto"
+                onClick={uploadSelectedProof}
+                disabled={Boolean(captureTarget && isUploading(captureTarget.tempId))}
+              >
+                {captureTarget && isUploading(captureTarget.tempId) ? "กำลังบันทึก..." : "บันทึก"}
+              </Button>
+            ) : null}
           </div>
         </div>
       </Modal>
