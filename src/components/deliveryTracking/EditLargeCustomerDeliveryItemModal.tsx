@@ -46,7 +46,7 @@ export default function EditLargeCustomerDeliveryItemModal({
 
         <div className="mt-2 flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>ยกเลิก</Button>
-          <Button type="button" onClick={onSubmit}>บันทึกรายการ</Button>
+          <Button type="button" onClick={onSubmit}>💾 บันทึกข้อมูลลูกค้า</Button>
         </div>
       </div>
     </Modal>
