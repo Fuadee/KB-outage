@@ -44,12 +44,12 @@ export default function SocialPostPreviewModal({
     try {
       await navigator.clipboard.writeText(previewText);
       if (showToast) {
-        setToastMessage("คัดลอกข้อความแล้ว — ไปวางใน Facebook/LINE ได้เลย");
+        setToastMessage("คัดลอกข้อความแจ้งเตือนแล้ว — ไปวางใน Facebook/LINE ได้เลย");
       }
     } catch (error) {
       console.error("Failed to copy text", error);
       if (showToast) {
-        setToastMessage("คัดลอกข้อความไม่สำเร็จ กรุณาลองใหม่");
+        setToastMessage("คัดลอกข้อความแจ้งเตือนไม่สำเร็จ กรุณาลองใหม่");
       }
     }
   };
@@ -132,8 +132,10 @@ export default function SocialPostPreviewModal({
             type="button"
             variant="secondary"
             onClick={() => void handleCopy(true)}
+            title="คัดลอกข้อความแจ้งเตือน"
+            aria-label="คัดลอกข้อความแจ้งเตือน"
           >
-            คัดลอกข้อความ
+            คัดลอกข้อความแจ้งเตือน
           </Button>
           <Button
             type="button"

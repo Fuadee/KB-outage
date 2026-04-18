@@ -2,7 +2,8 @@
 
 import type { ReactElement, SyntheticEvent } from "react";
 import { MapPin } from "lucide-react";
-import Button, { buttonStyles } from "@/components/ui/Button";
+import { buttonStyles } from "@/components/ui/Button";
+import CopyNoticeButton from "@/components/job/CopyNoticeButton";
 import { cn } from "@/lib/utils";
 
 type MapActionButtonsProps = {
@@ -52,8 +53,9 @@ export default function MapActionButtons({
   const iconClasses = "h-3.5 w-3.5";
   const mapButtonClasses = cn(
     buttonStyles({ variant: "primary", size: "sm" }),
-    "w-full justify-center md:w-auto"
+    "h-9 !w-auto rounded-md px-3.5 text-xs font-semibold"
   );
+
   const handleCopyLink = async (event: SyntheticEvent) => {
     stopPropagation(event);
     try {
@@ -64,7 +66,7 @@ export default function MapActionButtons({
   };
 
   return (
-    <div className={cn("flex flex-wrap gap-2", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <a
         href={googleMap}
         target="_blank"
@@ -72,19 +74,19 @@ export default function MapActionButtons({
         onClick={stopPropagation}
         onPointerDownCapture={stopPropagation}
         className={mapButtonClasses}
+        title="เปิดแผนที่"
+        aria-label="เปิดแผนที่"
       >
         <MapPin className={iconClasses} aria-hidden="true" />
-        <span className="whitespace-nowrap">📍 เปิดแผนที่</span>
+        <span className="whitespace-nowrap">เปิดแผนที่</span>
       </a>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={(event) => void handleCopyLink(event)}
-        onPointerDownCapture={stopPropagation}
-      >
-        คัดลอกลิงก์
-      </Button>
+      <CopyNoticeButton
+        onCopy={handleCopyLink}
+        label="คัดลอกลิงก์"
+        copiedLabel="คัดลอกแล้ว"
+        title="คัดลอกลิงก์แผนที่"
+        className="shrink-0"
+      />
     </div>
   );
 }
