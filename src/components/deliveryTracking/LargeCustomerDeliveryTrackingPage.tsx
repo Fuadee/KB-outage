@@ -357,30 +357,34 @@ export default function LargeCustomerDeliveryTrackingPage({
         </div>
       </div>
 
-      <LargeCustomerDeliveryList
-        jobId={jobId}
-        items={filteredTargets}
-        selectedTempId={selectedTempId}
-        onRowSelect={setSelectedTempId}
-        onEdit={(item) => {
-          console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
-          setEditingId(item.tempId);
-        }}
-        onDelete={(tempId) => {
-          console.info("[delivery-tracking-page] delete item", { jobId, tempId });
-          setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
-        }}
-        onMarkNotified={markItemAsNotified}
-        onProofSaved={(tempId, patch) => {
-          setLocalTargets((prev) =>
-            prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
-          );
-          setSuccess("บันทึกรูปหลักฐานสำเร็จ");
-          setError(null);
-        }}
-      />
+      <div className="relative z-20">
+        <LargeCustomerDeliveryList
+          jobId={jobId}
+          items={filteredTargets}
+          selectedTempId={selectedTempId}
+          onRowSelect={setSelectedTempId}
+          onEdit={(item) => {
+            console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
+            setEditingId(item.tempId);
+          }}
+          onDelete={(tempId) => {
+            console.info("[delivery-tracking-page] delete item", { jobId, tempId });
+            setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
+          }}
+          onMarkNotified={markItemAsNotified}
+          onProofSaved={(tempId, patch) => {
+            setLocalTargets((prev) =>
+              prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
+            );
+            setSuccess("บันทึกรูปหลักฐานสำเร็จ");
+            setError(null);
+          }}
+        />
+      </div>
 
-      <CustomerMapSection items={filteredTargets} selectedTempId={selectedTempId} onMarkerSelect={setSelectedTempId} />
+      <div className="relative z-0">
+        <CustomerMapSection items={filteredTargets} selectedTempId={selectedTempId} onMarkerSelect={setSelectedTempId} />
+      </div>
 
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}
       {success ? <div className="rounded-xl border border-green-500/40 bg-green-500/20 px-3 py-2 text-sm text-green-300">{success}</div> : null}
