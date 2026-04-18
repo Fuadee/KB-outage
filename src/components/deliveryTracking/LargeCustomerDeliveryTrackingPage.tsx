@@ -348,6 +348,7 @@ export default function LargeCustomerDeliveryTrackingPage({
       </div>
 
       <LargeCustomerDeliveryList
+        jobId={jobId}
         items={filteredTargets}
         onEdit={(item) => {
           console.info("[delivery-tracking-page] edit item", { jobId, tempId: item.tempId });
@@ -358,6 +359,13 @@ export default function LargeCustomerDeliveryTrackingPage({
           setLocalTargets((prev) => prev.filter((item) => item.tempId !== tempId));
         }}
         onMarkNotified={markItemAsNotified}
+        onProofSaved={(tempId, patch) => {
+          setLocalTargets((prev) =>
+            prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
+          );
+          setSuccess("บันทึกรูปหลักฐานสำเร็จ");
+          setError(null);
+        }}
       />
 
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm text-red-300">{error}</div> : null}

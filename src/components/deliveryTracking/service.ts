@@ -9,6 +9,17 @@ type BatchResponse = {
   };
 };
 
+type UploadProofResponse = {
+  ok: boolean;
+  error?: string;
+  data?: {
+    id: string;
+    status: "pending" | "delivered";
+    delivered_at: string | null;
+    proof_image_url: string | null;
+  };
+};
+
 const parseJson = async <T>(response: Response): Promise<T | null> => {
   return (await response.json().catch(() => null)) as T | null;
 };
@@ -38,4 +49,22 @@ export async function persistDeliveryTargetsByJobId(jobId: string, targets: unkn
   }
 
   return (result.data?.targets ?? []).map((target) => toEditableTarget(target));
+}
+
+export async function uploadDeliveryProofForJobId(jobId: string, targetId: string, file: File) {
+  const formData = new FormData();
+  formData.append("proof", file);
+
+  const response = await fetch(`/api/jobs/${jobId}/delivery-batch/targets/${targetId}/proof`, {
+    method: "POST",
+    body: formData
+  });
+
+  const result = await parseJson<UploadProofResponse>(response);
+
+  if (!response.ok || !result?.ok || !result.data) {
+    throw new Error(result?.error ?? "อัปโหลดรูปไม่สำเร็จ");
+  }
+
+  return result.data;
 }
