@@ -566,10 +566,6 @@ export default function LargeCustomerDeliveryList({
               className="max-h-[60vh] w-full rounded-xl border border-slate-700/80 object-contain"
             />
           ) : null}
-          <div className="rounded-lg border border-slate-700/80 bg-[#111827] px-3 py-2 text-xs text-gray-300">
-            <p className="truncate">ไฟล์: {captureFile?.name ?? "-"}</p>
-            <p>ขนาด: {captureFile ? `${(captureFile.size / 1024 / 1024).toFixed(2)} MB` : "-"}</p>
-          </div>
           {cameraError ? <p className="text-xs text-red-300">{cameraError}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" className="!w-auto" onClick={closeCapturePreview}>
