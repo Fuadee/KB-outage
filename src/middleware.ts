@@ -7,6 +7,16 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   process.env.SUPABASE_ANON_KEY;
 
+const ADMIN_ROUTE_PREFIXES = [
+  "/dashboard",
+  "/jobs",
+  "/calendar",
+  "/new",
+  "/job",
+  "/admin",
+  "/manage"
+] as const;
+
 const createSupabaseClient = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
@@ -17,7 +27,19 @@ const createSupabaseClient = () => {
   return createClient(supabaseUrl, supabaseAnonKey);
 };
 
+const isAdminRoute = (pathname: string) => {
+  if (pathname === "/") return true;
+  return ADMIN_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+};
+
 export async function middleware(request: NextRequest) {
+  if (!isAdminRoute(request.nextUrl.pathname)) {
+    // Public routes (e.g. /delivery/[token]) must be accessible immediately.
+    return NextResponse.next();
+  }
+
   const accessToken = request.cookies.get("sb-access-token")?.value;
 
   if (!accessToken) {
@@ -37,5 +59,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard", "/job/:path*", "/new"]
+  matcher: ["/", "/dashboard/:path*", "/jobs/:path*", "/calendar/:path*", "/new", "/job/:path*", "/admin/:path*", "/manage/:path*"]
 };
