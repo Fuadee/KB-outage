@@ -1,12 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Segmented from "@/components/ui/Segmented";
-import { supabase } from "@/lib/supabaseClient";
 
 type PatientStatus = "ACTIVE" | "INACTIVE";
 
@@ -59,40 +58,32 @@ export default function BedriddenPatientsPage() {
   const [editingPatient, setEditingPatient] = useState<BedriddenPatient | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async (status: PatientStatus, q: string) => {
     setLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("bedridden_patients")
-      .select("id, patient_name, contact_name, contact_phone, address, subdistrict, latitude, longitude, power_dependency_note, care_note, status")
-      .order("created_at", { ascending: false });
+    const params = new URLSearchParams({ status });
+    const trimmedQuery = q.trim();
+    if (trimmedQuery) {
+      params.set("q", trimmedQuery);
+    }
 
-    if (fetchError) {
+    const response = await fetch(`/api/bedridden-patients?${params.toString()}`);
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
       setPatients([]);
-      setError(fetchError.message);
+      setError(result.error ?? "ไม่สามารถดึงข้อมูลผู้ป่วยได้ กรุณาลองใหม่อีกครั้ง");
     } else {
-      setPatients((data ?? []) as BedriddenPatient[]);
+      setPatients((result.data ?? []) as BedriddenPatient[]);
     }
 
     setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchPatients();
   }, []);
 
-  const visiblePatients = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return patients.filter((patient) => {
-      if (patient.status !== statusFilter) return false;
-      if (!normalizedQuery) return true;
-
-      return [patient.patient_name, patient.subdistrict, patient.contact_phone, patient.power_dependency_note]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(normalizedQuery));
-    });
-  }, [patients, query, statusFilter]);
+  useEffect(() => {
+    fetchPatients(statusFilter, query);
+  }, [fetchPatients, query, statusFilter]);
 
   const openCreateModal = () => {
     setEditingPatient(null);
@@ -157,7 +148,7 @@ export default function BedriddenPatientsPage() {
     setModalOpen(false);
     setEditingPatient(null);
     setForm(emptyForm);
-    fetchPatients();
+    fetchPatients(statusFilter, query);
   };
 
   const deactivatePatient = async (id: string) => {
@@ -173,7 +164,7 @@ export default function BedriddenPatientsPage() {
       return;
     }
 
-    fetchPatients();
+    fetchPatients(statusFilter, query);
   };
 
   return (
@@ -211,11 +202,11 @@ export default function BedriddenPatientsPage() {
 
       <div className="grid gap-3">
         {loading ? <p className="text-sm text-slate-300">กำลังโหลดข้อมูล...</p> : null}
-        {!loading && visiblePatients.length === 0 ? (
+        {!loading && patients.length === 0 ? (
           <p className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-4 text-sm text-slate-300">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p>
         ) : null}
 
-        {visiblePatients.map((patient) => {
+        {patients.map((patient) => {
           const shortPowerNote = patient.power_dependency_note?.slice(0, 80) ?? "-";
           const hasMap = patient.latitude !== null && patient.longitude !== null;
 
