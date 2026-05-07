@@ -138,13 +138,17 @@ export default function BedriddenPatientsPage() {
       care_note: form.care_note.trim() || null
     };
 
-    const operation = editingPatient
-      ? supabase.from("bedridden_patients").update(payload).eq("id", editingPatient.id)
-      : supabase.from("bedridden_patients").insert(payload);
-
-    const { error: saveError } = await operation;
-    if (saveError) {
-      setError(saveError.message);
+    const response = await fetch(
+      editingPatient ? `/api/bedridden-patients/${editingPatient.id}` : "/api/bedridden-patients",
+      {
+        method: editingPatient ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      setError(result.error ?? "ไม่สามารถบันทึกข้อมูลผู้ป่วยได้ กรุณาลองใหม่อีกครั้ง");
       setSaving(false);
       return;
     }
@@ -157,13 +161,15 @@ export default function BedriddenPatientsPage() {
   };
 
   const deactivatePatient = async (id: string) => {
-    const { error: deactivateError } = await supabase
-      .from("bedridden_patients")
-      .update({ status: "INACTIVE" })
-      .eq("id", id);
+    const response = await fetch(`/api/bedridden-patients/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "INACTIVE" })
+    });
+    const result = await response.json();
 
-    if (deactivateError) {
-      setError(deactivateError.message);
+    if (!response.ok || !result.ok) {
+      setError(result.error ?? "ไม่สามารถปิดใช้งานผู้ป่วยได้ กรุณาลองใหม่อีกครั้ง");
       return;
     }
 
