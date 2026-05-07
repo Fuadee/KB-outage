@@ -252,6 +252,7 @@ export default function JobDetailPage() {
               <Button
                 type="button"
                 size="sm"
+                variant="closeWork"
                 onClick={() => {
                   setCloseError(null);
                   setCloseOpen(true);
