@@ -88,11 +88,19 @@ export default function JobCard({
 
         <section className="flex flex-col gap-2">
           {primaryAction && !isClosed ? (
-            <JobPrimaryAction label={primaryAction.label} onClick={primaryAction.onClick} disabled={primaryAction.disabled} />
+            <JobPrimaryAction id={primaryAction.id} label={primaryAction.label} onClick={primaryAction.onClick} disabled={primaryAction.disabled} />
           ) : null}
 
           {secondaryActions.map((action) => (
-            <Button key={action.id} type="button" size="sm" variant="secondary" className="w-full justify-start" onClick={action.onClick} disabled={action.disabled}>
+            <Button
+              key={action.id}
+              type="button"
+              size="sm"
+              variant={action.id === "close_job" || action.label === "ปิดงาน" ? "closeWork" : "secondary"}
+              className="w-full justify-start"
+              onClick={action.onClick}
+              disabled={action.disabled}
+            >
               {action.id.includes("doc") ? <FileText className="h-3.5 w-3.5" /> : action.id.includes("map") ? <MapPin className="h-3.5 w-3.5" /> : null}
               {action.label}
             </Button>

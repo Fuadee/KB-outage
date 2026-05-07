@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import Button from "@/components/ui/Button";
 
 type JobPrimaryActionProps = {
+  id?: string;
   label: string;
   onClick: () => void;
   disabled?: boolean;
@@ -10,17 +11,20 @@ type JobPrimaryActionProps = {
 };
 
 export default function JobPrimaryAction({
+  id,
   label,
   onClick,
   disabled,
   loading,
   loadingLabel
 }: JobPrimaryActionProps): ReactElement {
+  const isCloseWorkAction = id === "close_job" || label === "ปิดงาน";
+
   return (
     <Button
       type="button"
       size="sm"
-      variant="primary"
+      variant={isCloseWorkAction ? "closeWork" : "primary"}
       className="w-full uppercase tracking-wide"
       onClick={onClick}
       disabled={disabled || loading}
