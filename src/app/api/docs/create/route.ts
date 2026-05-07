@@ -5,8 +5,7 @@ import {
   generateOutageDocxBuffer,
   OUTAGE_TEMPLATE_PATH
 } from "@/lib/docs/outage-docx-template";
-import { extractGoogleMyMapsMid } from "@/lib/googleMyMaps";
-import { fetchAndParseGoogleMyMapKml, LatLng } from "@/lib/googleMyMapsKml";
+import { runVulnerablePatientsCheck } from "@/lib/vulnerablePatientsCheck";
 
 export const runtime = "nodejs";
 
@@ -63,197 +62,6 @@ function buildContentDisposition(asciiName: string, utf8Name?: string) {
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
 }
 
-function isPointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lng;
-    const yi = polygon[i].lat;
-    const xj = polygon[j].lng;
-    const yj = polygon[j].lat;
-
-    const intersects =
-      yi > point.lat !== yj > point.lat &&
-      point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-async function runVulnerableCheck(
-  supabase: ReturnType<typeof createSupabaseServerClient>,
-  jobId: string | number,
-  mapLink: string
-) {
-  console.info("[vulnerable-check] start", { jobId, map_link: mapLink });
-  const mid = extractGoogleMyMapsMid(mapLink);
-  console.info("[vulnerable-check] extracted mid", { jobId, mid });
-
-  const checkedAt = new Date().toISOString();
-
-  if (!mid) {
-    const { error: updateError } = await supabase
-      .from("outage_jobs")
-      .update({
-        vulnerable_check_status: "NO_POLYGON_FOUND",
-        vulnerable_check_count: 0,
-        vulnerable_patient_ids: [],
-        vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
-        vulnerable_check_checked_at: checkedAt
-      })
-      .eq("id", jobId)
-      .select("id")
-      .single();
-
-    console.info("[vulnerable-check] no mid update", { jobId, updateError });
-    return;
-  }
-
-  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}&forcekml=1`;
-  console.info("[vulnerable-check] kml url", { jobId, kmlUrl });
-
-  try {
-    const kmlDebug = await fetchAndParseGoogleMyMapKml(mid);
-    console.info("[vulnerable-check] kml fetch/parse debug", {
-      jobId,
-      map_link: mapLink,
-      mid,
-      kmlUrl: kmlDebug.kmlUrl,
-      httpStatus: kmlDebug.httpStatus,
-      contentType: kmlDebug.contentType,
-      bodyLength: kmlDebug.bodyLength,
-      bodyPreview1000: kmlDebug.bodyPreview1000,
-      placemarkCount: kmlDebug.placemarkCount,
-      polygonTagCount: kmlDebug.polygonTagCount,
-      isLikelyXml: kmlDebug.isLikelyXml,
-      redirectDetected: kmlDebug.redirectDetected,
-      loginDetected: kmlDebug.loginDetected,
-      captchaDetected: kmlDebug.captchaDetected,
-      coordinateTagCount: kmlDebug.coordinateTagCount
-    });
-    const contentTypeLower = (kmlDebug.contentType ?? "").toLowerCase();
-    const isHtmlResponse =
-      contentTypeLower.includes("text/html") ||
-      /<!doctype html|<html[\s>]|accounts\.google\.com|service login|sign in/i.test(
-        kmlDebug.bodyPreview1000
-      );
-
-    if (kmlDebug.httpStatus < 200 || kmlDebug.httpStatus >= 300 || isHtmlResponse) {
-      throw new Error(
-        "ไม่สามารถโหลด KML ได้ อาจต้องตั้งค่า My Maps เป็น Anyone with the link can view"
-      );
-    }
-    const polygons = kmlDebug.polygons;
-    console.info("[vulnerable-check] polygon parsed", {
-      jobId,
-      polygonCount: polygons.length,
-      polygonCoordinates: polygons
-    });
-
-    if (polygons.length === 0) {
-      if (kmlDebug.hasCoordinatesTag) {
-        console.error("[vulnerable-check] PARSER_FAILED_INSTEAD_OF_NO_POLYGON", {
-          jobId,
-          mid,
-          kmlUrl: kmlDebug.kmlUrl
-        });
-      }
-      const { error: updateError } = await supabase
-        .from("outage_jobs")
-        .update({
-          vulnerable_check_status: "NO_POLYGON_FOUND",
-          vulnerable_check_count: 0,
-          vulnerable_patient_ids: [],
-          vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
-          vulnerable_check_checked_at: checkedAt
-        })
-        .eq("id", jobId)
-        .select("id")
-        .single();
-
-      console.info("[vulnerable-check] no polygon update", { jobId, updateError });
-      console.info("[vulnerable-check] raw xml samples", {
-        jobId,
-        rawFirstPlacemarkXml: kmlDebug.rawFirstPlacemarkXml,
-        rawFirstPolygonXml: kmlDebug.rawFirstPolygonXml,
-        firstPolygonCoordinatesRaw: kmlDebug.firstPolygonCoordinatesRaw
-      });
-      return;
-    }
-
-    const { data: patients, error: patientError } = await supabase
-      .from("bedridden_patients")
-      .select("id, latitude, longitude")
-      .eq("status", "ACTIVE")
-      .not("latitude", "is", null)
-      .not("longitude", "is", null);
-
-    if (patientError) {
-      throw new Error(patientError.message);
-    }
-
-    const activePatients = patients ?? [];
-    console.info("[vulnerable-check] active patients", {
-      jobId,
-      activePatientCount: activePatients.length
-    });
-
-    const patientIds = activePatients
-      .filter((patient) =>
-        polygons.some((polygon) =>
-          isPointInPolygon(
-            { lat: Number(patient.latitude), lng: Number(patient.longitude) },
-            polygon
-          )
-        )
-      )
-      .map((patient) => patient.id);
-
-    const finalStatus =
-      patientIds.length > 0 ? "FOUND_IN_POLYGON" : "NOT_FOUND_IN_POLYGON";
-
-    console.info("[vulnerable-check] in polygon", { jobId, patientIds });
-    console.info("[vulnerable-check] final", {
-      jobId,
-      vulnerable_check_status: finalStatus,
-      vulnerable_check_count: patientIds.length
-    });
-
-    const { data: updatedRows, error: updateError } = await supabase
-      .from("outage_jobs")
-      .update({
-        vulnerable_check_status: finalStatus,
-        vulnerable_check_count: patientIds.length,
-        vulnerable_patient_ids: patientIds,
-        vulnerable_check_checked_at: checkedAt,
-        vulnerable_check_error: null
-      })
-      .eq("id", jobId)
-      .select("id");
-
-    console.info("[vulnerable-check] update result", {
-      requestedJobId: jobId,
-      updatedJobIds: (updatedRows ?? []).map((row) => row.id),
-      updateError
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[vulnerable-check] failed", { jobId, message });
-    const { error: updateError } = await supabase
-      .from("outage_jobs")
-      .update({
-        vulnerable_check_status: "KML_FETCH_FAILED",
-        vulnerable_check_count: 0,
-        vulnerable_patient_ids: [],
-        vulnerable_check_error: message,
-        vulnerable_check_checked_at: checkedAt
-      })
-      .eq("id", jobId)
-      .select("id")
-      .single();
-
-    console.info("[vulnerable-check] failure update", { jobId, updateError });
-  }
-}
 
 
 export async function POST(request: Request) {
@@ -328,7 +136,7 @@ export async function POST(request: Request) {
     if (updateError) {
       throw new Error(updateError.message);
     }
-    await runVulnerableCheck(supabase, jobId, payload.map_link);
+    await runVulnerablePatientsCheck(supabase, jobId, payload.map_link);
 
     console.info("DOCX template path:", OUTAGE_TEMPLATE_PATH);
     console.info("DOCX template jobId:", jobId);

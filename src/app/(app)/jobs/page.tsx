@@ -357,6 +357,30 @@ export default function JobsPage() {
     }
   };
 
+  const handleRecheckVulnerable = async (job: OutageJob) => {
+    const key = `vulnerable:${job.id}`;
+    setActionLoading((prev) => ({ ...prev, [key]: true }));
+    setActionError(null);
+    try {
+      const response = await fetch(
+        `/api/jobs/${job.id}/check-vulnerable-patients`,
+        { method: "POST" }
+      );
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ไม่สามารถตรวจสอบผู้ป่วยติดเตียงได้");
+      }
+      await fetchJobs();
+      router.refresh();
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "ไม่สามารถตรวจสอบผู้ป่วยติดเตียงได้"
+      );
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
   const handleCloseJob = async () => {
     if (!closeJob) return;
     setCloseSaving(true);
@@ -956,6 +980,8 @@ export default function JobsPage() {
                 vulnerableCheckError={job.vulnerable_check_error}
                 canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
                 onOpenVulnerableList={() => openVulnerableModal(job)}
+                vulnerableChecking={actionLoading[`vulnerable:${job.id}`] ?? false}
+                onRecheckVulnerable={() => handleRecheckVulnerable(job)}
                 onOpenDetail={() => router.push(`/job/${job.id}`)}
               />
             );
