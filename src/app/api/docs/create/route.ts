@@ -6,6 +6,7 @@ import {
   OUTAGE_TEMPLATE_PATH
 } from "@/lib/docs/outage-docx-template";
 import { extractGoogleMyMapsMid } from "@/lib/googleMyMaps";
+import { fetchAndParseGoogleMyMapKml, LatLng } from "@/lib/googleMyMapsKml";
 
 export const runtime = "nodejs";
 
@@ -62,38 +63,6 @@ function buildContentDisposition(asciiName: string, utf8Name?: string) {
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
 }
 
-type LatLng = { lat: number; lng: number };
-
-function parseKmlPolygons(kmlText: string): LatLng[][] {
-  const polygons: LatLng[][] = [];
-  const polygonBlocks = kmlText.match(/<Polygon[\s\S]*?<\/Polygon>/gi) ?? [];
-
-  for (const polygonBlock of polygonBlocks) {
-    const coordinatesBlocks =
-      polygonBlock.match(/<coordinates>([\s\S]*?)<\/coordinates>/gi) ?? [];
-    for (const block of coordinatesBlocks) {
-      const raw = block.replace(/<\/?coordinates>/gi, "").trim();
-      if (!raw) continue;
-      const points = raw
-        .split(/\s+/)
-        .map((coord) => coord.trim())
-        .filter(Boolean)
-        .map((coord) => {
-          const [lngRaw, latRaw] = coord.split(",");
-          const lat = Number.parseFloat(latRaw);
-          const lng = Number.parseFloat(lngRaw);
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-          return { lat, lng };
-        })
-        .filter((point): point is LatLng => Boolean(point));
-
-      if (points.length >= 3) polygons.push(points);
-    }
-  }
-
-  return polygons;
-}
-
 function isPointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -143,15 +112,31 @@ async function runVulnerableCheck(
   console.info("[vulnerable-check] kml url", { jobId, kmlUrl });
 
   try {
-    const response = await fetch(kmlUrl, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`KML fetch failed with status ${response.status}`);
+    const kmlDebug = await fetchAndParseGoogleMyMapKml(mid);
+    console.info("[vulnerable-check] kml fetch/parse debug", {
+      jobId,
+      map_link: mapLink,
+      mid,
+      kmlUrl: kmlDebug.kmlUrl,
+      httpStatus: kmlDebug.httpStatus,
+      contentType: kmlDebug.contentType,
+      bodyLength: kmlDebug.bodyLength,
+      bodyPreview500: kmlDebug.bodyPreview500,
+      placemarkCount: kmlDebug.placemarkCount,
+      polygonTagCount: kmlDebug.polygonTagCount,
+      isLikelyXml: kmlDebug.isLikelyXml,
+      redirectDetected: kmlDebug.redirectDetected,
+      loginDetected: kmlDebug.loginDetected,
+      captchaDetected: kmlDebug.captchaDetected
+    });
+    if (kmlDebug.httpStatus < 200 || kmlDebug.httpStatus >= 300) {
+      throw new Error(`KML fetch failed with status ${kmlDebug.httpStatus}`);
     }
-    const kmlText = await response.text();
-    const polygons = parseKmlPolygons(kmlText);
+    const polygons = kmlDebug.polygons;
     console.info("[vulnerable-check] polygon parsed", {
       jobId,
-      polygonCount: polygons.length
+      polygonCount: polygons.length,
+      polygonCoordinates: polygons
     });
 
     if (polygons.length === 0) {
@@ -169,6 +154,12 @@ async function runVulnerableCheck(
         .single();
 
       console.info("[vulnerable-check] no polygon update", { jobId, updateError });
+      console.info("[vulnerable-check] raw xml samples", {
+        jobId,
+        rawFirstPlacemarkXml: kmlDebug.rawFirstPlacemarkXml,
+        rawFirstPolygonXml: kmlDebug.rawFirstPolygonXml,
+        firstPolygonCoordinatesRaw: kmlDebug.firstPolygonCoordinatesRaw
+      });
       return;
     }
 
