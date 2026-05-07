@@ -15,6 +15,11 @@ export type OutageJob = {
   doc_time_end: string | null;
   doc_area_detail: string | null;
   map_link: string | null;
+  vulnerable_check_status: string | null;
+  vulnerable_check_count: number;
+  vulnerable_check_checked_at: string | null;
+  vulnerable_check_error: string | null;
+  vulnerable_patient_ids: string[];
   doc_status: "PENDING" | "GENERATING" | "GENERATED" | "ERROR";
   doc_url: string | null;
   doc_generated_at: string | null;
