@@ -357,24 +357,24 @@ export default function JobsPage() {
     }
   };
 
-  const handleRecheckVulnerable = async (job: OutageJob) => {
-    const key = `vulnerable:${job.id}`;
+  const handleRecheckImpactGroups = async (job: OutageJob) => {
+    const key = `impact-groups:${job.id}`;
     setActionLoading((prev) => ({ ...prev, [key]: true }));
     setActionError(null);
     try {
       const response = await fetch(
-        `/api/jobs/${job.id}/check-vulnerable-patients`,
+        `/api/jobs/${job.id}/check-impact-groups`,
         { method: "POST" }
       );
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) {
-        throw new Error(result?.error ?? "ไม่สามารถตรวจสอบผู้ป่วยติดเตียงได้");
+        throw new Error(result?.error ?? "ไม่สามารถตรวจสอบกลุ่มผลกระทบได้");
       }
       await fetchJobs();
       router.refresh();
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "ไม่สามารถตรวจสอบผู้ป่วยติดเตียงได้"
+        error instanceof Error ? error.message : "ไม่สามารถตรวจสอบกลุ่มผลกระทบได้"
       );
     } finally {
       setActionLoading((prev) => ({ ...prev, [key]: false }));
@@ -986,8 +986,8 @@ export default function JobsPage() {
                 onOpenSpecialWatchlist={() => router.push("/special-watchlist")}
                 canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
                 onOpenVulnerableList={() => openVulnerableModal(job)}
-                vulnerableChecking={actionLoading[`vulnerable:${job.id}`] ?? false}
-                onRecheckVulnerable={() => handleRecheckVulnerable(job)}
+                impactGroupsChecking={actionLoading[`impact-groups:${job.id}`] ?? false}
+                onRecheckImpactGroups={() => handleRecheckImpactGroups(job)}
                 onOpenDetail={() => router.push(`/job/${job.id}`)}
               />
             );
