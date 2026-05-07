@@ -24,5 +24,9 @@ export const appNavItems: NavItem[] = [
   {
     label: "ผู้ป่วยติดเตียง",
     href: "/bedridden-patients"
+  },
+  {
+    label: "กลุ่มเฝ้าระวังพิเศษ",
+    href: "/special-watchlist"
   }
 ];
