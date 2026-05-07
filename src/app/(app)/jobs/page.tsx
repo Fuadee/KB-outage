@@ -60,6 +60,19 @@ type VulnerablePatientPreview = {
   longitude: number | null;
 };
 
+type SpecialWatchlistPreview = {
+  id: string;
+  customer_name: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  subdistrict: string | null;
+  impact_reason: string | null;
+  care_note: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 const isValidGoogleMapsUrl = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return false;
@@ -216,6 +229,9 @@ export default function JobsPage() {
   const [vulnerableJob, setVulnerableJob] = useState<OutageJob | null>(null);
   const [vulnerablePatients, setVulnerablePatients] = useState<VulnerablePatientPreview[]>([]);
   const [vulnerableLoading, setVulnerableLoading] = useState(false);
+  const [specialWatchlistJob, setSpecialWatchlistJob] = useState<OutageJob | null>(null);
+  const [specialWatchlistCustomers, setSpecialWatchlistCustomers] = useState<SpecialWatchlistPreview[]>([]);
+  const [specialWatchlistLoading, setSpecialWatchlistLoading] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -329,6 +345,36 @@ export default function JobsPage() {
     setCloseSaving(false);
     setCloseError(null);
   };
+  const openSpecialWatchlistModal = async (job: OutageJob) => {
+    const ids = Array.isArray(job.special_watchlist_customer_ids)
+      ? job.special_watchlist_customer_ids
+      : [];
+    setSpecialWatchlistJob(job);
+    setSpecialWatchlistCustomers([]);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    setSpecialWatchlistLoading(true);
+    try {
+      const params = new URLSearchParams({ ids: ids.join(",") });
+      const response = await fetch(`/api/special-watchlist/by-ids?${params.toString()}`);
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ไม่สามารถโหลดรายละเอียดกลุ่มเฝ้าระวังพิเศษได้");
+      }
+
+      setSpecialWatchlistCustomers(Array.isArray(result.data) ? result.data : []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ไม่สามารถโหลดรายละเอียดกลุ่มเฝ้าระวังพิเศษได้";
+      setToast({ message, tone: "error" });
+      setSpecialWatchlistCustomers([]);
+    } finally {
+      setSpecialWatchlistLoading(false);
+    }
+  };
+
   const openVulnerableModal = async (job: OutageJob) => {
     const ids = Array.isArray(job.vulnerable_patient_ids) ? job.vulnerable_patient_ids : [];
     setVulnerableJob(job);
@@ -983,7 +1029,7 @@ export default function JobsPage() {
                 specialWatchlistCheckedAt={job.special_watchlist_check_checked_at}
                 specialWatchlistCheckError={job.special_watchlist_check_error}
                 canOpenSpecialWatchlist={job.special_watchlist_check_status === "FOUND_IN_POLYGON"}
-                onOpenSpecialWatchlist={() => router.push("/special-watchlist")}
+                onOpenSpecialWatchlist={() => openSpecialWatchlistModal(job)}
                 canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
                 onOpenVulnerableList={() => openVulnerableModal(job)}
                 impactGroupsChecking={actionLoading[`impact-groups:${job.id}`] ?? false}
@@ -1263,6 +1309,44 @@ export default function JobsPage() {
                   {typeof patient.latitude === "number" && typeof patient.longitude === "number" ? (
                     <a
                       href={`https://www.google.com/maps?q=${patient.latitude},${patient.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex underline underline-offset-2"
+                    >
+                      เปิดแผนที่
+                    </a>
+                  ) : null}
+                </div>
+              ))
+            : null}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(specialWatchlistJob)}
+        title="รายชื่อกลุ่มเฝ้าระวังพิเศษในพื้นที่ดับไฟ"
+        onClose={() => {
+          setSpecialWatchlistJob(null);
+          setSpecialWatchlistCustomers([]);
+          setSpecialWatchlistLoading(false);
+        }}
+      >
+        <div className="space-y-2">
+          {specialWatchlistLoading ? <p className="text-sm text-slate-300">กำลังโหลดรายชื่อกลุ่มเฝ้าระวังพิเศษ...</p> : null}
+          {!specialWatchlistLoading && specialWatchlistCustomers.length === 0 ? (
+            <p className="text-sm text-slate-300">ไม่พบรายละเอียดกลุ่มเฝ้าระวังพิเศษ</p>
+          ) : null}
+          {!specialWatchlistLoading
+            ? specialWatchlistCustomers.map((customer) => (
+                <div key={customer.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+                  <p className="font-semibold">{customer.customer_name}</p>
+                  <p>พื้นที่/ที่อยู่: {customer.subdistrict || customer.address || "-"}</p>
+                  <p>ผู้ประสาน: {customer.contact_name || "-"} {customer.contact_phone ? `(${customer.contact_phone})` : ""}</p>
+                  <p>เหตุผลที่ต้องเฝ้าระวัง: {customer.impact_reason || "-"}</p>
+                  <p>หมายเหตุการดูแล: {customer.care_note || "-"}</p>
+                  {typeof customer.latitude === "number" && typeof customer.longitude === "number" ? (
+                    <a
+                      href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-2 inline-flex underline underline-offset-2"
