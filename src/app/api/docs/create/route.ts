@@ -108,7 +108,7 @@ async function runVulnerableCheck(
     return;
   }
 
-  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}`;
+  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}&forcekml=1`;
   console.info("[vulnerable-check] kml url", { jobId, kmlUrl });
 
   try {
@@ -121,16 +121,26 @@ async function runVulnerableCheck(
       httpStatus: kmlDebug.httpStatus,
       contentType: kmlDebug.contentType,
       bodyLength: kmlDebug.bodyLength,
-      bodyPreview500: kmlDebug.bodyPreview500,
+      bodyPreview1000: kmlDebug.bodyPreview1000,
       placemarkCount: kmlDebug.placemarkCount,
       polygonTagCount: kmlDebug.polygonTagCount,
       isLikelyXml: kmlDebug.isLikelyXml,
       redirectDetected: kmlDebug.redirectDetected,
       loginDetected: kmlDebug.loginDetected,
-      captchaDetected: kmlDebug.captchaDetected
+      captchaDetected: kmlDebug.captchaDetected,
+      coordinateTagCount: kmlDebug.coordinateTagCount
     });
-    if (kmlDebug.httpStatus < 200 || kmlDebug.httpStatus >= 300) {
-      throw new Error(`KML fetch failed with status ${kmlDebug.httpStatus}`);
+    const contentTypeLower = (kmlDebug.contentType ?? "").toLowerCase();
+    const isHtmlResponse =
+      contentTypeLower.includes("text/html") ||
+      /<!doctype html|<html[\s>]|accounts\.google\.com|service login|sign in/i.test(
+        kmlDebug.bodyPreview1000
+      );
+
+    if (kmlDebug.httpStatus < 200 || kmlDebug.httpStatus >= 300 || isHtmlResponse) {
+      throw new Error(
+        "ไม่สามารถโหลด KML ได้ อาจต้องตั้งค่า My Maps เป็น Anyone with the link can view"
+      );
     }
     const polygons = kmlDebug.polygons;
     console.info("[vulnerable-check] polygon parsed", {
@@ -140,6 +150,13 @@ async function runVulnerableCheck(
     });
 
     if (polygons.length === 0) {
+      if (kmlDebug.hasCoordinatesTag) {
+        console.error("[vulnerable-check] PARSER_FAILED_INSTEAD_OF_NO_POLYGON", {
+          jobId,
+          mid,
+          kmlUrl: kmlDebug.kmlUrl
+        });
+      }
       const { error: updateError } = await supabase
         .from("outage_jobs")
         .update({
