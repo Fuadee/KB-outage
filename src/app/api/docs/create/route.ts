@@ -115,36 +115,60 @@ async function runVulnerableCheck(
   jobId: string | number,
   mapLink: string
 ) {
+  console.info("[vulnerable-check] start", { jobId, map_link: mapLink });
   const mid = extractGoogleMyMapsMid(mapLink);
+  console.info("[vulnerable-check] extracted mid", { jobId, mid });
+
+  const checkedAt = new Date().toISOString();
+
   if (!mid) {
-    await supabase
+    const { error: updateError } = await supabase
       .from("outage_jobs")
       .update({
         vulnerable_check_status: "NO_POLYGON_FOUND",
+        vulnerable_check_count: 0,
+        vulnerable_patient_ids: [],
         vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
-        vulnerable_check_checked_at: new Date().toISOString()
+        vulnerable_check_checked_at: checkedAt
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .select("id")
+      .single();
+
+    console.info("[vulnerable-check] no mid update", { jobId, updateError });
     return;
   }
 
+  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}`;
+  console.info("[vulnerable-check] kml url", { jobId, kmlUrl });
+
   try {
-    const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}`;
     const response = await fetch(kmlUrl, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`KML fetch failed with status ${response.status}`);
     }
     const kmlText = await response.text();
     const polygons = parseKmlPolygons(kmlText);
+    console.info("[vulnerable-check] polygon parsed", {
+      jobId,
+      polygonCount: polygons.length
+    });
+
     if (polygons.length === 0) {
-      await supabase
+      const { error: updateError } = await supabase
         .from("outage_jobs")
         .update({
           vulnerable_check_status: "NO_POLYGON_FOUND",
+          vulnerable_check_count: 0,
+          vulnerable_patient_ids: [],
           vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
-          vulnerable_check_checked_at: new Date().toISOString()
+          vulnerable_check_checked_at: checkedAt
         })
-        .eq("id", jobId);
+        .eq("id", jobId)
+        .select("id")
+        .single();
+
+      console.info("[vulnerable-check] no polygon update", { jobId, updateError });
       return;
     }
 
@@ -159,7 +183,13 @@ async function runVulnerableCheck(
       throw new Error(patientError.message);
     }
 
-    const patientIds = (patients ?? [])
+    const activePatients = patients ?? [];
+    console.info("[vulnerable-check] active patients", {
+      jobId,
+      activePatientCount: activePatients.length
+    });
+
+    const patientIds = activePatients
       .filter((patient) =>
         polygons.some((polygon) =>
           isPointInPolygon(
@@ -170,29 +200,53 @@ async function runVulnerableCheck(
       )
       .map((patient) => patient.id);
 
-    await supabase
+    const finalStatus =
+      patientIds.length > 0 ? "FOUND_IN_POLYGON" : "NOT_FOUND_IN_POLYGON";
+
+    console.info("[vulnerable-check] in polygon", { jobId, patientIds });
+    console.info("[vulnerable-check] final", {
+      jobId,
+      vulnerable_check_status: finalStatus,
+      vulnerable_check_count: patientIds.length
+    });
+
+    const { data: updatedRows, error: updateError } = await supabase
       .from("outage_jobs")
       .update({
-        vulnerable_check_status:
-          patientIds.length > 0 ? "FOUND_IN_POLYGON" : "NOT_FOUND_IN_POLYGON",
+        vulnerable_check_status: finalStatus,
         vulnerable_check_count: patientIds.length,
         vulnerable_patient_ids: patientIds,
-        vulnerable_check_checked_at: new Date().toISOString(),
+        vulnerable_check_checked_at: checkedAt,
         vulnerable_check_error: null
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .select("id");
+
+    console.info("[vulnerable-check] update result", {
+      requestedJobId: jobId,
+      updatedJobIds: (updatedRows ?? []).map((row) => row.id),
+      updateError
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    await supabase
+    console.error("[vulnerable-check] failed", { jobId, message });
+    const { error: updateError } = await supabase
       .from("outage_jobs")
       .update({
         vulnerable_check_status: "KML_FETCH_FAILED",
+        vulnerable_check_count: 0,
+        vulnerable_patient_ids: [],
         vulnerable_check_error: message,
-        vulnerable_check_checked_at: new Date().toISOString()
+        vulnerable_check_checked_at: checkedAt
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .select("id")
+      .single();
+
+    console.info("[vulnerable-check] failure update", { jobId, updateError });
   }
 }
+
 
 export async function POST(request: Request) {
   let jobId: string | number | undefined;

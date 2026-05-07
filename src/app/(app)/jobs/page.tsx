@@ -822,7 +822,7 @@ export default function JobsPage() {
             const vulnerableStatus = job.vulnerable_check_status ?? null;
             const vulnerableCount = Number(job.vulnerable_check_count ?? 0);
             const vulnerableWarning =
-              vulnerableStatus === "FOUND_IN_POLYGON"
+              vulnerableStatus === "FOUND_IN_POLYGON" && vulnerableCount > 0
                 ? `⚠️ พบผู้ป่วยติดเตียงในพื้นที่ดับไฟ ${vulnerableCount} ราย`
                 : null;
             const vulnerableCheckUnavailable =
