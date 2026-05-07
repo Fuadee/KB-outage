@@ -26,6 +26,49 @@ type Payload = {
   care_note?: string | null;
 };
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const q = searchParams.get("q")?.trim() ?? "";
+    const statusFilter = status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+
+    const supabase = getServerSupabase();
+    let query = supabase
+      .from("bedridden_patients")
+      .select("id, patient_name, contact_name, contact_phone, address, subdistrict, latitude, longitude, power_dependency_note, care_note, status")
+      .eq("status", statusFilter)
+      .order("created_at", { ascending: false });
+
+    if (q) {
+      const escaped = q.replace(/[%_]/g, "\\$&");
+      const keyword = `%${escaped}%`;
+      query = query.or(
+        [
+          `patient_name.ilike.${keyword}`,
+          `contact_name.ilike.${keyword}`,
+          `contact_phone.ilike.${keyword}`,
+          `address.ilike.${keyword}`,
+          `subdistrict.ilike.${keyword}`,
+          `power_dependency_note.ilike.${keyword}`,
+          `care_note.ilike.${keyword}`
+        ].join(",")
+      );
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return NextResponse.json({ ok: false, error: "ไม่สามารถดึงข้อมูลผู้ป่วยได้ กรุณาลองใหม่อีกครั้ง" }, { status: 400 });
+    }
+
+    console.log("[bedridden-patients][GET]", { status: statusFilter, q, rows: data?.length ?? 0 });
+    return NextResponse.json({ ok: true, data: data ?? [] });
+  } catch (error) {
+    console.error("[bedridden-patients][GET]", error);
+    return NextResponse.json({ ok: false, error: "เกิดข้อผิดพลาดที่เซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง" }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Payload;
