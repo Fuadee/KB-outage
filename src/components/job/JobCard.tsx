@@ -37,8 +37,8 @@ type JobCardProps = {
   onOpenSpecialWatchlist?: () => void;
   canOpenVulnerableList?: boolean;
   onOpenVulnerableList?: () => void;
-  onRecheckVulnerable?: () => void;
-  vulnerableChecking?: boolean;
+  onRecheckImpactGroups?: () => void;
+  impactGroupsChecking?: boolean;
   onOpenDetail: () => void;
 };
 
@@ -62,8 +62,8 @@ export default function JobCard({
   onOpenSpecialWatchlist,
   canOpenVulnerableList,
   onOpenVulnerableList,
-  onRecheckVulnerable,
-  vulnerableChecking,
+  onRecheckImpactGroups,
+  impactGroupsChecking,
   onOpenDetail
 }: JobCardProps): ReactElement {
   const isClosed = job.is_closed ?? false;
@@ -196,14 +196,6 @@ export default function JobCard({
             {vulnerableCheckError ? (
               <p className="mt-1 text-[11px] text-slate-300">{vulnerableCheckError}</p>
             ) : null}
-            <button
-              type="button"
-              onClick={onRecheckVulnerable}
-              disabled={vulnerableChecking}
-              className="mt-2 text-[11px] font-medium underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {vulnerableChecking ? "กำลังตรวจสอบ..." : "ตรวจผู้ป่วยอีกครั้ง"}
-            </button>
           </div>
           <div className={cn("mt-2 rounded-md border px-2 py-1 text-xs", specialUi.className)}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em]">ตรวจสอบกลุ่มเฝ้าระวังพิเศษ</p>
@@ -217,6 +209,14 @@ export default function JobCard({
             </p>
             {specialCheckedAtText ? <p className="mt-1 text-[11px] text-slate-300">ตรวจเมื่อ: {specialCheckedAtText}</p> : null}
           </div>
+          <button
+            type="button"
+            onClick={onRecheckImpactGroups}
+            disabled={impactGroupsChecking}
+            className="mt-2 text-[11px] font-medium underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {impactGroupsChecking ? "กำลังตรวจสอบกลุ่มผลกระทบ..." : "ตรวจสอบอีกครั้ง"}
+          </button>
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
 
