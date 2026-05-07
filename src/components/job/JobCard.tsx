@@ -209,14 +209,16 @@ export default function JobCard({
             </p>
             {specialCheckedAtText ? <p className="mt-1 text-[11px] text-slate-300">ตรวจเมื่อ: {specialCheckedAtText}</p> : null}
           </div>
-          <button
-            type="button"
-            onClick={onRecheckImpactGroups}
-            disabled={impactGroupsChecking}
-            className="mt-2 text-[11px] font-medium underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {impactGroupsChecking ? "กำลังตรวจสอบกลุ่มผลกระทบ..." : "ตรวจสอบอีกครั้ง"}
-          </button>
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={onRecheckImpactGroups}
+              disabled={impactGroupsChecking}
+              className="inline-flex w-full items-center justify-center rounded-md border border-cyan-400/60 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {impactGroupsChecking ? "กำลังตรวจสอบกลุ่มผลกระทบ..." : "ตรวจสอบอีกครั้ง"}
+            </button>
+          </div>
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
 
