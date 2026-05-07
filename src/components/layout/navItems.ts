@@ -20,5 +20,9 @@ export const appNavItems: NavItem[] = [
   {
     label: "Calendar",
     href: "/calendar"
+  },
+  {
+    label: "ผู้ป่วยติดเตียง",
+    href: "/bedridden-patients"
   }
 ];
