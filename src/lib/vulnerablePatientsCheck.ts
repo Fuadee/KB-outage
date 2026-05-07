@@ -33,6 +33,11 @@ export async function runVulnerablePatientsCheck(
         vulnerable_check_status: "NO_POLYGON_FOUND",
         vulnerable_check_count: 0,
         vulnerable_patient_ids: [],
+        special_watchlist_check_status: "NO_POLYGON_FOUND",
+        special_watchlist_check_count: 0,
+        special_watchlist_customer_ids: [],
+        special_watchlist_check_error: "ไม่พบ Polygon ใน Google My Maps",
+        special_watchlist_check_checked_at: checkedAt,
         vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
         vulnerable_check_checked_at: checkedAt
       })
@@ -62,6 +67,11 @@ export async function runVulnerablePatientsCheck(
           vulnerable_check_status: "NO_POLYGON_FOUND",
           vulnerable_check_count: 0,
           vulnerable_patient_ids: [],
+          special_watchlist_check_status: "NO_POLYGON_FOUND",
+          special_watchlist_check_count: 0,
+          special_watchlist_customer_ids: [],
+          special_watchlist_check_error: "ไม่พบ Polygon ใน Google My Maps",
+          special_watchlist_check_checked_at: checkedAt,
           vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
           vulnerable_check_checked_at: checkedAt
         })
@@ -91,6 +101,28 @@ export async function runVulnerablePatientsCheck(
       )
       .map((patient) => patient.id);
 
+    const { data: watchlistCustomers, error: watchlistError } = await supabase
+      .from("special_watchlist_customers")
+      .select("id, latitude, longitude")
+      .eq("status", "ACTIVE")
+      .not("latitude", "is", null)
+      .not("longitude", "is", null);
+
+    if (watchlistError) {
+      throw new Error(watchlistError.message);
+    }
+
+    const watchlistIds = (watchlistCustomers ?? [])
+      .filter((customer) =>
+        kmlDebug.polygons.some((polygon) =>
+          isPointInPolygon(
+            { lat: Number(customer.latitude), lng: Number(customer.longitude) },
+            polygon
+          )
+        )
+      )
+      .map((customer) => customer.id);
+
     await supabase
       .from("outage_jobs")
       .update({
@@ -99,7 +131,13 @@ export async function runVulnerablePatientsCheck(
         vulnerable_check_count: patientIds.length,
         vulnerable_patient_ids: patientIds,
         vulnerable_check_checked_at: checkedAt,
-        vulnerable_check_error: null
+        vulnerable_check_error: null,
+        special_watchlist_check_status:
+          watchlistIds.length > 0 ? "FOUND_IN_POLYGON" : "NOT_FOUND_IN_POLYGON",
+        special_watchlist_check_count: watchlistIds.length,
+        special_watchlist_customer_ids: watchlistIds,
+        special_watchlist_check_checked_at: checkedAt,
+        special_watchlist_check_error: null
       })
       .eq("id", jobId);
   } catch (error) {
@@ -111,7 +149,12 @@ export async function runVulnerablePatientsCheck(
         vulnerable_check_count: 0,
         vulnerable_patient_ids: [],
         vulnerable_check_error: message,
-        vulnerable_check_checked_at: checkedAt
+        vulnerable_check_checked_at: checkedAt,
+        special_watchlist_check_status: "KML_FETCH_FAILED",
+        special_watchlist_check_count: 0,
+        special_watchlist_customer_ids: [],
+        special_watchlist_check_error: message,
+        special_watchlist_check_checked_at: checkedAt
       })
       .eq("id", jobId);
   }
