@@ -5,7 +5,9 @@ export type GoogleMyMapsKmlDebug = {
   httpStatus: number;
   contentType: string | null;
   bodyLength: number;
-  bodyPreview500: string;
+  bodyPreview1000: string;
+  coordinateTagCount: number;
+  hasCoordinatesTag: boolean;
   isLikelyXml: boolean;
   redirectDetected: boolean;
   loginDetected: boolean;
@@ -23,25 +25,37 @@ export function parseKmlPolygons(kmlText: string): LatLng[][] {
   const polygonBlocks = kmlText.match(/<Polygon[\s\S]*?<\/Polygon>/gi) ?? [];
 
   for (const polygonBlock of polygonBlocks) {
-    const coordinatesBlocks =
-      polygonBlock.match(/<coordinates>([\s\S]*?)<\/coordinates>/gi) ?? [];
-    for (const block of coordinatesBlocks) {
-      const raw = block.replace(/<\/?coordinates>/gi, "").trim();
-      if (!raw) continue;
-      const points = raw
-        .split(/\s+/)
-        .map((coord) => coord.trim())
-        .filter(Boolean)
-        .map((coord) => {
-          const [lngRaw, latRaw] = coord.split(",");
-          const lat = Number.parseFloat(latRaw);
-          const lng = Number.parseFloat(lngRaw);
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-          return { lat, lng };
-        })
-        .filter((point): point is LatLng => Boolean(point));
+    const outerBoundaryBlocks =
+      polygonBlock.match(/<outerBoundaryIs[\s\S]*?<\/outerBoundaryIs>/gi) ?? [polygonBlock];
 
-      if (points.length >= 3) polygons.push(points);
+    for (const boundaryBlock of outerBoundaryBlocks) {
+      const linearRingBlocks =
+        boundaryBlock.match(/<LinearRing[\s\S]*?<\/LinearRing>/gi) ?? [boundaryBlock];
+
+      for (const ringBlock of linearRingBlocks) {
+        const coordinatesBlocks =
+          ringBlock.match(/<coordinates>([\s\S]*?)<\/coordinates>/gi) ?? [];
+
+        for (const block of coordinatesBlocks) {
+          const raw = block.replace(/<\/?coordinates>/gi, "").trim();
+          if (!raw) continue;
+
+          const points = raw
+            .split(/\s+/)
+            .map((coord) => coord.trim())
+            .filter(Boolean)
+            .map((coord) => {
+              const [lngRaw, latRaw] = coord.split(",");
+              const lat = Number.parseFloat(latRaw);
+              const lng = Number.parseFloat(lngRaw);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+              return { lat, lng };
+            })
+            .filter((point): point is LatLng => Boolean(point));
+
+          if (points.length >= 3) polygons.push(points);
+        }
+      }
     }
   }
 
@@ -49,7 +63,7 @@ export function parseKmlPolygons(kmlText: string): LatLng[][] {
 }
 
 export async function fetchAndParseGoogleMyMapKml(mid: string): Promise<GoogleMyMapsKmlDebug> {
-  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}`;
+  const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}&forcekml=1`;
   const response = await fetch(kmlUrl, { cache: "no-store", redirect: "follow" });
   const body = await response.text();
   const contentType = response.headers.get("content-type");
@@ -72,7 +86,9 @@ export async function fetchAndParseGoogleMyMapKml(mid: string): Promise<GoogleMy
     httpStatus: response.status,
     contentType,
     bodyLength: body.length,
-    bodyPreview500: body.slice(0, 500),
+    bodyPreview1000: body.slice(0, 1000),
+    coordinateTagCount: (body.match(/<coordinates[\s>]/gi) ?? []).length,
+    hasCoordinatesTag: /<coordinates[\s>]/i.test(body),
     isLikelyXml,
     redirectDetected:
       response.redirected || /<title>redirect/i.test(bodyLower) || /http-equiv=["']refresh/i.test(bodyLower),
