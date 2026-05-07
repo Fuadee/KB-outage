@@ -5,6 +5,7 @@ import {
   generateOutageDocxBuffer,
   OUTAGE_TEMPLATE_PATH
 } from "@/lib/docs/outage-docx-template";
+import { extractGoogleMyMapsMid } from "@/lib/googleMyMaps";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,138 @@ function buildContentDisposition(asciiName: string, utf8Name?: string) {
     .replace(/['()]/g, escape)
     .replace(/\*/g, "%2A");
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
+}
+
+type LatLng = { lat: number; lng: number };
+
+function parseKmlPolygons(kmlText: string): LatLng[][] {
+  const polygons: LatLng[][] = [];
+  const polygonBlocks = kmlText.match(/<Polygon[\s\S]*?<\/Polygon>/gi) ?? [];
+
+  for (const polygonBlock of polygonBlocks) {
+    const coordinatesBlocks =
+      polygonBlock.match(/<coordinates>([\s\S]*?)<\/coordinates>/gi) ?? [];
+    for (const block of coordinatesBlocks) {
+      const raw = block.replace(/<\/?coordinates>/gi, "").trim();
+      if (!raw) continue;
+      const points = raw
+        .split(/\s+/)
+        .map((coord) => coord.trim())
+        .filter(Boolean)
+        .map((coord) => {
+          const [lngRaw, latRaw] = coord.split(",");
+          const lat = Number.parseFloat(latRaw);
+          const lng = Number.parseFloat(lngRaw);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return { lat, lng };
+        })
+        .filter((point): point is LatLng => Boolean(point));
+
+      if (points.length >= 3) polygons.push(points);
+    }
+  }
+
+  return polygons;
+}
+
+function isPointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+
+    const intersects =
+      yi > point.lat !== yj > point.lat &&
+      point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+async function runVulnerableCheck(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  jobId: string | number,
+  mapLink: string
+) {
+  const mid = extractGoogleMyMapsMid(mapLink);
+  if (!mid) {
+    await supabase
+      .from("outage_jobs")
+      .update({
+        vulnerable_check_status: "NO_POLYGON_FOUND",
+        vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
+        vulnerable_check_checked_at: new Date().toISOString()
+      })
+      .eq("id", jobId);
+    return;
+  }
+
+  try {
+    const kmlUrl = `https://www.google.com/maps/d/kml?mid=${encodeURIComponent(mid)}`;
+    const response = await fetch(kmlUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`KML fetch failed with status ${response.status}`);
+    }
+    const kmlText = await response.text();
+    const polygons = parseKmlPolygons(kmlText);
+    if (polygons.length === 0) {
+      await supabase
+        .from("outage_jobs")
+        .update({
+          vulnerable_check_status: "NO_POLYGON_FOUND",
+          vulnerable_check_error: "ไม่พบ Polygon ใน Google My Maps",
+          vulnerable_check_checked_at: new Date().toISOString()
+        })
+        .eq("id", jobId);
+      return;
+    }
+
+    const { data: patients, error: patientError } = await supabase
+      .from("bedridden_patients")
+      .select("id, latitude, longitude")
+      .eq("status", "ACTIVE")
+      .not("latitude", "is", null)
+      .not("longitude", "is", null);
+
+    if (patientError) {
+      throw new Error(patientError.message);
+    }
+
+    const patientIds = (patients ?? [])
+      .filter((patient) =>
+        polygons.some((polygon) =>
+          isPointInPolygon(
+            { lat: Number(patient.latitude), lng: Number(patient.longitude) },
+            polygon
+          )
+        )
+      )
+      .map((patient) => patient.id);
+
+    await supabase
+      .from("outage_jobs")
+      .update({
+        vulnerable_check_status:
+          patientIds.length > 0 ? "FOUND_IN_POLYGON" : "NOT_FOUND_IN_POLYGON",
+        vulnerable_check_count: patientIds.length,
+        vulnerable_patient_ids: patientIds,
+        vulnerable_check_checked_at: new Date().toISOString(),
+        vulnerable_check_error: null
+      })
+      .eq("id", jobId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    await supabase
+      .from("outage_jobs")
+      .update({
+        vulnerable_check_status: "KML_FETCH_FAILED",
+        vulnerable_check_error: message,
+        vulnerable_check_checked_at: new Date().toISOString()
+      })
+      .eq("id", jobId);
+  }
 }
 
 export async function POST(request: Request) {
@@ -133,6 +266,7 @@ export async function POST(request: Request) {
     if (updateError) {
       throw new Error(updateError.message);
     }
+    await runVulnerableCheck(supabase, jobId, payload.map_link);
 
     console.info("DOCX template path:", OUTAGE_TEMPLATE_PATH);
     console.info("DOCX template jobId:", jobId);

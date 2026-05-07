@@ -25,6 +25,10 @@ type JobCardProps = {
   primaryAction?: JobAction;
   secondaryActions: JobAction[];
   tertiaryItems: string[];
+  vulnerableWarning?: string | null;
+  canOpenVulnerableList?: boolean;
+  onOpenVulnerableList?: () => void;
+  vulnerableCheckUnavailable?: boolean;
   onOpenDetail: () => void;
 };
 
@@ -36,6 +40,10 @@ export default function JobCard({
   primaryAction,
   secondaryActions,
   tertiaryItems,
+  vulnerableWarning,
+  canOpenVulnerableList,
+  onOpenVulnerableList,
+  vulnerableCheckUnavailable,
   onOpenDetail
 }: JobCardProps): ReactElement {
   const isClosed = job.is_closed ?? false;
@@ -75,6 +83,21 @@ export default function JobCard({
           </div>
           <p className="line-clamp-2 text-sm text-slate-100">{job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}</p>
           <p className="line-clamp-2 text-xs text-slate-400">{job.note?.trim() || "ไม่มีหมายเหตุเพิ่มเติม"}</p>
+          {vulnerableWarning ? (
+            <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+              {vulnerableWarning}
+              {canOpenVulnerableList && onOpenVulnerableList ? (
+                <button type="button" onClick={onOpenVulnerableList} className="ml-2 underline underline-offset-2">
+                  ดูรายชื่อ
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {vulnerableCheckUnavailable ? (
+            <p className="mt-2 inline-flex w-fit rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">
+              ยังตรวจสอบผู้ป่วยจากแผนที่ไม่ได้
+            </p>
+          ) : null}
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
 

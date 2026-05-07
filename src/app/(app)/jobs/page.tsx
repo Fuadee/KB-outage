@@ -47,6 +47,14 @@ type DocForm = {
   doc_area_detail: string;
   map_link: string;
 };
+type VulnerablePatientPreview = {
+  id: string;
+  patient_name: string;
+  address: string | null;
+  subdistrict: string | null;
+  contact_phone: string | null;
+  power_dependency_note: string | null;
+};
 
 const isValidGoogleMapsUrl = (value: string) => {
   const trimmed = value.trim();
@@ -201,6 +209,8 @@ export default function JobsPage() {
   >>({});
   const [docSaving, setDocSaving] = useState(false);
   const [closeJob, setCloseJob] = useState<OutageJob | null>(null);
+  const [vulnerableJob, setVulnerableJob] = useState<OutageJob | null>(null);
+  const [vulnerablePatients, setVulnerablePatients] = useState<VulnerablePatientPreview[]>([]);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -313,6 +323,16 @@ export default function JobsPage() {
     setCloseJob(job);
     setCloseSaving(false);
     setCloseError(null);
+  };
+  const openVulnerableModal = async (job: OutageJob) => {
+    const ids = Array.isArray(job.vulnerable_patient_ids) ? job.vulnerable_patient_ids : [];
+    if (ids.length === 0) return;
+    const { data } = await supabase
+      .from("bedridden_patients")
+      .select("id, patient_name, address, subdistrict, contact_phone, power_dependency_note")
+      .in("id", ids);
+    setVulnerablePatients(data ?? []);
+    setVulnerableJob(job);
   };
 
   const handleCloseJob = async () => {
@@ -799,6 +819,15 @@ export default function JobsPage() {
             const workflowSteps = getWorkflowSteps(job);
             const secondaryActions: JobAction[] = [];
             const tertiaryItems: string[] = [];
+            const vulnerableStatus = job.vulnerable_check_status ?? null;
+            const vulnerableCount = Number(job.vulnerable_check_count ?? 0);
+            const vulnerableWarning =
+              vulnerableStatus === "FOUND_IN_POLYGON"
+                ? `⚠️ พบผู้ป่วยติดเตียงในพื้นที่ดับไฟ ${vulnerableCount} ราย`
+                : null;
+            const vulnerableCheckUnavailable =
+              vulnerableStatus === "KML_FETCH_FAILED" ||
+              vulnerableStatus === "NO_POLYGON_FOUND";
             let primaryAction: JobAction | undefined;
 
             if (isPending) {
@@ -907,6 +936,10 @@ export default function JobsPage() {
                 primaryAction={isClosed ? undefined : primaryAction}
                 secondaryActions={displaySecondaryActions}
                 tertiaryItems={tertiaryItems}
+                vulnerableWarning={vulnerableWarning}
+                vulnerableCheckUnavailable={vulnerableCheckUnavailable}
+                canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
+                onOpenVulnerableList={() => openVulnerableModal(job)}
                 onOpenDetail={() => router.push(`/job/${job.id}`)}
               />
             );
@@ -1157,6 +1190,26 @@ export default function JobsPage() {
         }}
         onJobUpdate={handleNoticeJobUpdate}
       />
+
+      <Modal
+        isOpen={Boolean(vulnerableJob)}
+        title="รายชื่อผู้ป่วยในพื้นที่ดับไฟ"
+        onClose={() => {
+          setVulnerableJob(null);
+          setVulnerablePatients([]);
+        }}
+      >
+        <div className="space-y-2">
+          {vulnerablePatients.map((patient) => (
+            <div key={patient.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+              <p className="font-semibold">{patient.patient_name}</p>
+              <p>พื้นที่/ที่อยู่ย่อ: {patient.subdistrict || patient.address || "-"}</p>
+              <p>เบอร์ผู้ประสาน: {patient.contact_phone || "-"}</p>
+              <p>หมายเหตุไฟฟ้าจำเป็น: {patient.power_dependency_note || "-"}</p>
+            </div>
+          ))}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={Boolean(closeJob)}
