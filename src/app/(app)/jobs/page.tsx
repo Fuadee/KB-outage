@@ -978,6 +978,12 @@ export default function JobsPage() {
                 vulnerableCheckCount={job.vulnerable_check_count}
                 vulnerableCheckedAt={job.vulnerable_check_checked_at}
                 vulnerableCheckError={job.vulnerable_check_error}
+                specialWatchlistCheckStatus={job.special_watchlist_check_status}
+                specialWatchlistCheckCount={job.special_watchlist_check_count}
+                specialWatchlistCheckedAt={job.special_watchlist_check_checked_at}
+                specialWatchlistCheckError={job.special_watchlist_check_error}
+                canOpenSpecialWatchlist={job.special_watchlist_check_status === "FOUND_IN_POLYGON"}
+                onOpenSpecialWatchlist={() => router.push("/special-watchlist")}
                 canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
                 onOpenVulnerableList={() => openVulnerableModal(job)}
                 vulnerableChecking={actionLoading[`vulnerable:${job.id}`] ?? false}

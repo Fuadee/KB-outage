@@ -29,6 +29,12 @@ type JobCardProps = {
   vulnerableCheckCount?: number | null;
   vulnerableCheckedAt?: string | null;
   vulnerableCheckError?: string | null;
+  specialWatchlistCheckStatus?: string | null;
+  specialWatchlistCheckCount?: number | null;
+  specialWatchlistCheckedAt?: string | null;
+  specialWatchlistCheckError?: string | null;
+  canOpenSpecialWatchlist?: boolean;
+  onOpenSpecialWatchlist?: () => void;
   canOpenVulnerableList?: boolean;
   onOpenVulnerableList?: () => void;
   onRecheckVulnerable?: () => void;
@@ -48,6 +54,12 @@ export default function JobCard({
   vulnerableCheckCount,
   vulnerableCheckedAt,
   vulnerableCheckError,
+  specialWatchlistCheckStatus,
+  specialWatchlistCheckCount,
+  specialWatchlistCheckedAt,
+  specialWatchlistCheckError,
+  canOpenSpecialWatchlist,
+  onOpenSpecialWatchlist,
   canOpenVulnerableList,
   onOpenVulnerableList,
   onRecheckVulnerable,
@@ -97,6 +109,43 @@ export default function JobCard({
                 className: "border-slate-600 bg-slate-800 text-slate-300",
                 message: "ยังไม่ได้ตรวจสอบผู้ป่วยติดเตียง"
               };
+
+  const specialStatus = specialWatchlistCheckStatus?.trim() || null;
+  const specialCount = Number(specialWatchlistCheckCount ?? 0);
+  const specialCheckedAt = specialWatchlistCheckedAt
+    ? new Date(specialWatchlistCheckedAt)
+    : null;
+  const specialCheckedAtText =
+    specialCheckedAt && !Number.isNaN(specialCheckedAt.getTime())
+      ? specialCheckedAt.toLocaleString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        })
+      : null;
+  const specialUi =
+    specialStatus === "FOUND_IN_POLYGON"
+      ? {
+          className: "border-amber-500/50 bg-amber-500/10 text-amber-200",
+          message: `⚠️ พบกลุ่มเฝ้าระวังพิเศษในพื้นที่ดับไฟ ${specialCount} ราย`
+        }
+      : specialStatus === "NOT_FOUND_IN_POLYGON"
+        ? {
+            className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+            message: "✅ ตรวจแล้ว ไม่พบกลุ่มเฝ้าระวังพิเศษในพื้นที่ดับไฟ"
+          }
+        : specialStatus === "KML_FETCH_FAILED" || specialStatus === "NO_POLYGON_FOUND"
+          ? {
+              className: "border-slate-500/50 bg-slate-800/80 text-amber-200",
+              message: `⚠️ ตรวจสอบกลุ่มเฝ้าระวังพิเศษไม่ได้: ${specialWatchlistCheckError || "โหลดข้อมูลแผนที่ไม่สำเร็จ"}`
+            }
+          : {
+              className: "border-slate-600 bg-slate-800 text-slate-300",
+              message: "ยังไม่ได้ตรวจสอบกลุ่มเฝ้าระวังพิเศษ"
+            };
 
   return (
     <article
@@ -155,6 +204,18 @@ export default function JobCard({
             >
               {vulnerableChecking ? "กำลังตรวจสอบ..." : "ตรวจผู้ป่วยอีกครั้ง"}
             </button>
+          </div>
+          <div className={cn("mt-2 rounded-md border px-2 py-1 text-xs", specialUi.className)}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em]">ตรวจสอบกลุ่มเฝ้าระวังพิเศษ</p>
+            <p className="mt-0.5">
+              {specialUi.message}
+              {specialStatus === "FOUND_IN_POLYGON" && canOpenSpecialWatchlist && onOpenSpecialWatchlist ? (
+                <button type="button" onClick={onOpenSpecialWatchlist} className="ml-2 underline underline-offset-2">
+                  ดูรายชื่อ
+                </button>
+              ) : null}
+            </p>
+            {specialCheckedAtText ? <p className="mt-1 text-[11px] text-slate-300">ตรวจเมื่อ: {specialCheckedAtText}</p> : null}
           </div>
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
