@@ -31,6 +31,8 @@ type JobCardProps = {
   vulnerableCheckError?: string | null;
   canOpenVulnerableList?: boolean;
   onOpenVulnerableList?: () => void;
+  onRecheckVulnerable?: () => void;
+  vulnerableChecking?: boolean;
   onOpenDetail: () => void;
 };
 
@@ -48,6 +50,8 @@ export default function JobCard({
   vulnerableCheckError,
   canOpenVulnerableList,
   onOpenVulnerableList,
+  onRecheckVulnerable,
+  vulnerableChecking,
   onOpenDetail
 }: JobCardProps): ReactElement {
   const isClosed = job.is_closed ?? false;
@@ -143,6 +147,14 @@ export default function JobCard({
             {vulnerableCheckError ? (
               <p className="mt-1 text-[11px] text-slate-300">{vulnerableCheckError}</p>
             ) : null}
+            <button
+              type="button"
+              onClick={onRecheckVulnerable}
+              disabled={vulnerableChecking}
+              className="mt-2 text-[11px] font-medium underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {vulnerableChecking ? "กำลังตรวจสอบ..." : "ตรวจผู้ป่วยอีกครั้ง"}
+            </button>
           </div>
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
