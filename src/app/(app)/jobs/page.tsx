@@ -50,10 +50,14 @@ type DocForm = {
 type VulnerablePatientPreview = {
   id: string;
   patient_name: string;
+  contact_name: string | null;
   address: string | null;
   subdistrict: string | null;
   contact_phone: string | null;
   power_dependency_note: string | null;
+  care_note: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const isValidGoogleMapsUrl = (value: string) => {
@@ -211,6 +215,7 @@ export default function JobsPage() {
   const [closeJob, setCloseJob] = useState<OutageJob | null>(null);
   const [vulnerableJob, setVulnerableJob] = useState<OutageJob | null>(null);
   const [vulnerablePatients, setVulnerablePatients] = useState<VulnerablePatientPreview[]>([]);
+  const [vulnerableLoading, setVulnerableLoading] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -326,13 +331,30 @@ export default function JobsPage() {
   };
   const openVulnerableModal = async (job: OutageJob) => {
     const ids = Array.isArray(job.vulnerable_patient_ids) ? job.vulnerable_patient_ids : [];
-    if (ids.length === 0) return;
-    const { data } = await supabase
-      .from("bedridden_patients")
-      .select("id, patient_name, address, subdistrict, contact_phone, power_dependency_note")
-      .in("id", ids);
-    setVulnerablePatients(data ?? []);
     setVulnerableJob(job);
+    setVulnerablePatients([]);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    setVulnerableLoading(true);
+    try {
+      const params = new URLSearchParams({ ids: ids.join(",") });
+      const response = await fetch(`/api/bedridden-patients/by-ids?${params.toString()}`);
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ไม่สามารถโหลดรายละเอียดผู้ป่วยได้");
+      }
+
+      setVulnerablePatients(Array.isArray(result.data) ? result.data : []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ไม่สามารถโหลดรายละเอียดผู้ป่วยได้";
+      setToast({ message, tone: "error" });
+      setVulnerablePatients([]);
+    } finally {
+      setVulnerableLoading(false);
+    }
   };
 
   const handleCloseJob = async () => {
@@ -1191,17 +1213,34 @@ export default function JobsPage() {
         onClose={() => {
           setVulnerableJob(null);
           setVulnerablePatients([]);
+          setVulnerableLoading(false);
         }}
       >
         <div className="space-y-2">
-          {vulnerablePatients.map((patient) => (
-            <div key={patient.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
-              <p className="font-semibold">{patient.patient_name}</p>
-              <p>พื้นที่/ที่อยู่ย่อ: {patient.subdistrict || patient.address || "-"}</p>
-              <p>เบอร์ผู้ประสาน: {patient.contact_phone || "-"}</p>
-              <p>หมายเหตุไฟฟ้าจำเป็น: {patient.power_dependency_note || "-"}</p>
-            </div>
-          ))}
+          {vulnerableLoading ? <p className="text-sm text-slate-300">กำลังโหลดรายชื่อผู้ป่วย...</p> : null}
+          {!vulnerableLoading && vulnerablePatients.length === 0 ? (
+            <p className="text-sm text-slate-300">ไม่พบรายละเอียดผู้ป่วย</p>
+          ) : null}
+          {!vulnerableLoading
+            ? vulnerablePatients.map((patient) => (
+                <div key={patient.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+                  <p className="font-semibold">{patient.patient_name}</p>
+                  <p>พื้นที่/ที่อยู่ย่อ: {patient.subdistrict || patient.address || "-"}</p>
+                  <p>ผู้ประสาน: {patient.contact_name || "-"} {patient.contact_phone ? `(${patient.contact_phone})` : ""}</p>
+                  <p>หมายเหตุไฟฟ้าจำเป็น: {patient.power_dependency_note || "-"}</p>
+                  {typeof patient.latitude === "number" && typeof patient.longitude === "number" ? (
+                    <a
+                      href={`https://www.google.com/maps?q=${patient.latitude},${patient.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex underline underline-offset-2"
+                    >
+                      เปิดแผนที่
+                    </a>
+                  ) : null}
+                </div>
+              ))
+            : null}
         </div>
       </Modal>
 
