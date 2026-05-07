@@ -25,10 +25,12 @@ type JobCardProps = {
   primaryAction?: JobAction;
   secondaryActions: JobAction[];
   tertiaryItems: string[];
-  vulnerableWarning?: string | null;
+  vulnerableCheckStatus?: string | null;
+  vulnerableCheckCount?: number | null;
+  vulnerableCheckedAt?: string | null;
+  vulnerableCheckError?: string | null;
   canOpenVulnerableList?: boolean;
   onOpenVulnerableList?: () => void;
-  vulnerableCheckUnavailable?: boolean;
   onOpenDetail: () => void;
 };
 
@@ -40,15 +42,57 @@ export default function JobCard({
   primaryAction,
   secondaryActions,
   tertiaryItems,
-  vulnerableWarning,
+  vulnerableCheckStatus,
+  vulnerableCheckCount,
+  vulnerableCheckedAt,
+  vulnerableCheckError,
   canOpenVulnerableList,
   onOpenVulnerableList,
-  vulnerableCheckUnavailable,
   onOpenDetail
 }: JobCardProps): ReactElement {
   const isClosed = job.is_closed ?? false;
   const outageDate = parseLocalDate(job.outage_date);
   const highlightDay = urgency.daysLeft === 0 || urgency.daysLeft === 1;
+  const status = vulnerableCheckStatus?.trim() || null;
+  const count = Number(vulnerableCheckCount ?? 0);
+  const checkedAt = vulnerableCheckedAt ? new Date(vulnerableCheckedAt) : null;
+  const checkedAtText =
+    checkedAt && !Number.isNaN(checkedAt.getTime())
+      ? checkedAt.toLocaleString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        })
+      : null;
+
+  const vulnerableUi =
+    status === "FOUND_IN_POLYGON"
+      ? {
+          className: "border-amber-500/50 bg-amber-500/10 text-amber-200",
+          message: `⚠️ พบผู้ป่วยติดเตียงในพื้นที่ดับไฟ ${count} ราย`
+        }
+      : status === "NOT_FOUND_IN_POLYGON"
+        ? {
+            className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+            message: "✅ ตรวจแล้ว ไม่พบผู้ป่วยติดเตียงในพื้นที่ดับไฟ"
+          }
+        : status === "KML_FETCH_FAILED"
+          ? {
+              className: "border-slate-500/50 bg-slate-800/80 text-amber-200",
+              message: "⚠️ ตรวจสอบไม่ได้: โหลดข้อมูลแผนที่ไม่สำเร็จ"
+            }
+          : status === "NO_POLYGON_FOUND"
+            ? {
+                className: "border-slate-500/50 bg-slate-800/80 text-amber-200",
+                message: "⚠️ ตรวจสอบไม่ได้: ไม่พบ Polygon ใน My Maps"
+              }
+            : {
+                className: "border-slate-600 bg-slate-800 text-slate-300",
+                message: "ยังไม่ได้ตรวจสอบผู้ป่วยติดเตียง"
+              };
 
   return (
     <article
@@ -83,21 +127,23 @@ export default function JobCard({
           </div>
           <p className="line-clamp-2 text-sm text-slate-100">{job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}</p>
           <p className="line-clamp-2 text-xs text-slate-400">{job.note?.trim() || "ไม่มีหมายเหตุเพิ่มเติม"}</p>
-          {vulnerableWarning ? (
-            <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
-              {vulnerableWarning}
-              {canOpenVulnerableList && onOpenVulnerableList ? (
+          <div className={cn("mt-2 rounded-md border px-2 py-1 text-xs", vulnerableUi.className)}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em]">ตรวจสอบผู้ป่วยติดเตียง</p>
+            <p className="mt-0.5">
+              {vulnerableUi.message}
+              {status === "FOUND_IN_POLYGON" && canOpenVulnerableList && onOpenVulnerableList ? (
                 <button type="button" onClick={onOpenVulnerableList} className="ml-2 underline underline-offset-2">
                   ดูรายชื่อ
                 </button>
               ) : null}
-            </div>
-          ) : null}
-          {vulnerableCheckUnavailable ? (
-            <p className="mt-2 inline-flex w-fit rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">
-              ยังตรวจสอบผู้ป่วยจากแผนที่ไม่ได้
             </p>
-          ) : null}
+            {checkedAtText ? (
+              <p className="mt-1 text-[11px] text-slate-300">ตรวจเมื่อ: {checkedAtText}</p>
+            ) : null}
+            {vulnerableCheckError ? (
+              <p className="mt-1 text-[11px] text-slate-300">{vulnerableCheckError}</p>
+            ) : null}
+          </div>
           <MapActionButtons googleUrl={job.map_link} className="mt-3" />
         </section>
 

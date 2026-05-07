@@ -820,14 +820,6 @@ export default function JobsPage() {
             const secondaryActions: JobAction[] = [];
             const tertiaryItems: string[] = [];
             const vulnerableStatus = job.vulnerable_check_status ?? null;
-            const vulnerableCount = Number(job.vulnerable_check_count ?? 0);
-            const vulnerableWarning =
-              vulnerableStatus === "FOUND_IN_POLYGON" && vulnerableCount > 0
-                ? `⚠️ พบผู้ป่วยติดเตียงในพื้นที่ดับไฟ ${vulnerableCount} ราย`
-                : null;
-            const vulnerableCheckUnavailable =
-              vulnerableStatus === "KML_FETCH_FAILED" ||
-              vulnerableStatus === "NO_POLYGON_FOUND";
             let primaryAction: JobAction | undefined;
 
             if (isPending) {
@@ -936,8 +928,10 @@ export default function JobsPage() {
                 primaryAction={isClosed ? undefined : primaryAction}
                 secondaryActions={displaySecondaryActions}
                 tertiaryItems={tertiaryItems}
-                vulnerableWarning={vulnerableWarning}
-                vulnerableCheckUnavailable={vulnerableCheckUnavailable}
+                vulnerableCheckStatus={vulnerableStatus}
+                vulnerableCheckCount={job.vulnerable_check_count}
+                vulnerableCheckedAt={job.vulnerable_check_checked_at}
+                vulnerableCheckError={job.vulnerable_check_error}
                 canOpenVulnerableList={vulnerableStatus === "FOUND_IN_POLYGON"}
                 onOpenVulnerableList={() => openVulnerableModal(job)}
                 onOpenDetail={() => router.push(`/job/${job.id}`)}
