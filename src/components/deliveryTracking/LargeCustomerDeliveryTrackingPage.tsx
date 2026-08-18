@@ -366,7 +366,7 @@ export default function LargeCustomerDeliveryTrackingPage({
   };
 
   return (
-    <div className="space-y-4 bg-[#0B1220] pb-6 text-gray-300">
+    <div className="dark-operations-surface space-y-4 bg-[#0B1220] pb-6 text-gray-300">
       <header className="rounded-2xl border border-slate-700/80 bg-[#111827] p-3.5 sm:p-4">
         <div className="space-y-3">
           <div className="space-y-1">

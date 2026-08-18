@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { DeliveryTrackingError } from "@/lib/deliveryTracking";
-import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
+import { authorizeServerRequest } from "@/lib/serverAuth";
 
 const parsePgCode = (details: unknown) => {
   if (typeof details !== "object" || details === null) return "";
@@ -88,12 +88,6 @@ export const buildDeliveryErrorResponse = (error: DeliveryTrackingError) => {
 };
 
 export const ensureAuthenticated = async () => {
-  const { accessToken } = getAuthTokens();
-  if (!accessToken) return false;
-  const authClient = createServerClient();
-  const {
-    data: { user },
-    error
-  } = await authClient.auth.getUser(accessToken);
-  return Boolean(user) && !error;
+  const { authorized } = await authorizeServerRequest();
+  return authorized;
 };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AppShell from "@/components/layout/AppShell";
 import Button, { buttonStyles } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -46,7 +47,8 @@ export default function NewJobPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <AppShell>
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <header className="flex flex-col gap-2">
         <h1 className={cn(titleText, "text-2xl")}>สร้างงานใหม่</h1>
         <p className={subtitleText}>ระบุรายละเอียดสำหรับงานดับไฟที่จะมาถึง</p>
@@ -103,5 +105,6 @@ export default function NewJobPage() {
         </CardContent>
       </Card>
     </div>
+    </AppShell>
   );
 }

@@ -2,7 +2,7 @@ export default function DashboardLoading() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
           Overview
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900">

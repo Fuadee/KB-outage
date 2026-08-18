@@ -13,7 +13,7 @@ export default function AppShell({ children }: AppShellProps) {
     <div className={`${appBg} h-dvh overflow-hidden`}>
       <div className="flex h-full min-h-0 flex-col">
         <AppNavbar />
-        <main className="flex-1 min-h-0 overflow-y-auto px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-12 pt-6 sm:px-6 sm:pt-8 lg:px-8">
           <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
       </div>

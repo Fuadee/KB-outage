@@ -12,15 +12,15 @@ type ButtonStyleProps = {
 };
 
 const baseStyles =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap transition disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap transition duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-60";
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary: btnPrimaryGradient,
   secondary: btnSecondaryLight,
   ghost:
-    "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
+    "inline-flex items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium text-slate-500 transition duration-150 ease-out hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-slate-200",
   closeWork:
-    "rounded-lg border border-[rgba(16,185,129,0.35)] bg-[#047857] text-white shadow-[0_10px_25px_-18px_rgba(16,185,129,0.9)] hover:bg-[#10B981] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+    "rounded-[var(--radius-control)] bg-[var(--primary)] text-white shadow-sm hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-orange-200 focus-visible:ring-offset-2"
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

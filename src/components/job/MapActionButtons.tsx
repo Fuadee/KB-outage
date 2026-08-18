@@ -51,7 +51,7 @@ export default function MapActionButtons({
 
   const iconClasses = "h-3.5 w-3.5";
   const mapButtonClasses = cn(
-    buttonStyles({ variant: "primary", size: "sm" }),
+    buttonStyles({ variant: "secondary", size: "sm" }),
     "!inline-flex !w-fit !max-w-max !shrink-0 !flex-none !items-center !px-4 !py-2"
   );
 
@@ -66,7 +66,7 @@ export default function MapActionButtons({
         className={mapButtonClasses}
       >
         <MapPin className={iconClasses} aria-hidden="true" />
-        <span className="whitespace-nowrap">📍 เปิดแผนที่</span>
+        <span className="whitespace-nowrap">เปิดแผนที่</span>
       </a>
     </div>
   );

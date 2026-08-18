@@ -212,15 +212,15 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
+      <Card className="!border-0 !bg-transparent !shadow-none">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 !px-0 py-1">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+            <p className="page-eyebrow">
               Month view
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
+            <h1 className="page-title">
               {monthLabel}
-            </h2>
+            </h1>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -245,7 +245,7 @@ export default function CalendarPage() {
 
       <Card>
         <CardContent className="py-6">
-          <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {dayLabels.map((label) => (
               <div key={label} className="px-2">
                 {label}
@@ -270,7 +270,7 @@ export default function CalendarPage() {
                     isSelected
                       ? "border-slate-400 bg-slate-50"
                       : "border-slate-200/70 bg-white"
-                  } ${isCurrent ? "" : "text-slate-400"}`}
+                  } ${isCurrent ? "" : "text-slate-500"}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">
@@ -331,10 +331,10 @@ export default function CalendarPage() {
           <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <p className="text-xs font-semibold text-slate-500">
                   Daily outages
                 </p>
-                <h2 className="mt-2 text-xl font-semibold text-white">
+                <h2 className="mt-1 text-xl font-semibold text-slate-900">
                   {selectedDate
                     ? selectedDate.toLocaleDateString("en-US", {
                         weekday: "long",

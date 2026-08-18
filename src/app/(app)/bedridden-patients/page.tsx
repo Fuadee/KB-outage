@@ -169,12 +169,13 @@ export default function BedriddenPatientsPage() {
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardContent className="space-y-4 py-5">
+      <Card className="!border-0 !bg-transparent !shadow-none">
+        <CardContent className="space-y-5 !px-0 py-1">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-white">ผู้ป่วยติดเตียง / กลุ่มเปราะบาง</h1>
-              <p className="text-sm text-slate-300">ฐานข้อมูลสำหรับเตรียมประเมินผลกระทบจากงานดับไฟ (Phase 1)</p>
+              <p className="page-eyebrow">Impact preparedness</p>
+              <h1 className="page-title">ผู้ป่วยติดเตียง / กลุ่มเปราะบาง</h1>
+              <p className="page-description">ฐานข้อมูลสำหรับเตรียมประเมินผลกระทบจากงานดับไฟ (Phase 1)</p>
             </div>
             <Button onClick={openCreateModal}>เพิ่มผู้ป่วย</Button>
           </div>
@@ -198,12 +199,12 @@ export default function BedriddenPatientsPage() {
         </CardContent>
       </Card>
 
-      {error ? <p className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
+      {error ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
       <div className="grid gap-3">
-        {loading ? <p className="text-sm text-slate-300">กำลังโหลดข้อมูล...</p> : null}
+        {loading ? <p className="text-sm text-slate-600">กำลังโหลดข้อมูล...</p> : null}
         {!loading && patients.length === 0 ? (
-          <p className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-4 text-sm text-slate-300">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p>
+          <p className="empty-state">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p>
         ) : null}
 
         {patients.map((patient) => {
@@ -214,10 +215,10 @@ export default function BedriddenPatientsPage() {
             <Card key={patient.id}>
               <CardContent className="space-y-3 py-4">
                 <div className="space-y-1">
-                  <p className="text-base font-semibold text-white">{patient.patient_name}</p>
-                  <p className="text-sm text-slate-300">พื้นที่: {patient.subdistrict || patient.address || "-"}</p>
-                  <p className="text-sm text-slate-300">เบอร์ผู้ประสาน: {patient.contact_phone || "-"}</p>
-                  <p className="text-sm text-slate-300">หมายเหตุไฟฟ้าจำเป็น: {shortPowerNote}{(patient.power_dependency_note?.length ?? 0) > 80 ? "…" : ""}</p>
+                  <p className="text-base font-semibold text-slate-900">{patient.patient_name}</p>
+                  <p className="text-sm text-slate-600">พื้นที่: {patient.subdistrict || patient.address || "-"}</p>
+                  <p className="text-sm text-slate-600">เบอร์ผู้ประสาน: {patient.contact_phone || "-"}</p>
+                  <p className="text-sm text-slate-600">หมายเหตุไฟฟ้าจำเป็น: {shortPowerNote}{(patient.power_dependency_note?.length ?? 0) > 80 ? "…" : ""}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -226,7 +227,7 @@ export default function BedriddenPatientsPage() {
                       href={`https://maps.google.com/?q=${patient.latitude},${patient.longitude}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center justify-center rounded-md border border-[#f97316]/60 px-3 py-2 text-xs font-semibold text-orange-200 hover:bg-orange-500/10"
+                      className="inline-flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"
                     >
                       เปิดแผนที่
                     </a>

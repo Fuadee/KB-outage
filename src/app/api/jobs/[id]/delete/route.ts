@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient, getAuthTokens } from "@/lib/supabase/server";
+import { authorizeServerRequest } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -23,21 +23,8 @@ export async function DELETE(
   context: { params: { id: string } }
 ) {
   try {
-    const { accessToken } = getAuthTokens();
-    if (!accessToken) {
-      return NextResponse.json(
-        { ok: false, error: "UNAUTHENTICATED" },
-        { status: 401 }
-      );
-    }
-
-    const authClient = createServerClient();
-    const {
-      data: { user },
-      error: userError
-    } = await authClient.auth.getUser(accessToken);
-
-    if (userError || !user) {
+    const { authorized } = await authorizeServerRequest();
+    if (!authorized) {
       return NextResponse.json(
         { ok: false, error: "UNAUTHENTICATED" },
         { status: 401 }

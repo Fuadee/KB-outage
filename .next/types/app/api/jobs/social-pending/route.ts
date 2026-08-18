@@ -1,4 +1,4 @@
-// File: C:\Users\506870\Desktop\KB-outage\src\app\api\jobs\social-pending\route.ts
+// File: C:\Users\506870\Desktop\WebApp\Outage\KB-outage\src\app\api\jobs\social-pending\route.ts
 import * as entry from '../../../../../../src/app/api/jobs/social-pending/route.js'
 import type { NextRequest } from 'next/server.js'
 

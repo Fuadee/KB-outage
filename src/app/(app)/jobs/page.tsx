@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   type FormEvent,
   type RefObject,
@@ -26,6 +25,12 @@ import {
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
 import { supabase } from "@/lib/supabaseClient";
+import { AUTH_DISABLED } from "@/lib/authConfig";
+import {
+  CloseJobRequestError,
+  closeOutageJob,
+  normalizeJobId
+} from "@/lib/closeJob";
 import { inputLight } from "@/lib/theme";
 import { getJobUrgency, parseLocalDate } from "@/lib/dateUtils";
 
@@ -46,6 +51,11 @@ type DocForm = {
   doc_time_end: string;
   doc_area_detail: string;
   map_link: string;
+};
+
+type CloseTarget = {
+  id: string;
+  equipmentCode: string;
 };
 type VulnerablePatientPreview = {
   id: string;
@@ -191,6 +201,7 @@ const textareaStyles = `${inputLight} min-h-[96px]`;
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<OutageJob[]>([]);
+  const [gisIssueCounts, setGisIssueCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -225,7 +236,7 @@ export default function JobsPage() {
     Record<keyof DocForm | "submit", string>
   >>({});
   const [docSaving, setDocSaving] = useState(false);
-  const [closeJob, setCloseJob] = useState<OutageJob | null>(null);
+  const [closeTarget, setCloseTarget] = useState<CloseTarget | null>(null);
   const [vulnerableJob, setVulnerableJob] = useState<OutageJob | null>(null);
   const [vulnerablePatients, setVulnerablePatients] = useState<VulnerablePatientPreview[]>([]);
   const [vulnerableLoading, setVulnerableLoading] = useState(false);
@@ -257,7 +268,21 @@ export default function JobsPage() {
       setError(fetchError.message);
       setJobs([]);
     } else {
-      setJobs(data ?? []);
+      const nextJobs = data ?? [];
+      setJobs(nextJobs);
+      try {
+        const countsResponse = await fetch("/api/gis-issues/job-counts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_ids: nextJobs.map((job) => job.id) })
+        });
+        const countsResult = await countsResponse.json().catch(() => null);
+        if (countsResponse.ok && countsResult?.ok) {
+          setGisIssueCounts(countsResult.data ?? {});
+        }
+      } catch (countsError) {
+        console.warn("Unable to load GIS issue counts", countsError);
+      }
     }
     setLoading(false);
   };
@@ -341,7 +366,13 @@ export default function JobsPage() {
   };
 
   const openCloseModal = (job: OutageJob) => {
-    setCloseJob(job);
+    const jobId = normalizeJobId(job.id);
+    if (!jobId) {
+      setToast({ message: "รหัสงานไม่ถูกต้อง ไม่สามารถเปิดหน้าต่างปิดงานได้", tone: "error" });
+      return;
+    }
+
+    setCloseTarget({ id: jobId, equipmentCode: job.equipment_code });
     setCloseSaving(false);
     setCloseError(null);
   };
@@ -427,41 +458,48 @@ export default function JobsPage() {
     }
   };
 
-  const handleCloseJob = async () => {
-    if (!closeJob) return;
+  const handleCloseJob = async (jobId: string) => {
     setCloseSaving(true);
     setCloseError(null);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      setCloseSaving(false);
-      setCloseJob(null);
-      router.push("/login");
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/jobs/${closeJob.id}/close`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        }
-      });
-      if (response.status === 401) {
+    if (!AUTH_DISABLED) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
         setCloseSaving(false);
-        setCloseJob(null);
+        setCloseTarget(null);
         router.push("/login");
         return;
       }
-      const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.ok) {
-        throw new Error(result?.error ?? "ปิดงานไม่สำเร็จ กรุณาลองใหม่");
-      }
+    }
+
+    try {
+      const result = await closeOutageJob(jobId);
 
       setToast({ message: "✅ ปิดงานเรียบร้อย", tone: "success" });
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === result.jobId
+            ? {
+                ...job,
+                is_closed: true,
+                closed_at: result.closed_at ?? new Date().toISOString()
+              }
+            : job
+        )
+      );
+      setCloseTarget(null);
       await fetchJobs();
-      setCloseJob(null);
     } catch (closeError) {
+      if (
+        !AUTH_DISABLED &&
+        closeError instanceof CloseJobRequestError &&
+        closeError.status === 401
+      ) {
+        setCloseTarget(null);
+        router.push("/login");
+        return;
+      }
+
       const message =
         closeError instanceof Error
           ? closeError.message
@@ -785,38 +823,26 @@ export default function JobsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <header className="rounded-xl border border-slate-300/70 bg-[#e8edf5] p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              Jobs
-            </h1>
-            <p className="text-sm text-slate-600">
-              ศูนย์ควบคุมติดตามงานดับไฟ แสดงสถานะงานและขั้นตอนถัดไปของแต่ละใบงาน
-            </p>
-          </div>
-          <Link
-            href="/new"
-            className="inline-flex items-center rounded-md bg-[#f97316] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea6a13]"
-          >
-            + สร้างงาน
-          </Link>
-        </div>
+    <div className="space-y-6">
+      <header className="space-y-1 pb-1">
+        <p className="page-eyebrow">Outage operations</p>
+        <h1 className="page-title">Jobs</h1>
+        <p className="page-description">
+          ศูนย์ควบคุมติดตามงานดับไฟ แสดงสถานะงานและขั้นตอนถัดไปของแต่ละใบงาน
+        </p>
       </header>
 
-      <Card className="border-slate-600 bg-[#111827]">
-        <CardContent className="p-3 lg:p-4">
-          <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-end">
+      <section className="rounded-[12px] border border-slate-200/80 bg-white/75 px-4 py-3.5">
+          <div className="grid gap-3 lg:grid-cols-[minmax(320px,1fr)_auto_auto] lg:items-end">
             <div className="flex w-full flex-col gap-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              <label className="text-xs font-semibold text-slate-600">
                 ค้นหาอุปกรณ์
               </label>
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="กรอกรหัสอุปกรณ์"
-                className="h-9"
+                className="h-10"
               />
             </div>
             <Segmented
@@ -838,8 +864,7 @@ export default function JobsPage() {
               onChange={setTab}
             />
           </div>
-        </CardContent>
-      </Card>
+      </section>
 
       {toast ? (
         <Card
@@ -878,13 +903,13 @@ export default function JobsPage() {
       <section className="grid gap-3">
         {loading ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-slate-300">
+            <CardContent className="py-10 text-center text-sm text-slate-500">
               กำลังโหลดข้อมูล...
             </CardContent>
           </Card>
         ) : filteredJobs.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-slate-300">
+            <CardContent className="py-10 text-center text-sm text-slate-500">
               ยังไม่มีงานที่ตรงกับตัวกรอง
             </CardContent>
           </Card>
@@ -1034,6 +1059,9 @@ export default function JobsPage() {
                 onOpenVulnerableList={() => openVulnerableModal(job)}
                 impactGroupsChecking={actionLoading[`impact-groups:${job.id}`] ?? false}
                 onRecheckImpactGroups={() => handleRecheckImpactGroups(job)}
+                gisIssueCount={gisIssueCounts[job.id] ?? 0}
+                onReportGisIssue={() => router.push(`/gis-issues/new?source_job_id=${job.id}`)}
+                onOpenGisIssues={() => router.push(`/gis-issues?source_job_id=${job.id}`)}
                 onOpenDetail={() => router.push(`/job/${job.id}`)}
               />
             );
@@ -1058,7 +1086,7 @@ export default function JobsPage() {
         }
       >
         <div className="grid gap-3">
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             วันที่แจ้งศูนย์นคร
             <Input
               ref={notifiedDateRef}
@@ -1072,7 +1100,7 @@ export default function JobsPage() {
               <span className="text-xs text-red-600">{modalErrors.date}</span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             เลขที่บันทึก
             <Input
               ref={memoNoRef}
@@ -1111,7 +1139,7 @@ export default function JobsPage() {
         }
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             หนังสือลงวันที่
             <Input
               ref={docIssueDateRef}
@@ -1132,7 +1160,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             ดับไฟเพื่อ
             <Input
               ref={docPurposeRef}
@@ -1153,7 +1181,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             บริเวณที่ดับ
             <Input
               ref={docAreaTitleRef}
@@ -1174,7 +1202,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             เวลาเริ่มดับไฟ
             <Input
               ref={docTimeStartRef}
@@ -1195,7 +1223,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             เวลาจ่ายไฟ
             <Input
               ref={docTimeEndRef}
@@ -1216,7 +1244,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700 md:col-span-2">
             รายละเอียดพื้นที่ดับไฟ
             <textarea
               ref={docAreaDetailRef}
@@ -1237,7 +1265,7 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700 md:col-span-2">
             ตำแหน่งสถานที่ (Google Map)
             <Input
               ref={mapLinkRef}
@@ -1295,13 +1323,13 @@ export default function JobsPage() {
         }}
       >
         <div className="space-y-2">
-          {vulnerableLoading ? <p className="text-sm text-slate-300">กำลังโหลดรายชื่อผู้ป่วย...</p> : null}
+          {vulnerableLoading ? <p className="text-sm text-slate-600">กำลังโหลดรายชื่อผู้ป่วย...</p> : null}
           {!vulnerableLoading && vulnerablePatients.length === 0 ? (
-            <p className="text-sm text-slate-300">ไม่พบรายละเอียดผู้ป่วย</p>
+            <p className="text-sm text-slate-600">ไม่พบรายละเอียดผู้ป่วย</p>
           ) : null}
           {!vulnerableLoading
             ? vulnerablePatients.map((patient) => (
-                <div key={patient.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+                <div key={patient.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                   <p className="font-semibold">{patient.patient_name}</p>
                   <p>พื้นที่/ที่อยู่ย่อ: {patient.subdistrict || patient.address || "-"}</p>
                   <p>ผู้ประสาน: {patient.contact_name || "-"} {patient.contact_phone ? `(${patient.contact_phone})` : ""}</p>
@@ -1332,13 +1360,13 @@ export default function JobsPage() {
         }}
       >
         <div className="space-y-2">
-          {specialWatchlistLoading ? <p className="text-sm text-slate-300">กำลังโหลดรายชื่อกลุ่มเฝ้าระวังพิเศษ...</p> : null}
+          {specialWatchlistLoading ? <p className="text-sm text-slate-600">กำลังโหลดรายชื่อกลุ่มเฝ้าระวังพิเศษ...</p> : null}
           {!specialWatchlistLoading && specialWatchlistCustomers.length === 0 ? (
-            <p className="text-sm text-slate-300">ไม่พบรายละเอียดกลุ่มเฝ้าระวังพิเศษ</p>
+            <p className="text-sm text-slate-600">ไม่พบรายละเอียดกลุ่มเฝ้าระวังพิเศษ</p>
           ) : null}
           {!specialWatchlistLoading
             ? specialWatchlistCustomers.map((customer) => (
-                <div key={customer.id} className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+                <div key={customer.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                   <p className="font-semibold">{customer.customer_name}</p>
                   <p>พื้นที่/ที่อยู่: {customer.subdistrict || customer.address || "-"}</p>
                   <p>ผู้ประสาน: {customer.contact_name || "-"} {customer.contact_phone ? `(${customer.contact_phone})` : ""}</p>
@@ -1361,15 +1389,22 @@ export default function JobsPage() {
       </Modal>
 
       <Modal
-        isOpen={Boolean(closeJob)}
+        isOpen={Boolean(closeTarget)}
         title="ยืนยันปิดงาน?"
-        onClose={() => setCloseJob(null)}
+        onClose={() => {
+          if (!closeSaving) setCloseTarget(null);
+        }}
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-slate-200/80">
+          <p className="text-sm text-slate-600">
             ปิดงานแล้วจะถูกย้ายไปที่ &quot;งานที่ปิดแล้ว&quot;
             และไม่สามารถแก้ไขได้
           </p>
+          {closeTarget ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+              งาน {closeTarget.equipmentCode}
+            </p>
+          ) : null}
           {closeError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {closeError}
@@ -1379,14 +1414,17 @@ export default function JobsPage() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setCloseJob(null)}
+              onClick={() => setCloseTarget(null)}
+              disabled={closeSaving}
             >
               ยกเลิก
             </Button>
             <Button
               type="button"
-              onClick={handleCloseJob}
-              disabled={closeSaving}
+              onClick={() => {
+                if (closeTarget) void handleCloseJob(closeTarget.id);
+              }}
+              disabled={closeSaving || !closeTarget}
             >
               {closeSaving ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
             </Button>

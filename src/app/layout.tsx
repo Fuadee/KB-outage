@@ -10,8 +10,8 @@ const noto = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "Krabi Outage Tracker",
-  description: "Track planned outages in Krabi."
+  title: "KB Outage Operations",
+  description: "พื้นที่ปฏิบัติงานสำหรับติดตามและจัดการงานดับไฟตามแผน"
 };
 
 export default function RootLayout({

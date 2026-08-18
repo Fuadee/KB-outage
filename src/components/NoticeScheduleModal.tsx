@@ -173,7 +173,7 @@ export default function NoticeScheduleModal({
             {toastMessage}
           </div>
         ) : null}
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
           วันที่จะไปดำเนินการแจ้ง
           <Input
             type="date"
@@ -185,7 +185,7 @@ export default function NoticeScheduleModal({
             <span className="text-xs text-red-600">{errors.noticeDate}</span>
           ) : null}
         </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-200/90">
+        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
           ผู้แจ้ง
           <Input
             type="text"
@@ -215,9 +215,9 @@ export default function NoticeScheduleModal({
           </Button>
         </div>
         {job?.notice_status === "SCHEDULED" ? (
-          <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-3">
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-100">
+              <p className="text-sm font-semibold text-slate-900">
                 สถานะการแจ้งผู้ใช้ไฟรายใหญ่
               </p>
               <Button
@@ -237,7 +237,7 @@ export default function NoticeScheduleModal({
               </Button>
             </div>
             {deliverySummary ? (
-              <div className="space-y-2 text-xs text-slate-300">
+              <div className="space-y-2 text-xs text-slate-600">
                 <p>
                   ทั้งหมด {deliverySummary.total} ราย | แจ้งแล้ว{" "}
                   {deliverySummary.delivered} ราย | ยังไม่แจ้ง{" "}
@@ -266,7 +266,7 @@ export default function NoticeScheduleModal({
                 )}
               </div>
             ) : (
-              <p className="text-xs text-slate-400">ยังไม่มีรายการผู้ใช้ไฟรายใหญ่</p>
+              <p className="text-xs text-slate-500">ยังไม่มีรายการผู้ใช้ไฟรายใหญ่</p>
             )}
           </div>
         ) : null}

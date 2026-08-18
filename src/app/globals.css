@@ -2,11 +2,204 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-soft: #eef3f8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-subtle: #64748b;
+  --navy: #172b49;
+  --navy-soft: #203858;
+  --primary: #f97316;
+  --primary-hover: #ea580c;
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --warning: #b45309;
+  --warning-soft: #fff8e7;
+  --danger: #dc2626;
+  --danger-soft: #fff1f2;
+  --radius-card: 16px;
+  --radius-control: 9px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.035);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  background: var(--app-bg);
+}
+
+body {
+  color: var(--text);
+  background: var(--app-bg);
+}
+
+::selection {
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
 @layer components {
   .input-light[type="date"],
   .input-light[type="time"] {
-    color: rgb(226 232 240);
-    -webkit-text-fill-color: rgb(226 232 240);
-    color-scheme: dark;
+    color: var(--text);
+    -webkit-text-fill-color: var(--text);
+    color-scheme: light;
+  }
+
+  .page-header {
+    @apply flex flex-col gap-4 py-1 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .page-eyebrow {
+    @apply text-xs font-semibold text-slate-500;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl;
+  }
+
+  .page-description {
+    @apply mt-1 max-w-3xl text-sm leading-6 text-slate-600;
+  }
+
+  .empty-state {
+    @apply rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500;
+  }
+
+  .modal-surface {
+    color: var(--text);
+  }
+
+  .modal-surface .text-slate-100,
+  .modal-surface .text-slate-200 {
+    color: var(--text) !important;
+  }
+
+  .modal-surface .text-slate-200\/80,
+  .modal-surface .text-slate-200\/90,
+  .modal-surface .text-slate-300,
+  .modal-surface .text-slate-400 {
+    color: var(--text-muted) !important;
+  }
+}
+
+/* Compatibility layer for older feature screens while their logic remains untouched. */
+.operations-workspace main .bg-\[\#111827\],
+.operations-workspace main .bg-\[\#0f172a\],
+.operations-workspace main .bg-slate-900,
+.operations-workspace main .bg-slate-900\/60,
+.operations-workspace main .bg-slate-900\/80,
+.operations-workspace main .bg-slate-900\/95,
+.operations-workspace main .bg-slate-800,
+.operations-workspace main .bg-slate-800\/80 {
+  background-color: var(--surface) !important;
+}
+
+.operations-workspace main .text-slate-100,
+.operations-workspace main .text-slate-200 {
+  color: var(--text) !important;
+}
+
+.operations-workspace main .text-slate-300 {
+  color: var(--text-muted) !important;
+}
+
+.operations-workspace main .border-slate-500,
+.operations-workspace main .border-slate-600,
+.operations-workspace main .border-slate-700,
+.operations-workspace main .border-slate-700\/70,
+.operations-workspace main .border-slate-700\/80 {
+  border-color: var(--border) !important;
+}
+
+.operations-workspace main .text-emerald-200,
+.operations-workspace main .text-emerald-300 {
+  color: #047857 !important;
+}
+
+.operations-workspace main .text-amber-100,
+.operations-workspace main .text-amber-200,
+.operations-workspace main .text-amber-300,
+.operations-workspace main .text-orange-300 {
+  color: #b45309 !important;
+}
+
+.operations-workspace main .text-red-300,
+.operations-workspace main .text-rose-200,
+.operations-workspace main .text-rose-300 {
+  color: #be123c !important;
+}
+
+/* Field delivery tracking intentionally uses a dark surface. Keep its light
+   text paired with the original dark backgrounds instead of the legacy
+   light-theme compatibility overrides above. */
+.operations-workspace main .dark-operations-surface .bg-\[\#111827\],
+.operations-workspace main .dark-operations-surface.bg-\[\#111827\] {
+  background-color: #111827 !important;
+}
+
+.operations-workspace main .dark-operations-surface .bg-slate-900 {
+  background-color: #0f172a !important;
+}
+
+.operations-workspace main .dark-operations-surface .bg-slate-900\/60 {
+  background-color: rgb(15 23 42 / 0.6) !important;
+}
+
+.operations-workspace main .dark-operations-surface .bg-slate-900\/80 {
+  background-color: rgb(15 23 42 / 0.8) !important;
+}
+
+.operations-workspace main .dark-operations-surface .bg-slate-900\/95 {
+  background-color: rgb(15 23 42 / 0.95) !important;
+}
+
+.operations-workspace main .dark-operations-surface .bg-slate-800,
+.operations-workspace main .dark-operations-surface .bg-slate-800\/80 {
+  background-color: #1e293b !important;
+}
+
+.operations-workspace main .dark-operations-surface .text-slate-100 {
+  color: #f1f5f9 !important;
+}
+
+.operations-workspace main .dark-operations-surface .text-slate-200 {
+  color: #e2e8f0 !important;
+}
+
+.operations-workspace main .dark-operations-surface .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+.operations-workspace main .dark-operations-surface .border-slate-500 {
+  border-color: #64748b !important;
+}
+
+.operations-workspace main .dark-operations-surface .border-slate-600 {
+  border-color: #475569 !important;
+}
+
+.operations-workspace main .dark-operations-surface .border-slate-700,
+.operations-workspace main .dark-operations-surface .border-slate-700\/70,
+.operations-workspace main .dark-operations-surface .border-slate-700\/80 {
+  border-color: #334155 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

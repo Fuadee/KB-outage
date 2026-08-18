@@ -1,5 +1,6 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AUTH_DISABLED } from "@/lib/authConfig";
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
@@ -41,7 +42,7 @@ export const createClient = () => {
     browserClient = createSupabaseClient(supabaseUrl!, supabaseAnonKey!);
   }
 
-  if (!authListenerRegistered && typeof window !== "undefined") {
+  if (!AUTH_DISABLED && !authListenerRegistered && typeof window !== "undefined") {
     authListenerRegistered = true;
     browserClient.auth.onAuthStateChange((_event, session) => {
       syncSessionToServer(

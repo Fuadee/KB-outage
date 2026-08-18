@@ -22,6 +22,10 @@ export const appNavItems: NavItem[] = [
     href: "/calendar"
   },
   {
+    label: "GIS Issues",
+    href: "/gis-issues"
+  },
+  {
     label: "ผู้ป่วยติดเตียง",
     href: "/bedridden-patients"
   },

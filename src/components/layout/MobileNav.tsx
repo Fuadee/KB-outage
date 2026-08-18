@@ -28,15 +28,15 @@ export default function MobileNav({ open, onClose }: MobileNavProps) {
       />
       <aside
         className={cn(
-          "absolute right-3 top-3 w-[calc(100%-1.5rem)] max-w-sm rounded-xl border border-slate-600 bg-[#0f172a] p-4 shadow-2xl transition duration-200",
+          "absolute right-3 top-3 w-[calc(100%-1.5rem)] max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl transition duration-200",
           open ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"
         )}
       >
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-100">เมนูหลัก</p>
+          <p className="text-sm font-semibold text-slate-900">เมนูหลัก</p>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
             onClick={onClose}
             aria-label="Close navigation"
           >
@@ -49,12 +49,12 @@ export default function MobileNav({ open, onClose }: MobileNavProps) {
         <Link
           href="/new"
           onClick={onClose}
-          className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-[#f97316] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ea6a13]"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-[9px] bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]"
         >
           + สร้างงาน
         </Link>
 
-        <div className="mt-4 border-t border-slate-700 pt-4">
+        <div className="mt-4 border-t border-slate-200 pt-4">
           <UserMenu compact onAfterLogout={onClose} />
         </div>
       </aside>

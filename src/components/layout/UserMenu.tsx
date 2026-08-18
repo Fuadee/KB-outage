@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabaseClient";
+import { AUTH_DISABLED } from "@/lib/authConfig";
 
 interface UserMenuProps {
   compact?: boolean;
   onAfterLogout?: () => void;
 }
 
-export default function UserMenu({ compact = false, onAfterLogout }: UserMenuProps) {
+function AuthenticatedUserMenu({ compact = false, onAfterLogout }: UserMenuProps) {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -63,4 +64,9 @@ export default function UserMenu({ compact = false, onAfterLogout }: UserMenuPro
       </Button>
     </div>
   );
+}
+
+export default function UserMenu(props: UserMenuProps) {
+  if (AUTH_DISABLED) return null;
+  return <AuthenticatedUserMenu {...props} />;
 }

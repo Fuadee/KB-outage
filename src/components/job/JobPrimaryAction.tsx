@@ -25,7 +25,7 @@ export default function JobPrimaryAction({
       type="button"
       size="sm"
       variant={isCloseWorkAction ? "closeWork" : "primary"}
-      className="w-full uppercase tracking-wide"
+      className="min-h-9 w-full"
       onClick={onClick}
       disabled={disabled || loading}
     >

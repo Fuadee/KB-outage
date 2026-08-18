@@ -1,4 +1,4 @@
-// File: C:\Users\506870\Desktop\KB-outage\src\app\(app)\jobs\page.tsx
+// File: C:\Users\506870\Desktop\WebApp\Outage\KB-outage\src\app\(app)\jobs\page.tsx
 import * as entry from '../../../../../src/app/(app)/jobs/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

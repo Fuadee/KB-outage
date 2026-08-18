@@ -154,11 +154,12 @@ export default function SpecialWatchlistPage() {
 
   return (
     <div className="space-y-5">
-      <Card><CardContent className="space-y-4 py-5">
+      <Card className="!border-0 !bg-transparent !shadow-none"><CardContent className="space-y-5 !px-0 py-1">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-white">กลุ่มเฝ้าระวังพิเศษ</h1>
-            <p className="text-sm text-slate-300">ฐานข้อมูลผู้ใช้ไฟที่ควรแจ้งล่วงหน้า/ดูแลเป็นพิเศษเมื่อมีงานดับไฟ</p>
+            <p className="page-eyebrow">Priority care directory</p>
+            <h1 className="page-title">กลุ่มเฝ้าระวังพิเศษ</h1>
+            <p className="page-description">ฐานข้อมูลผู้ใช้ไฟที่ควรแจ้งล่วงหน้า/ดูแลเป็นพิเศษเมื่อมีงานดับไฟ</p>
           </div>
           <Button onClick={openCreateModal}>เพิ่มรายชื่อ</Button>
         </div>
@@ -168,24 +169,24 @@ export default function SpecialWatchlistPage() {
         </div>
       </CardContent></Card>
 
-      {error ? <p className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
+      {error ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
       <div className="grid gap-3">
-        {loading ? <p className="text-sm text-slate-300">กำลังโหลดข้อมูล...</p> : null}
-        {!loading && customers.length === 0 ? <p className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-4 text-sm text-slate-300">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p> : null}
+        {loading ? <p className="text-sm text-slate-600">กำลังโหลดข้อมูล...</p> : null}
+        {!loading && customers.length === 0 ? <p className="empty-state">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p> : null}
         {customers.map((customer) => {
           const shortImpactReason = customer.impact_reason?.slice(0, 80) ?? "-";
           const hasMap = customer.latitude !== null && customer.longitude !== null;
           return (
             <Card key={customer.id}><CardContent className="space-y-3 py-4">
               <div className="space-y-1">
-                <p className="text-base font-semibold text-white">{customer.customer_name}</p>
-                <p className="text-sm text-slate-300">พื้นที่: {customer.subdistrict || customer.address || "-"}</p>
-                <p className="text-sm text-slate-300">เบอร์ผู้ประสาน: {customer.contact_phone || "-"}</p>
-                <p className="text-sm text-slate-300">เหตุผลที่ต้องเฝ้าระวัง: {shortImpactReason}{(customer.impact_reason?.length ?? 0) > 80 ? "…" : ""}</p>
+                <p className="text-base font-semibold text-slate-900">{customer.customer_name}</p>
+                <p className="text-sm text-slate-600">พื้นที่: {customer.subdistrict || customer.address || "-"}</p>
+                <p className="text-sm text-slate-600">เบอร์ผู้ประสาน: {customer.contact_phone || "-"}</p>
+                <p className="text-sm text-slate-600">เหตุผลที่ต้องเฝ้าระวัง: {shortImpactReason}{(customer.impact_reason?.length ?? 0) > 80 ? "…" : ""}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {hasMap ? <a href={`https://maps.google.com/?q=${customer.latitude},${customer.longitude}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-md border border-[#f97316]/60 px-3 py-2 text-xs font-semibold text-orange-200 hover:bg-orange-500/10">เปิดแผนที่</a> : null}
+                {hasMap ? <a href={`https://maps.google.com/?q=${customer.latitude},${customer.longitude}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100">เปิดแผนที่</a> : null}
                 <Button variant="secondary" size="sm" onClick={() => openEditModal(customer)}>แก้ไข</Button>
                 {customer.status === "ACTIVE" ? <Button variant="ghost" size="sm" onClick={() => deactivateCustomer(customer.id)}>ปิดใช้งาน</Button> : null}
               </div>

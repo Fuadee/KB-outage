@@ -18,10 +18,17 @@ const STEP_ORDER = [
 ] as const;
 
 const STEP_LABELS: Record<(typeof STEP_ORDER)[number], string> = {
-  DRAFT: "DRAFT",
-  DOC_READY: "DOCUMENT READY",
-  SOCIAL_POSTED: "SOCIAL POSTED",
-  NOTICE_SCHEDULED: "NOTICE SCHEDULED"
+  DRAFT: "Draft",
+  DOC_READY: "Document ready",
+  SOCIAL_POSTED: "Social posted",
+  NOTICE_SCHEDULED: "Notice scheduled"
+};
+
+const STEP_TONES: Record<(typeof STEP_ORDER)[number], string> = {
+  DRAFT: "bg-slate-400",
+  DOC_READY: "bg-blue-500",
+  SOCIAL_POSTED: "bg-emerald-500",
+  NOTICE_SCHEDULED: "bg-orange-500"
 };
 
 type DashboardJob = {
@@ -115,21 +122,30 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2 pb-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+      <header className="page-header">
+        <div>
+        <p className="page-eyebrow">
           Overview
         </p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="page-title">
           Dashboard
         </h1>
-        <p className="text-sm text-slate-600">
+        <p className="page-description">
           ติดตามสถานะงานแต่ละรายการและงานที่ต้องทำต่อ
         </p>
+        </div>
       </header>
       {jobsError ? (
         <Card className="border-rose-200 bg-rose-50/70">
-          <CardContent className="py-4 text-sm text-rose-700">
-            {jobsError}
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-rose-700">
+            <span>{jobsError}</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+            >
+              ลองใหม่
+            </button>
           </CardContent>
         </Card>
       ) : null}
@@ -143,37 +159,44 @@ export default function DashboardPage() {
                 งานที่ยังต้องดำเนินการตามขั้นตอน
               </CardDescription>
             </div>
-            <Badge variant="accent">Live</Badge>
+            <Badge variant="accent">Live operations</Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {STEP_ORDER.map((step) => (
               <div
                 key={step}
-                className="flex flex-col rounded-2xl border border-slate-200/70 bg-white/80 p-4 shadow-sm"
+                className="flex min-h-40 flex-col rounded-xl bg-slate-50/90 p-4"
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                  <p className="text-xs font-semibold text-slate-700">
                     {STEP_LABELS[step]}
                   </p>
-                  <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" />
+                  <span className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    {pipelineJobs[step]?.length ?? 0}
+                    <span className={`h-2 w-2 rounded-full ${STEP_TONES[step]}`} />
+                  </span>
                 </div>
                 <div className="mt-4 space-y-2">
                   {isLoadingJobs ? (
-                    <p className="text-xs text-slate-400">กำลังโหลด...</p>
+                    <div className="space-y-2" aria-label="กำลังโหลดข้อมูล">
+                      <div className="h-9 animate-pulse rounded-lg bg-slate-200/70" />
+                      <div className="h-9 animate-pulse rounded-lg bg-slate-200/50" />
+                    </div>
                   ) : pipelineJobs[step]?.length ? (
                     pipelineJobs[step].map((job) => (
                       <Link
                         key={job.id}
                         href={`/job/${job.id}`}
-                        className="block rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                        className="group flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                       >
                         {job.equipment_code ?? "—"}
+                        <span className="text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-orange-500">→</span>
                       </Link>
                     ))
                   ) : (
-                    <p className="text-xs text-slate-400">ไม่มีงาน</p>
+                    <p className="rounded-lg border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-500">ไม่มีงานในขั้นตอนนี้</p>
                   )}
                 </div>
               </div>

@@ -146,9 +146,9 @@ export default function LoginPage() {
         </form>
 
         <div className={dividerRow}>
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs text-slate-300/70">หรือ</span>
-          <div className="h-px flex-1 bg-white/10" />
+          <div className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs text-slate-500">หรือ</span>
+          <div className="h-px flex-1 bg-slate-200" />
         </div>
         <button
           type="button"
