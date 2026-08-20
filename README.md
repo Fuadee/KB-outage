@@ -39,7 +39,7 @@ Next.js (App Router) + Tailwind + TypeScript dashboard for tracking planned outa
 3. Run the SQL in `sql/002_nakhon_and_doc.sql` to add the นคร + เอกสาร workflow fields.
 4. Run the SQL in `sql/003_doc_fields.sql` to add Google Doc generation fields.
 5. Run the SQL in `sql/004_social_post.sql` to add the social post workflow fields.
-6. Run the remaining numbered migrations in `sql/` in order, including `sql/018_document_workflow.sql` for physical document receipt/delivery tracking and `sql/019_gis_issues_noauth_rls.sql` for GIS Issues access in the no-login application. The migrations are idempotent and preserve existing records.
+6. Run the remaining numbered migrations in `sql/` in order, including `sql/018_document_workflow.sql` for physical document receipt/delivery tracking, `sql/019_gis_issues_noauth_rls.sql` for GIS Issues access in the no-login application, and `sql/020_gis_issue_delete.sql` for parent deletion with activity cascade. The migrations are idempotent and preserve existing records except when a user explicitly deletes a GIS Issue.
 7. Copy `.env.example` to `.env.local` and set the Supabase URL + anon key.
 8. Configure Google Docs integration:
    - Create a Google Cloud project and enable the Google Drive API + Google Docs API.

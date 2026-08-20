@@ -35,8 +35,11 @@ export default function GisIssueDetailPage() {
   const [activities, setActivities] = useState<GisIssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
 
@@ -106,6 +109,35 @@ export default function GisIssueDetailPage() {
     void changeStatus("VERIFYING", { resolution_note: resolutionNote.trim() });
   };
 
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteOpen(false);
+    setDeleteError(null);
+  };
+
+  const deleteIssue = async () => {
+    if (!issue || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/gis-issues/${issue.id}`, { method: "DELETE" });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "ไม่สามารถลบ GIS Issue ได้");
+      }
+
+      setDeleteOpen(false);
+      router.replace("/gis-issues");
+      router.refresh();
+    } catch (deleteFailure) {
+      setDeleteError(
+        deleteFailure instanceof Error ? deleteFailure.message : "ไม่สามารถลบ GIS Issue ได้"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <p className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">กำลังโหลดข้อมูล...</p>;
   if (!issue) return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">{error || "ไม่พบ GIS Issue"}</p>;
 
@@ -123,6 +155,16 @@ export default function GisIssueDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>แก้ไขรายละเอียด</Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+            >
+              ลบ Issue
+            </Button>
             {issue.status === "OPEN" ? <Button size="sm" onClick={() => void changeStatus("IN_PROGRESS")} disabled={saving}>เริ่มดำเนินการ</Button> : null}
             {issue.status === "IN_PROGRESS" ? <Button size="sm" onClick={() => { setResolutionNote(issue.resolution_note ?? ""); setResolutionOpen(true); }}>ส่งตรวจสอบ</Button> : null}
             {issue.status === "VERIFYING" ? <Button size="sm" variant="closeWork" onClick={() => void changeStatus("CLOSED")} disabled={saving}>ปิด Issue</Button> : null}
@@ -209,6 +251,34 @@ export default function GisIssueDetailPage() {
 
       <Modal isOpen={editOpen} title={`แก้ไข ${issue.issue_number}`} onClose={() => setEditOpen(false)}>
         <GisIssueForm initialValue={issueToFormValue(issue)} submitLabel="บันทึกการแก้ไข" onSubmit={updateIssue} onCancel={() => setEditOpen(false)} />
+      </Modal>
+
+      <Modal
+        isOpen={deleteOpen}
+        title={`ลบ ${issue.issue_number} ?`}
+        onClose={closeDeleteDialog}
+        panelClassName="max-w-lg"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={closeDeleteDialog} disabled={deleting}>
+              ยกเลิก
+            </Button>
+            <Button type="button" variant="danger" onClick={() => void deleteIssue()} disabled={deleting}>
+              {deleting ? "กำลังลบ..." : "ลบ Issue"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm leading-6 text-slate-700">
+            การดำเนินการนี้จะลบ Issue และประวัติ Activity ที่เกี่ยวข้องทั้งหมด และไม่สามารถย้อนกลับได้
+          </p>
+          {deleteError ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              {deleteError}
+            </p>
+          ) : null}
+        </div>
       </Modal>
 
       <Modal

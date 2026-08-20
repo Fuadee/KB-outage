@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { btnPrimaryGradient, btnSecondaryLight } from "@/lib/theme";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "closeWork";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "closeWork" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonStyleProps = {
@@ -20,7 +20,9 @@ const variantStyles: Record<ButtonVariant, string> = {
   ghost:
     "inline-flex items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium text-slate-500 transition duration-150 ease-out hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-slate-200",
   closeWork:
-    "rounded-[var(--radius-control)] bg-[var(--primary)] text-white shadow-sm hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-orange-200 focus-visible:ring-offset-2"
+    "rounded-[var(--radius-control)] bg-[var(--primary)] text-white shadow-sm hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-orange-200 focus-visible:ring-offset-2",
+  danger:
+    "rounded-[var(--radius-control)] border border-rose-200 bg-white font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-rose-100 focus-visible:ring-offset-2"
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

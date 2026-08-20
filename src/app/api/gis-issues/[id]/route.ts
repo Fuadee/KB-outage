@@ -202,3 +202,31 @@ export async function PATCH(
     return respondError(error, "ไม่สามารถอัปเดต GIS Issue ได้ กรุณาลองใหม่");
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { admin } = await getGisContext();
+    const { data: deletedIssue, error } = await admin
+      .from("gis_issues")
+      .delete()
+      .eq("id", params.id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!deletedIssue) {
+      return NextResponse.json({ ok: false, error: "ไม่พบ GIS Issue ที่ต้องการลบ" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, data: deletedIssue });
+  } catch (error) {
+    logGisError("[gis-issues][id][DELETE]", error);
+    return NextResponse.json(
+      { ok: false, error: "ไม่สามารถลบ GIS Issue ได้ กรุณาลองใหม่" },
+      { status: 500 }
+    );
+  }
+}
