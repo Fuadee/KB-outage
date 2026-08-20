@@ -6,8 +6,7 @@ import {
   type GisIssueStatus
 } from "@/lib/gisIssues";
 import {
-  GisAuthError,
-  getAuthenticatedGisContext,
+  getGisContext,
   isValidOptionalUrl,
   logGisError,
   normalizeOptionalText
@@ -24,9 +23,6 @@ const issueSelect = `
 `;
 
 const respondError = (error: unknown, fallback: string) => {
-  if (error instanceof GisAuthError) {
-    return NextResponse.json({ ok: false, error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
-  }
   logGisError("[gis-issues][id]", error);
   return NextResponse.json({ ok: false, error: fallback }, { status: 500 });
 };
@@ -36,23 +32,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { admin, rpcSecret } = await getAuthenticatedGisContext();
-    if (rpcSecret) {
-      const { data, error } = await admin.rpc("gis_get_issue_noauth", {
-        p_rpc_secret: rpcSecret,
-        p_issue_id: params.id
-      });
-      if (error) throw error;
-      const result = data as { issue?: unknown; activities?: unknown[] } | null;
-      if (!result?.issue) {
-        return NextResponse.json({ ok: false, error: "ไม่พบ GIS Issue" }, { status: 404 });
-      }
-      return NextResponse.json({
-        ok: true,
-        data: result.issue,
-        activities: result.activities ?? []
-      });
-    }
+    const { admin } = await getGisContext();
     const [{ data: issue, error }, { data: activities, error: activityError }] =
       await Promise.all([
         admin.from("gis_issues").select(issueSelect).eq("id", params.id).single(),
@@ -100,64 +80,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { actorId, admin, actorName, rpcSecret } = await getAuthenticatedGisContext();
+    const { admin, actorName } = await getGisContext();
     const body = (await request.json()) as PatchPayload;
-
-    if (rpcSecret) {
-      const rpcPatch: Record<string, unknown> = {};
-      if (body.status !== undefined) {
-        if (!isGisIssueStatus(body.status)) {
-          return NextResponse.json({ ok: false, error: "สถานะไม่ถูกต้อง" }, { status: 400 });
-        }
-        rpcPatch.status = body.status;
-        if (body.assignee_name !== undefined) {
-          rpcPatch.assignee_name = normalizeOptionalText(body.assignee_name);
-        }
-        if (body.resolution_note !== undefined) {
-          rpcPatch.resolution_note = normalizeOptionalText(body.resolution_note);
-        }
-      } else {
-        if (body.feeder_code !== undefined) {
-          const value = normalizeOptionalText(body.feeder_code);
-          if (!value) return NextResponse.json({ ok: false, error: "กรุณาระบุ Feeder" }, { status: 400 });
-          rpcPatch.feeder_code = value;
-        }
-        if (body.equipment_code !== undefined) rpcPatch.equipment_code = normalizeOptionalText(body.equipment_code);
-        if (body.issue_type !== undefined) {
-          if (!isGisIssueType(body.issue_type)) return NextResponse.json({ ok: false, error: "ประเภทปัญหาไม่ถูกต้อง" }, { status: 400 });
-          rpcPatch.issue_type = body.issue_type;
-        }
-        if (body.issue_type_detail !== undefined) rpcPatch.issue_type_detail = normalizeOptionalText(body.issue_type_detail);
-        if (body.location_text !== undefined) rpcPatch.location_text = normalizeOptionalText(body.location_text);
-        if (body.description !== undefined) {
-          const value = normalizeOptionalText(body.description);
-          if (!value) return NextResponse.json({ ok: false, error: "กรุณาระบุรายละเอียดสิ่งที่ผิด" }, { status: 400 });
-          rpcPatch.description = value;
-        }
-        if (body.expected_value !== undefined) rpcPatch.expected_value = normalizeOptionalText(body.expected_value);
-        if (body.assignee_name !== undefined) rpcPatch.assignee_name = normalizeOptionalText(body.assignee_name);
-        if (body.resolution_note !== undefined) rpcPatch.resolution_note = normalizeOptionalText(body.resolution_note);
-        if (body.found_at !== undefined) {
-          const value = normalizeOptionalText(body.found_at);
-          if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NextResponse.json({ ok: false, error: "วันที่พบไม่ถูกต้อง" }, { status: 400 });
-          rpcPatch.found_at = value;
-        }
-        if (body.reference_url !== undefined) {
-          const value = normalizeOptionalText(body.reference_url);
-          if (!isValidOptionalUrl(value)) return NextResponse.json({ ok: false, error: "URL อ้างอิงไม่ถูกต้อง" }, { status: 400 });
-          rpcPatch.reference_url = value;
-        }
-      }
-
-      const { data: issue, error } = await admin.rpc("gis_update_issue_noauth", {
-        p_rpc_secret: rpcSecret,
-        p_actor_name: actorName,
-        p_issue_id: params.id,
-        p_patch: rpcPatch
-      });
-      if (error || !issue) throw error ?? new Error("Update GIS issue RPC failed");
-      return NextResponse.json({ ok: true, data: issue });
-    }
     const { data: current, error: currentError } = await admin
       .from("gis_issues")
       .select("*")
@@ -269,10 +193,9 @@ export async function PATCH(
       from_status: fromStatus,
       to_status: toStatus,
       message: activityMessage,
-      actor_id: actorId,
       actor_name: actorName
     });
-    if (activityError) console.error("[gis-issues][activity]", activityError);
+    if (activityError) logGisError("[gis-issues][activity]", activityError);
 
     return NextResponse.json({ ok: true, data: issue });
   } catch (error) {

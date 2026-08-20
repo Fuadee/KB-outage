@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import {
   GIS_ISSUE_STATUSES,
-  getBangkokToday,
   isGisIssueStatus,
   isGisIssueType,
   type GisIssueStatus
 } from "@/lib/gisIssues";
 import {
-  GisAuthError,
-  getAuthenticatedGisContext,
+  getGisContext,
   isValidOptionalUrl,
   logGisError,
   normalizeOptionalText
@@ -25,9 +23,6 @@ const issueSelect = `
 `;
 
 const errorResponse = (error: unknown, fallback: string) => {
-  if (error instanceof GisAuthError) {
-    return NextResponse.json({ ok: false, error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
-  }
   logGisError("[gis-issues]", error);
   return NextResponse.json({ ok: false, error: fallback }, { status: 500 });
 };
@@ -36,40 +31,13 @@ const escapeSearch = (value: string) => value.replace(/[%_,().]/g, "\\$&");
 
 export async function GET(request: Request) {
   try {
-    const { admin, rpcSecret } = await getAuthenticatedGisContext();
+    const { admin } = await getGisContext();
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim() ?? "";
     const status = searchParams.get("status");
     const feeder = searchParams.get("feeder")?.trim() ?? "";
     const issueType = searchParams.get("issue_type");
     const sourceJobId = searchParams.get("source_job_id")?.trim() ?? "";
-
-    if (rpcSecret) {
-      const { data, error } = await admin.rpc("gis_list_issues_noauth", {
-        p_rpc_secret: rpcSecret,
-        p_query: q || null,
-        p_status: status && status !== "ALL" && isGisIssueStatus(status) ? status : null,
-        p_feeder: feeder || null,
-        p_issue_type:
-          issueType && issueType !== "ALL" && isGisIssueType(issueType)
-            ? issueType
-            : null,
-        p_source_job_id: sourceJobId || null
-      });
-      if (error) throw error;
-      const result = data as {
-        data?: unknown[];
-        counts?: Record<GisIssueStatus, number>;
-        feeders?: string[];
-      } | null;
-      return NextResponse.json({
-        ok: true,
-        data: result?.data ?? [],
-        counts:
-          result?.counts ?? Object.fromEntries(GIS_ISSUE_STATUSES.map((item) => [item, 0])),
-        feeders: result?.feeders ?? []
-      });
-    }
 
     let query = admin
       .from("gis_issues")
@@ -138,7 +106,7 @@ type CreatePayload = {
 
 export async function POST(request: Request) {
   try {
-    const { actorId, admin, actorName, rpcSecret } = await getAuthenticatedGisContext();
+    const { admin, actorName } = await getGisContext();
     const body = (await request.json()) as CreatePayload;
     const feederCode = normalizeOptionalText(body.feeder_code);
     const description = normalizeOptionalText(body.description);
@@ -174,33 +142,12 @@ export async function POST(request: Request) {
       location_text: normalizeOptionalText(body.location_text),
       description,
       expected_value: normalizeOptionalText(body.expected_value),
-      reporter_id: actorId,
       reporter_name: actorName,
       assignee_name: normalizeOptionalText(body.assignee_name),
       ...(foundAt ? { found_at: foundAt } : {}),
       reference_url: referenceUrl,
       source_job_id: normalizeOptionalText(body.source_job_id)
     };
-
-    if (rpcSecret) {
-      const { data: issue, error } = await admin.rpc("gis_create_issue_noauth", {
-        p_rpc_secret: rpcSecret,
-        p_actor_name: actorName,
-        p_feeder_code: payload.feeder_code,
-        p_equipment_code: payload.equipment_code,
-        p_issue_type: payload.issue_type,
-        p_issue_type_detail: payload.issue_type_detail,
-        p_location_text: payload.location_text,
-        p_description: payload.description,
-        p_expected_value: payload.expected_value,
-        p_assignee_name: payload.assignee_name,
-        p_found_at: foundAt ?? getBangkokToday(),
-        p_reference_url: payload.reference_url,
-        p_source_job_id: payload.source_job_id
-      });
-      if (error || !issue) throw error ?? new Error("Create GIS issue RPC failed");
-      return NextResponse.json({ ok: true, data: issue }, { status: 201 });
-    }
 
     const { data: issue, error } = await admin
       .from("gis_issues")
@@ -215,10 +162,9 @@ export async function POST(request: Request) {
       from_status: null,
       to_status: "OPEN",
       message: "สร้าง Issue",
-      actor_id: actorId,
       actor_name: actorName
     });
-    if (activityError) console.error("[gis-issues][activity]", activityError);
+    if (activityError) logGisError("[gis-issues][activity]", activityError);
 
     return NextResponse.json({ ok: true, data: issue }, { status: 201 });
   } catch (error) {
