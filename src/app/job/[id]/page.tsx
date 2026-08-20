@@ -5,7 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import MapActionButtons from "@/components/job/MapActionButtons";
+import DocumentWorkflowModal, {
+  type DocumentWorkflowModalMode
+} from "@/components/job/DocumentWorkflowModal";
+import DocumentWorkflowPanel from "@/components/job/DocumentWorkflowPanel";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
+import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import Modal from "@/components/Modal";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -26,6 +31,10 @@ import {
   normalizeJobId
 } from "@/lib/closeJob";
 import { inputLight } from "@/lib/theme";
+import {
+  getDocumentWorkflowAction,
+  getDocumentWorkflowActionLabel
+} from "@/lib/documentWorkflow";
 
 const textareaStyles = `${inputLight} min-h-[96px]`;
 
@@ -42,6 +51,9 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<OutageJob | null>(null);
   const [gisIssueCount, setGisIssueCount] = useState(0);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
+  const [documentMode, setDocumentMode] =
+    useState<DocumentWorkflowModalMode | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -163,6 +175,10 @@ export default function JobDetailPage() {
     setJob((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
+  const handleWorkflowJobUpdate = (patch: Partial<OutageJob>) => {
+    setJob((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   const handleCloseJob = async (jobId: string) => {
     setCloseSaving(true);
     setCloseError(null);
@@ -224,6 +240,9 @@ export default function JobDetailPage() {
   const isClosed = job?.is_closed ?? false;
   const canCloseJob =
     (job?.notice_status ?? "NONE") === "SCHEDULED" && !isClosed;
+  const workflowNextActionLabel = job
+    ? getDocumentWorkflowActionLabel(getDocumentWorkflowAction(job))
+    : "-";
 
   return (
     <AppShell>
@@ -324,6 +343,25 @@ export default function JobDetailPage() {
           </Card>
         ) : null}
       </header>
+
+      {job ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>ขั้นตอนเอกสารก่อน Social</CardTitle>
+            <CardDescription>
+              เอกสารพร้อม → รับเอกสาร → ส่งเอกสาร → Social
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentWorkflowPanel
+              job={job}
+              onReceive={() => setDocumentMode("receive")}
+              onDeliver={() => setDocumentMode("deliver")}
+              onSocial={() => setSocialOpen(true)}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
@@ -443,7 +481,7 @@ export default function JobDetailPage() {
                     : "แจ้งหนังสือดับไฟ"}
                 </Button>
               ) : (
-                <Badge variant="default">รอการโพสต์ Social</Badge>
+                <Badge variant="default">ขั้นตอนถัดไป: {workflowNextActionLabel}</Badge>
               )}
               {canCloseJob ? (
                 <Button
@@ -469,6 +507,21 @@ export default function JobDetailPage() {
         open={noticeOpen}
         onOpenChange={setNoticeOpen}
         onJobUpdate={(_, patch) => handleNoticeJobUpdate(patch)}
+      />
+
+      <DocumentWorkflowModal
+        job={job}
+        mode={documentMode ?? "receive"}
+        open={Boolean(documentMode)}
+        onClose={() => setDocumentMode(null)}
+        onJobUpdate={handleWorkflowJobUpdate}
+      />
+
+      <SocialPostPreviewModal
+        job={job}
+        isOpen={socialOpen}
+        onClose={() => setSocialOpen(false)}
+        onJobUpdate={(_, patch) => handleWorkflowJobUpdate(patch)}
       />
 
       <Modal

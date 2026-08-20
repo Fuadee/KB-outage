@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import {
+  DOCUMENT_WORKFLOW_STAGE_LABELS,
+  type DocumentWorkflowStage
+} from "@/lib/documentWorkflow";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -12,21 +16,20 @@ import {
 } from "@/components/ui/Card";
 const STEP_ORDER = [
   "DRAFT",
-  "DOC_READY",
+  "WAITING_DOCUMENT",
+  "WAITING_DELIVERY",
+  "READY_FOR_SOCIAL",
   "SOCIAL_POSTED",
   "NOTICE_SCHEDULED"
-] as const;
+] as const satisfies readonly DocumentWorkflowStage[];
 
-const STEP_LABELS: Record<(typeof STEP_ORDER)[number], string> = {
-  DRAFT: "Draft",
-  DOC_READY: "Document ready",
-  SOCIAL_POSTED: "Social posted",
-  NOTICE_SCHEDULED: "Notice scheduled"
-};
+const STEP_LABELS = DOCUMENT_WORKFLOW_STAGE_LABELS;
 
 const STEP_TONES: Record<(typeof STEP_ORDER)[number], string> = {
   DRAFT: "bg-slate-400",
-  DOC_READY: "bg-blue-500",
+  WAITING_DOCUMENT: "bg-blue-500",
+  WAITING_DELIVERY: "bg-cyan-600",
+  READY_FOR_SOCIAL: "bg-indigo-600",
   SOCIAL_POSTED: "bg-emerald-500",
   NOTICE_SCHEDULED: "bg-orange-500"
 };
@@ -38,6 +41,11 @@ type DashboardJob = {
   doc_status: string | null;
   doc_generated_at: string | null;
   doc_url: string | null;
+  document_received_at: string | null;
+  document_received_by: string | null;
+  document_delivered_at: string | null;
+  document_delivered_by: string | null;
+  document_delivery_note: string | null;
   social_status: string | null;
   social_posted_at: string | null;
   social_approved_at: string | null;
@@ -79,6 +87,18 @@ async function fetchDashboardJobs() {
     throw new Error(data.error);
   }
   return data.jobs;
+}
+
+function getStageDetail(job: DashboardJob): string | null {
+  if (job.step === "WAITING_DOCUMENT") return "รอรับเอกสารฉบับจริง";
+  if (job.step === "WAITING_DELIVERY") {
+    return `รับโดย ${job.document_received_by ?? "ไม่ระบุ"}`;
+  }
+  if (job.step === "READY_FOR_SOCIAL") {
+    return `ส่งโดย ${job.document_delivered_by ?? "ไม่ระบุ"}`;
+  }
+  if (job.step === "SOCIAL_POSTED") return "โพสต์ Social แล้ว";
+  return null;
 }
 
 export default function DashboardPage() {
@@ -163,7 +183,7 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             {STEP_ORDER.map((step) => (
               <div
                 key={step}
@@ -189,9 +209,16 @@ export default function DashboardPage() {
                       <Link
                         key={job.id}
                         href={`/job/${job.id}`}
-                        className="group flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                        className="group flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                       >
-                        {job.equipment_code ?? "—"}
+                        <span className="min-w-0">
+                          <span className="block truncate">{job.equipment_code ?? "—"}</span>
+                          {getStageDetail(job) ? (
+                            <span className="mt-0.5 block truncate text-[10px] font-normal text-slate-600">
+                              {getStageDetail(job)}
+                            </span>
+                          ) : null}
+                        </span>
                         <span className="text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-orange-500">→</span>
                       </Link>
                     ))

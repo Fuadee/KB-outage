@@ -4,6 +4,7 @@ import {
   buildSocialPostText,
   getSocialPostPreview
 } from "@/lib/socialPost";
+import { isDocumentReady } from "@/lib/documentWorkflow";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,10 @@ function createSupabaseServerClient() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { jobId?: string | number };
+    const body = (await request.json()) as {
+      jobId?: string | number;
+      allowBeforeDelivery?: boolean;
+    };
     if (process.env.NODE_ENV === "development") {
       console.info("Social post request body:", body);
     }
@@ -47,7 +51,7 @@ export async function POST(request: Request) {
     const { data: job, error: jobError } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
+        "id, outage_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, doc_status, doc_generated_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
       )
       .eq("id", jobId)
       .single();
@@ -70,16 +74,16 @@ export async function POST(request: Request) {
       social_post_text: job.social_post_text
     });
 
-    if (job.social_status === "POSTED" && job.social_post_text) {
+    if (job.social_status === "POSTED" || job.social_posted_at) {
       return NextResponse.json({
         ok: true,
         preview_text: previewText,
         social_status: "POSTED",
-        social_post_text: job.social_post_text,
+        social_post_text: job.social_post_text ?? previewText,
         social_posted_at: job.social_posted_at,
         job: {
           social_status: "POSTED",
-          social_post_text: job.social_post_text,
+          social_post_text: job.social_post_text ?? previewText,
           social_posted_at: job.social_posted_at,
           notice_status: job.notice_status,
           notice_date: job.notice_date,
@@ -87,6 +91,24 @@ export async function POST(request: Request) {
           notice_scheduled_at: job.notice_scheduled_at
         }
       });
+    }
+
+    if (!isDocumentReady(job)) {
+      return NextResponse.json(
+        { ok: false, error: "ต้องสร้างเอกสารให้พร้อมก่อนโพสต์ Social" },
+        { status: 409 }
+      );
+    }
+
+    if (!job.document_delivered_at && body.allowBeforeDelivery !== true) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "DOCUMENT_NOT_DELIVERED",
+          error: "ขั้นตอนส่งเอกสารยังไม่ครบ กรุณายืนยันเหตุจำเป็นก่อนโพสต์ Social"
+        },
+        { status: 409 }
+      );
     }
 
     const postedAt = job.social_posted_at ?? new Date().toISOString();
@@ -101,7 +123,7 @@ export async function POST(request: Request) {
       })
       .eq("id", jobId)
       .select(
-        "social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
+        "document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, notice_status, notice_date, notice_by, notice_scheduled_at"
       )
       .single();
 

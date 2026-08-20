@@ -53,6 +53,11 @@ export async function GET(request: Request) {
           "doc_status",
           "doc_generated_at",
           "doc_url",
+          "document_received_at",
+          "document_received_by",
+          "document_delivered_at",
+          "document_delivered_by",
+          "document_delivery_note",
           "social_status",
           "social_posted_at",
           "social_approved_at",
@@ -67,8 +72,6 @@ export async function GET(request: Request) {
         ].join(",")
       )
       .order("outage_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-
       .order("created_at", { ascending: false })
       .limit(limit);
 

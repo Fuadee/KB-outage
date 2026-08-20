@@ -21,7 +21,6 @@ type JobCardProps = {
   job: OutageJob;
   urgency: { color: UrgencyColor; label: string; daysLeft: number };
   stepper: JobStep[];
-  nextActionLabel: string;
   primaryAction?: JobAction;
   secondaryActions: JobAction[];
   tertiaryItems: string[];
@@ -49,7 +48,6 @@ export default function JobCard({
   job,
   urgency,
   stepper,
-  nextActionLabel,
   primaryAction,
   secondaryActions,
   tertiaryItems,
@@ -160,13 +158,13 @@ export default function JobCard({
         isClosed && "bg-slate-50/80 opacity-90"
       )}
     >
-      <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[160px_minmax(0,1fr)_190px_210px] xl:gap-5">
-        <section className="space-y-2 border-b border-[#e8ecf2] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
+      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[200px_minmax(0,1fr)_230px] lg:gap-5">
+        <section className="min-w-0 space-y-2 border-b border-[#e8ecf2] pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5">
           <p className={cn("text-xs font-medium text-slate-500", highlightDay && "font-semibold text-orange-700")}>
             {outageDate.toLocaleDateString("th-TH", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
           </p>
-          <div className="flex items-center gap-2">
-            <p className="text-xl font-semibold tracking-tight text-slate-900">{job.equipment_code}</p>
+          <div className="flex flex-nowrap items-center gap-2">
+            <p className="whitespace-nowrap text-xl font-semibold tracking-tight text-slate-900">{job.equipment_code}</p>
             <StatusBadge status={urgency.color} label={urgency.color} compact />
           </div>
           <p className={cn("text-xs font-medium", urgency.color === "RED" ? "text-red-700" : urgency.color === "YELLOW" ? "text-amber-700" : "text-emerald-700")}>{urgency.label}</p>
@@ -177,57 +175,68 @@ export default function JobCard({
           ) : null}
         </section>
 
-        <section className="space-y-3 border-b border-[#e8ecf2] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Clock3 className="h-3.5 w-3.5" />
-            <span>
-              {job.doc_time_start && job.doc_time_end ? `${job.doc_time_start} - ${job.doc_time_end}` : "ยังไม่กำหนดช่วงเวลา"}
+        <section className="min-w-0 space-y-3 border-b border-[#e8ecf2] pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5">
+          <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-3">
+            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-600">
+              <Clock3 className="h-3.5 w-3.5" />
+              {job.doc_time_start && job.doc_time_end
+                ? `${job.doc_time_start}–${job.doc_time_end}`
+                : "ยังไม่กำหนดช่วงเวลา"}
             </span>
-          </div>
-          <p className="line-clamp-2 text-sm font-medium leading-6 text-slate-800">{job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}</p>
-          <p className="line-clamp-2 text-xs text-slate-500">{job.note?.trim() || "ไม่มีหมายเหตุเพิ่มเติม"}</p>
-          <div className={cn("mt-2 rounded-[9px] border px-3 py-2 text-xs leading-5", vulnerableUi.className)}>
-            <p className="font-medium">ตรวจสอบผู้ป่วยติดเตียง</p>
-            <p className="mt-0.5 flex items-start gap-1.5">
-              {status === "NOT_FOUND_IN_POLYGON" ? (
-                <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ) : status ? (
-                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ) : null}
-              <span>
-                {vulnerableUi.message}
-                {status === "FOUND_IN_POLYGON" && canOpenVulnerableList && onOpenVulnerableList ? (
-                  <button type="button" onClick={onOpenVulnerableList} className="ml-2 underline underline-offset-2">
-                    ดูรายชื่อ
-                  </button>
-                ) : null}
-              </span>
+            <p className="min-w-0 text-sm font-semibold leading-6 text-slate-800 sm:truncate">
+              {job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}
             </p>
-            {checkedAtText ? (
-              <p className="mt-1 text-[11px] text-slate-500">ตรวจเมื่อ: {checkedAtText}</p>
-            ) : null}
-            {vulnerableCheckError ? (
-              <p className="mt-1 text-[11px] text-slate-500">{vulnerableCheckError}</p>
-            ) : null}
           </div>
-          <div className={cn("mt-2 rounded-[9px] border px-3 py-2 text-xs leading-5", specialUi.className)}>
-            <p className="font-medium">ตรวจสอบกลุ่มเฝ้าระวังพิเศษ</p>
-            <p className="mt-0.5 flex items-start gap-1.5">
-              {specialStatus === "NOT_FOUND_IN_POLYGON" ? (
-                <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ) : specialStatus ? (
-                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ) : null}
-              <span>
-                {specialUi.message}
-                {specialStatus === "FOUND_IN_POLYGON" && canOpenSpecialWatchlist && onOpenSpecialWatchlist ? (
-                  <button type="button" onClick={onOpenSpecialWatchlist} className="ml-2 underline underline-offset-2">
-                    ดูรายชื่อ
-                  </button>
+          {job.note?.trim() ? (
+            <p className="line-clamp-2 text-xs leading-5 text-slate-600">{job.note.trim()}</p>
+          ) : null}
+
+          <JobStatusStepper steps={stepper} className="pt-0.5" />
+
+          <div className="grid gap-2 xl:grid-cols-2">
+            <div className={cn("rounded-[9px] border px-3 py-2 text-xs leading-5", vulnerableUi.className)}>
+              <p className="font-medium">ตรวจสอบผู้ป่วยติดเตียง</p>
+              <p className="mt-0.5 flex items-start gap-1.5">
+                {status === "NOT_FOUND_IN_POLYGON" ? (
+                  <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                ) : status ? (
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 ) : null}
-              </span>
-            </p>
-            {specialCheckedAtText ? <p className="mt-1 text-[11px] text-slate-500">ตรวจเมื่อ: {specialCheckedAtText}</p> : null}
+                <span>
+                  {vulnerableUi.message}
+                  {status === "FOUND_IN_POLYGON" && canOpenVulnerableList && onOpenVulnerableList ? (
+                    <button type="button" onClick={onOpenVulnerableList} className="ml-2 underline underline-offset-2">
+                      ดูรายชื่อ
+                    </button>
+                  ) : null}
+                </span>
+              </p>
+              {checkedAtText ? (
+                <p className="mt-1 text-[11px] text-slate-500">ตรวจเมื่อ: {checkedAtText}</p>
+              ) : null}
+              {vulnerableCheckError ? (
+                <p className="mt-1 text-[11px] text-slate-500">{vulnerableCheckError}</p>
+              ) : null}
+            </div>
+            <div className={cn("rounded-[9px] border px-3 py-2 text-xs leading-5", specialUi.className)}>
+              <p className="font-medium">ตรวจสอบกลุ่มเฝ้าระวังพิเศษ</p>
+              <p className="mt-0.5 flex items-start gap-1.5">
+                {specialStatus === "NOT_FOUND_IN_POLYGON" ? (
+                  <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                ) : specialStatus ? (
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                ) : null}
+                <span>
+                  {specialUi.message}
+                  {specialStatus === "FOUND_IN_POLYGON" && canOpenSpecialWatchlist && onOpenSpecialWatchlist ? (
+                    <button type="button" onClick={onOpenSpecialWatchlist} className="ml-2 underline underline-offset-2">
+                      ดูรายชื่อ
+                    </button>
+                  ) : null}
+                </span>
+              </p>
+              {specialCheckedAtText ? <p className="mt-1 text-[11px] text-slate-500">ตรวจเมื่อ: {specialCheckedAtText}</p> : null}
+            </div>
           </div>
           <div className="mt-1">
             <button
@@ -239,15 +248,7 @@ export default function JobCard({
               {impactGroupsChecking ? "กำลังตรวจสอบกลุ่มผลกระทบ..." : "ตรวจสอบอีกครั้ง"}
             </button>
           </div>
-          <MapActionButtons googleUrl={job.map_link} className="mt-3" />
-        </section>
-
-        <section className="space-y-3 border-b border-[#e8ecf2] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
-          <div className="text-xs font-medium text-slate-700">Workflow</div>
-          <JobStatusStepper steps={stepper} />
-          <p className="flex items-start gap-1.5 border-l-2 border-orange-300 bg-slate-50/80 px-2.5 py-2 text-[11px] font-medium leading-4 text-slate-700">
-            <TriangleAlert className="h-3 w-3 shrink-0 text-orange-600" /> ขั้นตอนถัดไป: {nextActionLabel}
-          </p>
+          <MapActionButtons googleUrl={job.map_link} className="mt-2" />
         </section>
 
         <section className="flex flex-col gap-2">

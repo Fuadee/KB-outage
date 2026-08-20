@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
 
 export const runtime = "nodejs";
 
@@ -33,19 +34,18 @@ function isValidDateString(value: string) {
 
 type JobStatusSource = {
   doc_status: string | null;
+  doc_generated_at: string | null;
+  document_received_at: string | null;
+  document_delivered_at: string | null;
   social_status: string | null;
+  social_posted_at: string | null;
   notice_status: string | null;
+  notice_date: string | null;
   is_closed: boolean | null;
 };
 
 function deriveJobStatus(job: JobStatusSource) {
-  if (job.is_closed) return "Done";
-  if ((job.notice_status ?? "NONE") === "SCHEDULED") return "Notice";
-  if ((job.social_status ?? "DRAFT") === "POSTED") return "Posted";
-  if (["GENERATED", "GENERATING"].includes(job.doc_status ?? "PENDING")) {
-    return "Doc";
-  }
-  return "Draft";
+  return getLegacyCalendarStatus(job);
 }
 
 export async function GET(request: Request) {
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, doc_time_start, doc_time_end, doc_area_title, doc_status, social_status, notice_status, is_closed, created_at"
+        "id, outage_date, doc_time_start, doc_time_end, doc_area_title, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })

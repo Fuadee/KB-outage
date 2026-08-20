@@ -7,6 +7,7 @@ import {
   buildSocialPostText,
   getSocialPostPreview
 } from "@/lib/socialPost";
+import { isDocumentReady } from "@/lib/documentWorkflow";
 
 const TOAST_TIMEOUT_MS = 3000;
 
@@ -25,6 +26,18 @@ export default function SocialPostPreviewModal({
 }: SocialPostPreviewModalProps) {
   const [isPosting, setIsPosting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [confirmEarlyPost, setConfirmEarlyPost] = useState(false);
+
+  const requiresEarlyPostConfirmation = Boolean(
+    job &&
+      isDocumentReady(job) &&
+      !job.document_delivered_at &&
+      job.social_status !== "POSTED"
+  );
+
+  useEffect(() => {
+    if (isOpen) setConfirmEarlyPost(false);
+  }, [isOpen, job?.id]);
 
   const previewText = useMemo(() => {
     if (!job) return "";
@@ -68,7 +81,11 @@ export default function SocialPostPreviewModal({
       const response = await fetch("/api/jobs/social-post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.id })
+        body: JSON.stringify({
+          jobId: job.id,
+          allowBeforeDelivery:
+            requiresEarlyPostConfirmation && confirmEarlyPost
+        })
       });
 
       const result = await response.json().catch(() => null);
@@ -127,6 +144,20 @@ export default function SocialPostPreviewModal({
         <div className="rounded-xl border border-slate-200/70 bg-white p-3">
           <MapActionButtons googleUrl={job?.map_link} />
         </div>
+        {requiresEarlyPostConfirmation ? (
+          <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-amber-400"
+              checked={confirmEarlyPost}
+              onChange={(event) => setConfirmEarlyPost(event.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold">ขั้นตอนเอกสารยังไม่ครบ</span>
+              ยืนยันว่ามีเหตุจำเป็นทางธุรกิจและต้องโพสต์ Social ก่อนส่งเอกสารฉบับจริง
+            </span>
+          </label>
+        ) : null}
         <div className="flex flex-wrap justify-end gap-3">
           <Button
             type="button"
@@ -138,7 +169,11 @@ export default function SocialPostPreviewModal({
           <Button
             type="button"
             onClick={handlePost}
-            disabled={isPosting || !previewText}
+            disabled={
+              isPosting ||
+              !previewText ||
+              (requiresEarlyPostConfirmation && !confirmEarlyPost)
+            }
           >
             {isPosting ? "กำลังโพสต์..." : "Post ลงสื่อ social"}
           </Button>
