@@ -11,7 +11,8 @@
     "test:docx:qr": "node scripts/test-docx-qr.js",
     "test:reminder": "node --test --experimental-strip-types src/lib/reminder.test.ts",
     "test:gis-issues": "node --test --experimental-strip-types src/lib/gisIssues.test.ts",
-    "test:workflow": "node --test --experimental-strip-types src/lib/documentWorkflow.test.ts"
+    "test:workflow": "node --test --experimental-strip-types src/lib/documentWorkflow.test.ts",
+    "test:social-publication": "node --test --experimental-strip-types src/lib/socialPublication.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

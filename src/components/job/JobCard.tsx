@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { CircleCheck, Clock3, FileText, MapPin, TriangleAlert } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileText, Megaphone, MapPin, TriangleAlert } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
 import type { UrgencyColor } from "@/lib/dateUtils";
 import { parseLocalDate } from "@/lib/dateUtils";
+import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
 import { cn } from "@/lib/utils";
 
 export type JobAction = {
@@ -148,8 +149,31 @@ export default function JobCard({
             }
           : {
               className: "border-slate-200 bg-slate-50 text-slate-600",
-              message: "ยังไม่ได้ตรวจสอบกลุ่มเฝ้าระวังพิเศษ"
+            message: "ยังไม่ได้ตรวจสอบกลุ่มเฝ้าระวังพิเศษ"
             };
+  const socialPublication = getSocialPublicationStatus({
+    socialPostedAt: job.social_posted_at,
+    socialStatus: job.social_status,
+    outageDate: job.outage_date
+  });
+  const socialStateUi =
+    socialPublication.state === "DUE_TODAY"
+      ? { className: "border-amber-200 bg-amber-50 text-amber-800", label: "ควรประชาสัมพันธ์วันนี้" }
+      : socialPublication.state === "NEXT_ROUND"
+        ? { className: "border-amber-200 bg-amber-50 text-amber-800", label: "รอรอบประชาสัมพันธ์ถัดไป" }
+        : socialPublication.state === "OVERDUE"
+          ? { className: "border-rose-200 bg-rose-50 text-rose-800", label: "เลยรอบประชาสัมพันธ์" }
+          : socialPublication.state === "POSTED_VALID"
+            ? { className: "border-emerald-200 bg-emerald-50 text-emerald-800", label: "โพสต์แล้ว" }
+            : socialPublication.state === "POSTED_EARLY"
+              ? { className: "border-amber-200 bg-amber-50 text-amber-800", label: "ประชาสัมพันธ์เร็วกว่าเกณฑ์ 7 วัน" }
+              : socialPublication.state === "POSTED_AFTER_OUTAGE"
+                ? { className: "border-rose-200 bg-rose-50 text-rose-800", label: "ข้อมูลวันที่ประชาสัมพันธ์ผิดปกติ" }
+                : socialPublication.state === "POSTED_DATE_UNKNOWN"
+                  ? { className: "border-slate-200 bg-slate-50 text-slate-700", label: "โพสต์ Social แล้ว · ไม่พบวันที่" }
+                  : socialPublication.state === "OUTAGE_DATE_UNKNOWN"
+                    ? { className: "border-slate-200 bg-slate-50 text-slate-600", label: "ไม่พบวันดับไฟ" }
+                    : { className: "border-slate-200 bg-slate-50 text-slate-600", label: "ยังไม่ถึงรอบ" };
 
   return (
     <article
@@ -192,6 +216,27 @@ export default function JobCard({
           ) : null}
 
           <JobStatusStepper steps={stepper} className="pt-0.5" />
+
+          <div className="rounded-[9px] border border-slate-200 bg-slate-50/75 px-3 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="mr-1 inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                <Megaphone className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                ประชาสัมพันธ์
+              </span>
+              {socialPublication.socialDate && socialPublication.outageDate ? (
+                <>
+                  <span className="font-medium text-slate-600">SOCIAL <strong className="ml-1 text-slate-800">{formatThaiShortDate(socialPublication.socialDate)}</strong></span>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                  <span className="font-medium text-slate-600">วันดับไฟ <strong className="ml-1 text-slate-800">{formatThaiShortDate(socialPublication.outageDate)}</strong></span>
+                </>
+              ) : null}
+              <span className={cn("rounded-md border px-2 py-1 font-semibold", socialStateUi.className)}>{socialStateUi.label}</span>
+              {socialPublication.state === "NOT_YET" && socialPublication.recommendedSocialDate ? (
+                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />ควรโพสต์ {formatThaiShortDate(socialPublication.recommendedSocialDate)}</span>
+              ) : null}
+              {socialPublication.state === "NEXT_ROUND" && socialPublication.nextPostingDate ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />รอบถัดไป {formatThaiShortDate(socialPublication.nextPostingDate)}</span> : null}
+            </div>
+          </div>
 
           <div className="grid gap-2 xl:grid-cols-2">
             <div className={cn("rounded-[9px] border px-3 py-2 text-xs leading-5", vulnerableUi.className)}>
