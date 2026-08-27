@@ -134,7 +134,7 @@ export async function POST(
       })
       .eq("id", jobId)
       .eq("is_closed", false)
-      .eq("notice_status", "SCHEDULED")
+      .or("social_status.eq.POSTED,social_posted_at.not.is.null")
       .select("id, is_closed, closed_at")
       .maybeSingle();
 
@@ -155,7 +155,7 @@ export async function POST(
     // and invalid workflow state receive distinct responses.
     const { data: currentJob, error: lookupError } = await admin
       .from("outage_jobs")
-      .select("id, is_closed, closed_at, notice_status")
+      .select("id, is_closed, closed_at, social_status, social_posted_at")
       .eq("id", jobId)
       .maybeSingle();
 

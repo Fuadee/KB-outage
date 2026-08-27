@@ -239,7 +239,7 @@ export default function JobDetailPage() {
 
   const isClosed = job?.is_closed ?? false;
   const canCloseJob =
-    (job?.notice_status ?? "NONE") === "SCHEDULED" && !isClosed;
+    (job?.social_status === "POSTED" || Boolean(job?.social_posted_at)) && !isClosed;
   const workflowNextActionLabel = job
     ? getDocumentWorkflowActionLabel(getDocumentWorkflowAction(job))
     : "-";
@@ -293,7 +293,7 @@ export default function JobDetailPage() {
             >
               ⚠ พบปัญหาข้อมูล GIS
             </Link>
-            {job?.social_status === "POSTED" && !isClosed ? (
+            {job?.document_delivered_at && !isClosed ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -302,7 +302,7 @@ export default function JobDetailPage() {
               >
                 {(job.notice_status ?? "NONE") === "SCHEDULED"
                   ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                  : "แจ้งหนังสือดับไฟ"}
+                  : "กำหนดการแจ้งดับไฟ"}
               </Button>
             ) : null}
             {canCloseJob ? (
@@ -347,9 +347,9 @@ export default function JobDetailPage() {
       {job ? (
         <Card>
           <CardHeader>
-            <CardTitle>ขั้นตอนเอกสารก่อน Social</CardTitle>
+            <CardTitle>ขั้นตอนดำเนินการ</CardTitle>
             <CardDescription>
-              เอกสารพร้อม → รับเอกสาร → ส่งเอกสาร → Social
+              เอกสารพร้อม → รับเอกสาร → ส่งเอกสาร → แจ้งดับไฟ → Social
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -357,6 +357,7 @@ export default function JobDetailPage() {
               job={job}
               onReceive={() => setDocumentMode("receive")}
               onDeliver={() => setDocumentMode("deliver")}
+              onNotice={() => setNoticeOpen(true)}
               onSocial={() => setSocialOpen(true)}
             />
           </CardContent>
@@ -469,7 +470,7 @@ export default function JobDetailPage() {
                   ดู GIS Issues ที่เชื่อมอยู่ ({gisIssueCount})
                 </Link>
               ) : null}
-              {job?.social_status === "POSTED" && !isClosed ? (
+              {job?.document_delivered_at && !isClosed ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -478,7 +479,7 @@ export default function JobDetailPage() {
                 >
                   {(job.notice_status ?? "NONE") === "SCHEDULED"
                     ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                    : "แจ้งหนังสือดับไฟ"}
+                    : "กำหนดการแจ้งดับไฟ"}
                 </Button>
               ) : (
                 <Badge variant="default">ขั้นตอนถัดไป: {workflowNextActionLabel}</Badge>

@@ -18,9 +18,10 @@ const STEP_ORDER = [
   "DRAFT",
   "WAITING_DOCUMENT",
   "WAITING_DELIVERY",
+  "READY_FOR_NOTICE",
+  "NOTICE_SCHEDULED",
   "READY_FOR_SOCIAL",
-  "SOCIAL_POSTED",
-  "NOTICE_SCHEDULED"
+  "SOCIAL_POSTED"
 ] as const satisfies readonly DocumentWorkflowStage[];
 
 const STEP_LABELS = DOCUMENT_WORKFLOW_STAGE_LABELS;
@@ -29,9 +30,10 @@ const STEP_TONES: Record<(typeof STEP_ORDER)[number], string> = {
   DRAFT: "bg-slate-400",
   WAITING_DOCUMENT: "bg-blue-500",
   WAITING_DELIVERY: "bg-cyan-600",
+  READY_FOR_NOTICE: "bg-indigo-600",
+  NOTICE_SCHEDULED: "bg-violet-600",
   READY_FOR_SOCIAL: "bg-indigo-600",
-  SOCIAL_POSTED: "bg-emerald-500",
-  NOTICE_SCHEDULED: "bg-orange-500"
+  SOCIAL_POSTED: "bg-emerald-500"
 };
 
 type DashboardJob = {
@@ -94,9 +96,10 @@ function getStageDetail(job: DashboardJob): string | null {
   if (job.step === "WAITING_DELIVERY") {
     return `รับโดย ${job.document_received_by ?? "ไม่ระบุ"}`;
   }
-  if (job.step === "READY_FOR_SOCIAL") {
+  if (job.step === "READY_FOR_NOTICE") {
     return `ส่งโดย ${job.document_delivered_by ?? "ไม่ระบุ"}`;
   }
+  if (job.step === "READY_FOR_SOCIAL") return "กำหนดการแจ้งดับไฟแล้ว";
   if (job.step === "SOCIAL_POSTED") return "โพสต์ Social แล้ว";
   return null;
 }

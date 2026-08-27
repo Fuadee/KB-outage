@@ -164,7 +164,7 @@ export default function NoticeScheduleModal({
   return (
     <Modal
       isOpen={open}
-      title="แจ้งหนังสือดับไฟ"
+      title="กำหนดการแจ้งดับไฟ"
       onClose={() => onOpenChange(false)}
     >
       <div className="flex flex-col gap-4">

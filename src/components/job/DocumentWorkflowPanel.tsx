@@ -4,6 +4,7 @@ import type { OutageJob } from "@/lib/jobsRepo";
 import {
   getDocumentWorkflowStage,
   isDocumentReady,
+  isNoticeScheduled,
   isSocialPosted
 } from "@/lib/documentWorkflow";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ type Props = {
   job: OutageJob;
   onReceive: () => void;
   onDeliver: () => void;
+  onNotice: () => void;
   onSocial: () => void;
 };
 
@@ -29,6 +31,7 @@ export default function DocumentWorkflowPanel({
   job,
   onReceive,
   onDeliver,
+  onNotice,
   onSocial
 }: Props) {
   const stage = getDocumentWorkflowStage(job);
@@ -50,10 +53,16 @@ export default function DocumentWorkflowPanel({
     {
       id: "delivered",
       label: "ส่งเอกสาร",
-      done: Boolean(job.document_delivered_at) || isSocialPosted(job),
+      done: Boolean(job.document_delivered_at) || isNoticeScheduled(job) || isSocialPosted(job),
       detail: job.document_delivered_at
         ? `${formatDate(job.document_delivered_at)} · ${job.document_delivered_by ?? "-"}`
         : "รอนำเอกสารไปส่ง"
+    },
+    {
+      id: "notice",
+      label: "แจ้งดับไฟ",
+      done: isNoticeScheduled(job) || isSocialPosted(job),
+      detail: job.notice_date ? `${job.notice_date} · ${job.notice_by ?? "-"}` : "รอกำหนดผู้แจ้งและวันแจ้ง"
     },
     {
       id: "social",
@@ -65,11 +74,12 @@ export default function DocumentWorkflowPanel({
 
   return (
     <div className="space-y-4">
-      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {items.map((item) => {
           const current =
             (item.id === "received" && stage === "WAITING_DOCUMENT") ||
             (item.id === "delivered" && stage === "WAITING_DELIVERY") ||
+            (item.id === "notice" && stage === "READY_FOR_NOTICE") ||
             (item.id === "social" && stage === "READY_FOR_SOCIAL") ||
             (item.id === "ready" && stage === "DRAFT");
           return (
@@ -119,6 +129,9 @@ export default function DocumentWorkflowPanel({
           {stage === "WAITING_DELIVERY" ? (
             <Button type="button" onClick={onDeliver}>บันทึกการส่งเอกสาร</Button>
           ) : null}
+          {stage === "READY_FOR_NOTICE" ? (
+            <Button type="button" onClick={onNotice}>กำหนดการแจ้งดับไฟ</Button>
+          ) : null}
           {stage === "READY_FOR_SOCIAL" ? (
             <Button type="button" onClick={onSocial}>Post ลงสื่อ Social</Button>
           ) : null}
@@ -132,9 +145,9 @@ export default function DocumentWorkflowPanel({
               แก้ไขการส่งเอกสาร
             </Button>
           ) : null}
-          {isDocumentReady(job) && !isSocialPosted(job) && stage !== "READY_FOR_SOCIAL" ? (
-            <Button type="button" variant="ghost" onClick={onSocial}>
-              จำเป็นต้องโพสต์ Social ก่อนส่งเอกสาร
+          {isNoticeScheduled(job) ? (
+            <Button type="button" variant="secondary" onClick={onNotice}>
+              แก้ไขผู้แจ้ง / วันที่แจ้ง
             </Button>
           ) : null}
         </div>
@@ -142,4 +155,3 @@ export default function DocumentWorkflowPanel({
     </div>
   );
 }
-

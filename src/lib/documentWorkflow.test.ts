@@ -23,7 +23,7 @@ test("case A follows every persisted document workflow stage", () => {
       document_received_at: "2026-08-20T02:00:00.000Z",
       document_delivered_at: "2026-08-20T03:00:00.000Z"
     }),
-    "READY_FOR_SOCIAL"
+    "READY_FOR_NOTICE"
   );
   assert.equal(
     getDocumentWorkflowStage({ ...documentReady, social_status: "POSTED" }),
@@ -32,10 +32,9 @@ test("case A follows every persisted document workflow stage", () => {
   assert.equal(
     getDocumentWorkflowStage({
       ...documentReady,
-      social_status: "POSTED",
       notice_status: "SCHEDULED"
     }),
-    "NOTICE_SCHEDULED"
+    "READY_FOR_SOCIAL"
   );
 });
 
@@ -54,6 +53,15 @@ test("cases B-D return the operational next action", () => {
       document_received_at: "2026-08-20T02:00:00.000Z",
       document_delivered_at: "2026-08-20T03:00:00.000Z"
     }),
+    "SCHEDULE_NOTICE"
+  );
+  assert.equal(
+    getDocumentWorkflowAction({
+      ...documentReady,
+      document_received_at: "2026-08-20T02:00:00.000Z",
+      document_delivered_at: "2026-08-20T03:00:00.000Z",
+      notice_status: "SCHEDULED"
+    }),
     "POST_SOCIAL"
   );
 });
@@ -68,7 +76,6 @@ test("case E keeps legacy Social and Notice rows at their completed stage", () =
       doc_status: "GENERATED",
       notice_status: "SCHEDULED"
     }),
-    "NOTICE_SCHEDULED"
+    "READY_FOR_SOCIAL"
   );
 });
-

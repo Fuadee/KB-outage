@@ -151,7 +151,7 @@ const actionLabelMap: Record<ActionKey, string> = {
 const getWorkflowSteps = (job: OutageJob): JobStep[] => {
   const isDocGenerated = isDocumentReady(job);
   const socialPosted = isSocialPosted(job);
-  const noticeScheduled = getDocumentWorkflowStage(job) === "NOTICE_SCHEDULED";
+  const noticeScheduled = job.notice_status === "SCHEDULED" || Boolean(job.notice_date);
   const isClosed = job.is_closed ?? false;
 
   return [
@@ -165,16 +165,25 @@ const getWorkflowSteps = (job: OutageJob): JobStep[] => {
       label: "รับเอกสาร",
       state: !isDocGenerated
         ? "locked"
-        : job.document_received_at || socialPosted
+        : job.document_received_at || noticeScheduled || socialPosted
           ? "done"
           : "current"
     },
     {
       id: "delivered",
       label: "ส่งเอกสาร",
-      state: !job.document_received_at && !socialPosted
+      state: !job.document_received_at && !noticeScheduled && !socialPosted
         ? "locked"
-        : job.document_delivered_at || socialPosted
+        : job.document_delivered_at || noticeScheduled || socialPosted
+          ? "done"
+          : "current"
+    },
+    {
+      id: "notice",
+      label: "แจ้งดับไฟ",
+      state: !job.document_delivered_at && !socialPosted
+        ? "locked"
+        : noticeScheduled || socialPosted
           ? "done"
           : "current"
     },
@@ -183,26 +192,16 @@ const getWorkflowSteps = (job: OutageJob): JobStep[] => {
       label: "Social",
       state: socialPosted
         ? "done"
-        : job.document_delivered_at
-          ? "current"
-          : "locked"
-    },
-    {
-      id: "notice",
-      label: "แจ้งดับไฟ",
-      state:
-        !socialPosted
+        : !noticeScheduled
           ? "locked"
-          : noticeScheduled
-            ? "done"
-            : "current"
+          : "current"
     },
     {
       id: "close",
       label: "ปิดงาน",
       state: isClosed
         ? "done"
-        : noticeScheduled
+        : socialPosted
           ? "current"
           : "locked"
     }
@@ -959,9 +958,11 @@ export default function JobsPage() {
             const isDocGenerating = job.doc_status === "GENERATING";
             const socialStatus = job.social_status ?? "DRAFT";
             const noticeStatus = job.notice_status ?? "NONE";
-            const showSocialButton = isDocGenerated;
-            const showNoticeButton = socialStatus === "POSTED";
-            const canCloseJob = noticeStatus === "SCHEDULED" && !isClosed;
+            const noticeScheduled = noticeStatus === "SCHEDULED" || Boolean(job.notice_date);
+            const socialPosted = socialStatus === "POSTED" || Boolean(job.social_posted_at);
+            const showSocialButton = noticeScheduled;
+            const showNoticeButton = Boolean(job.document_delivered_at) || socialPosted;
+            const canCloseJob = socialPosted && !isClosed;
             const nextAction = getNextAction(job);
             const workflowSteps = getWorkflowSteps(job);
             const secondaryActions: JobAction[] = [];
@@ -1007,11 +1008,9 @@ export default function JobsPage() {
               secondaryActions.push({
                 id: "wait_approval",
                 label:
-                  socialStatus === "POSTED"
+                  socialPosted
                     ? "Posted แล้วสื่อ Social"
-                    : job.document_delivered_at
-                      ? "Post ลงสื่อ Social"
-                      : "โพสต์ Social ก่อนส่งเอกสาร (กรณีจำเป็น)",
+                    : "Post ลงสื่อ Social",
                 onClick: () => setSocialJob(job)
               });
             }
@@ -1036,7 +1035,7 @@ export default function JobsPage() {
               secondaryActions.push({
                 id: "notify_outage_letter",
                 label:
-                  noticeStatus === "SCHEDULED"
+                  noticeScheduled
                     ? "แก้ไขกำหนดการแจ้งหนังสือ"
                     : "แจ้งหนังสือดับไฟ",
                 onClick: () => setNoticeJob(job)
@@ -1054,10 +1053,10 @@ export default function JobsPage() {
             primaryAction = {
               id: nextAction,
               label:
-                nextAction === "wait_approval" && socialStatus === "POSTED"
+                nextAction === "wait_approval" && socialPosted
                   ? "Posted แล้วสื่อ Social"
                   : nextAction === "notify_outage_letter" &&
-                      noticeStatus === "SCHEDULED"
+                      noticeScheduled
                     ? "กำหนดการแจ้งเรียบร้อยแล้ว"
                     : actionLabelMap[nextAction],
               onClick: () => {

@@ -26,7 +26,6 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       jobId?: string | number;
-      allowBeforeDelivery?: boolean;
     };
     if (process.env.NODE_ENV === "development") {
       console.info("Social post request body:", body);
@@ -100,12 +99,23 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!job.document_delivered_at && body.allowBeforeDelivery !== true) {
+    if (job.notice_status !== "SCHEDULED" && !job.notice_date) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "NOTICE_NOT_SCHEDULED",
+          error: "กรุณากำหนดผู้แจ้งและวันที่แจ้งดับไฟก่อนโพสต์ Social"
+        },
+        { status: 409 }
+      );
+    }
+
+    if (!job.document_delivered_at) {
       return NextResponse.json(
         {
           ok: false,
           code: "DOCUMENT_NOT_DELIVERED",
-          error: "ขั้นตอนส่งเอกสารยังไม่ครบ กรุณายืนยันเหตุจำเป็นก่อนโพสต์ Social"
+          error: "ขั้นตอนส่งเอกสารยังไม่ครบ"
         },
         { status: 409 }
       );
