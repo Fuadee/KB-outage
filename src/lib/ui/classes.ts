@@ -1,5 +1,3 @@
-import type { UrgencyColor } from "@/lib/dateUtils";
-
 export const pageBg = "min-h-screen bg-[#fafafa]";
 
 export const cardBase =
@@ -32,15 +30,3 @@ export const inputBase =
 
 export const linkBase =
   "text-sm font-medium text-purple-600 underline-offset-4 transition hover:text-violet-700 hover:underline";
-
-
-export const statusBadgeClasses = (status: UrgencyColor) => {
-  switch (status) {
-    case "RED":
-      return "border border-rose-200/80 bg-rose-50 text-rose-700";
-    case "YELLOW":
-      return "border border-amber-200/80 bg-amber-50 text-amber-700";
-    default:
-      return "border border-emerald-200/80 bg-emerald-50 text-emerald-700";
-  }
-};

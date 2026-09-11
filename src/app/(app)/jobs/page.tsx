@@ -35,7 +35,7 @@ import {
   normalizeJobId
 } from "@/lib/closeJob";
 import { inputLight } from "@/lib/theme";
-import { getJobUrgency, parseLocalDate } from "@/lib/dateUtils";
+import { getJobCountdown, parseLocalDate } from "@/lib/dateUtils";
 import {
   getDocumentWorkflowAction,
   getDocumentWorkflowStage,
@@ -43,7 +43,6 @@ import {
   isSocialPosted
 } from "@/lib/documentWorkflow";
 
-type FilterOption = "all" | "green" | "yellow" | "red";
 type TabOption = "active" | "closed";
 type ActionKey =
   | "notify_nakhon"
@@ -217,7 +216,6 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<FilterOption>("all");
   const [tab, setTab] = useState<TabOption>("active");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
@@ -778,11 +776,6 @@ export default function JobsPage() {
         if (!normalizedQuery) return true;
         return job.equipment_code.toLowerCase().includes(normalizedQuery);
       })
-      .filter((job) => {
-        if (filter === "all") return true;
-        const urgency = getJobUrgency(job);
-        return urgency.color.toLowerCase() === filter;
-      })
       .sort((a, b) => {
         if (tab === "closed") {
           const aClosed = a.closed_at ? new Date(a.closed_at).getTime() : 0;
@@ -794,7 +787,7 @@ export default function JobsPage() {
           parseLocalDate(b.outage_date).getTime()
         );
       });
-  }, [jobs, query, filter, tab]);
+  }, [jobs, query, tab]);
 
   const handleSocialJobUpdate = (
     jobId: string,
@@ -865,7 +858,7 @@ export default function JobsPage() {
       </header>
 
       <section className="rounded-[12px] border border-slate-200/80 bg-white/75 px-4 py-3.5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(320px,1fr)_auto_auto] lg:items-end">
+          <div className="grid gap-3 lg:grid-cols-[minmax(320px,1fr)_auto] lg:items-end">
             <div className="flex w-full flex-col gap-1.5">
               <label className="text-xs font-semibold text-slate-600">
                 ค้นหาอุปกรณ์
@@ -877,16 +870,6 @@ export default function JobsPage() {
                 className="h-10"
               />
             </div>
-            <Segmented
-              options={[
-                { id: "all", label: "ทั้งหมด" },
-                { id: "green", label: "เขียว" },
-                { id: "yellow", label: "เหลือง" },
-                { id: "red", label: "แดง" }
-              ]}
-              value={filter}
-              onChange={setFilter}
-            />
             <Segmented
               options={[
                 { id: "active", label: "ดำเนินการ" },
@@ -947,7 +930,7 @@ export default function JobsPage() {
           </Card>
         ) : (
           filteredJobs.map((job) => {
-            const urgency = getJobUrgency(job);
+            const countdown = getJobCountdown(job.outage_date);
             const nakhonStatus = job.nakhon_status ?? "PENDING";
             const isPending = nakhonStatus === "PENDING";
             const isNotified = nakhonStatus === "NOTIFIED";
@@ -1104,7 +1087,7 @@ export default function JobsPage() {
               <JobCard
                 key={job.id}
                 job={job}
-                urgency={urgency}
+                countdown={countdown}
                 stepper={workflowSteps}
                 primaryAction={isClosed ? undefined : primaryAction}
                 secondaryActions={displaySecondaryActions}

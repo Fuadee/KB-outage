@@ -3,10 +3,8 @@ import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Me
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
-import StatusBadge from "@/components/StatusBadge";
 import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
-import type { UrgencyColor } from "@/lib/dateUtils";
 import { parseLocalDate } from "@/lib/dateUtils";
 import { getDistributionReminderStatus } from "@/lib/distributionReminder";
 import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
@@ -21,7 +19,7 @@ export type JobAction = {
 
 type JobCardProps = {
   job: OutageJob;
-  urgency: { color: UrgencyColor; label: string; daysLeft: number };
+  countdown: { label: string; daysLeft: number };
   stepper: JobStep[];
   primaryAction?: JobAction;
   secondaryActions: JobAction[];
@@ -48,7 +46,7 @@ type JobCardProps = {
 
 export default function JobCard({
   job,
-  urgency,
+  countdown,
   stepper,
   primaryAction,
   secondaryActions,
@@ -74,7 +72,6 @@ export default function JobCard({
 }: JobCardProps): ReactElement {
   const isClosed = job.is_closed ?? false;
   const outageDate = parseLocalDate(job.outage_date);
-  const highlightDay = urgency.daysLeft === 0 || urgency.daysLeft === 1;
   const status = vulnerableCheckStatus?.trim() || null;
   const count = Number(vulnerableCheckCount ?? 0);
   const checkedAt = vulnerableCheckedAt ? new Date(vulnerableCheckedAt) : null;
@@ -218,14 +215,13 @@ export default function JobCard({
     >
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[200px_minmax(0,1fr)_230px] lg:gap-5">
         <section className="min-w-0 space-y-2 border-b border-[#e8ecf2] pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5">
-          <p className={cn("text-xs font-medium text-slate-500", highlightDay && "font-semibold text-orange-700")}>
+          <p className="text-xs font-medium text-slate-500">
             {outageDate.toLocaleDateString("th-TH", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
           </p>
-          <div className="flex flex-nowrap items-center gap-2">
-            <p className="whitespace-nowrap text-xl font-semibold tracking-tight text-slate-900">{job.equipment_code}</p>
-            <StatusBadge status={urgency.color} label={urgency.color} compact />
-          </div>
-          <p className={cn("text-xs font-medium", urgency.color === "RED" ? "text-red-700" : urgency.color === "YELLOW" ? "text-amber-700" : "text-emerald-700")}>{urgency.label}</p>
+          <p className="text-xl font-semibold tracking-tight text-slate-900 [overflow-wrap:anywhere]">
+            {job.equipment_code}
+          </p>
+          <p className="text-xs font-medium text-slate-500">{countdown.label}</p>
           {isClosed ? (
             <p className="text-[11px] text-slate-500">
               ปิดงาน: {job.closed_at ? new Date(job.closed_at).toLocaleString("th-TH") : "-"}

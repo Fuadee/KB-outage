@@ -13,7 +13,9 @@
     "test:gis-issues": "node --test --experimental-strip-types src/lib/gisIssues.test.ts",
     "test:workflow": "node --test --experimental-strip-types src/lib/documentWorkflow.test.ts",
     "test:social-publication": "node --test --experimental-strip-types src/lib/socialPublication.test.ts",
-    "test:distribution-reminder": "node --test --experimental-strip-types src/lib/distributionReminder.test.ts"
+    "test:distribution-reminder": "node --test --experimental-strip-types src/lib/distributionReminder.test.ts",
+    "test:date-utils": "node --test --experimental-strip-types src/lib/dateUtils.test.ts",
+    "test:jobs-presentation": "node --test --experimental-strip-types src/lib/jobsPresentation.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
