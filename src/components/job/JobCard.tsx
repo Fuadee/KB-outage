@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileText, Megaphone, MapPin, TriangleAlert } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Megaphone, MapPin, TriangleAlert } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
 import type { UrgencyColor } from "@/lib/dateUtils";
 import { parseLocalDate } from "@/lib/dateUtils";
+import { getDistributionReminderStatus } from "@/lib/distributionReminder";
 import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
 import { cn } from "@/lib/utils";
 
@@ -174,6 +175,39 @@ export default function JobCard({
                   : socialPublication.state === "OUTAGE_DATE_UNKNOWN"
                     ? { className: "border-slate-200 bg-slate-50 text-slate-600", label: "ไม่พบวันดับไฟ" }
                     : { className: "border-slate-200 bg-slate-50 text-slate-600", label: "ยังไม่ถึงรอบ" };
+  const distributionReminder = getDistributionReminderStatus({
+    outageDate: job.outage_date,
+    noticeDate: job.notice_date,
+    noticeBy: job.notice_by,
+    noticeStatus: job.notice_status
+  });
+  const distributionStateUi =
+    distributionReminder.state === "DONE"
+      ? {
+          className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+          label: "แจกแล้ว"
+        }
+      : distributionReminder.state === "DUE_TODAY"
+        ? {
+            className: "border-amber-200 bg-amber-50 text-amber-800",
+            label: "ควรแจกวันนี้"
+          }
+        : distributionReminder.state === "OVERDUE"
+          ? {
+              className: "border-rose-200 bg-rose-50 text-rose-800",
+              label: `เลยกำหนดแจก ${distributionReminder.daysOverdue ?? 0} วัน`
+            }
+          : distributionReminder.state === "UPCOMING"
+            ? {
+                className: "border-slate-200 bg-white text-slate-600",
+                label: distributionReminder.dueDate
+                  ? `ควรแจก ${formatThaiShortDate(distributionReminder.dueDate)}`
+                  : "ยังไม่ถึงกำหนดแจก"
+              }
+            : {
+                className: "border-slate-200 bg-white text-slate-500",
+                label: "ไม่พบวันดับไฟ"
+              };
 
   return (
     <article
@@ -217,8 +251,8 @@ export default function JobCard({
 
           <JobStatusStepper steps={stepper} className="pt-0.5" />
 
-          <div className="rounded-[9px] border border-slate-200 bg-slate-50/75 px-3 py-2 text-xs">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <div className="overflow-hidden rounded-[9px] border border-slate-200 bg-slate-50/75 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
               <span className="mr-1 inline-flex items-center gap-1.5 font-semibold text-slate-700">
                 <Megaphone className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
                 ประชาสัมพันธ์
@@ -235,6 +269,28 @@ export default function JobCard({
                 <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />ควรโพสต์ {formatThaiShortDate(socialPublication.recommendedSocialDate)}</span>
               ) : null}
               {socialPublication.state === "NEXT_ROUND" && socialPublication.nextPostingDate ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />รอบถัดไป {formatThaiShortDate(socialPublication.nextPostingDate)}</span> : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-slate-200/80 px-3 py-2">
+              <span className="mr-1 inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                <FileCheck2 className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                แจกหนังสือแจ้งดับไฟ
+              </span>
+              <span className={cn("rounded-md border px-2 py-1 font-semibold", distributionStateUi.className)}>
+                {distributionStateUi.label}
+              </span>
+              {distributionReminder.state === "UPCOMING" && distributionReminder.daysUntilDue !== null ? (
+                <span className="text-[11px] text-slate-500">อีก {distributionReminder.daysUntilDue} วัน</span>
+              ) : null}
+              {distributionReminder.state === "DONE" ? (
+                <span className="text-[11px] text-emerald-700/80">
+                  {distributionReminder.distributionDate
+                    ? formatThaiShortDate(distributionReminder.distributionDate)
+                    : "ไม่พบวันที่"}
+                  {distributionReminder.distributionBy
+                    ? ` · ${distributionReminder.distributionBy}`
+                    : ""}
+                </span>
+              ) : null}
             </div>
           </div>
 
