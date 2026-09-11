@@ -2,48 +2,88 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
+import Segmented from "@/components/ui/Segmented";
+import {
+  CALENDAR_STATUS_ORDER,
+  filterCalendarSummary,
+  matchesResponsibleUnitFilter,
+  type CalendarStatus,
+  type CalendarSummaryEntry,
+  type CalendarSummaryItem,
+  type ResponsibleUnitFilter
+} from "@/lib/calendarSummary";
+import {
+  getResponsibleUnitShortLabel,
+  type ResponsibleUnit
+} from "@/lib/jobMetadata";
+import {
+  CALENDAR_FLOW_STEPS,
+  formatThaiCalendarDate,
+  formatThaiCalendarMonth,
+  getCalendarStatusLabel,
+  THAI_CALENDAR_DAY_LABELS
+} from "@/lib/calendarPresentation";
 
-const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const statusOrder = ["Draft", "Doc", "Posted", "Notice", "Done"] as const;
-const statusStyles: Record<
-  (typeof statusOrder)[number],
-  { dot: string; badge: string; text: string }
-> = {
-  Draft: {
-    dot: "bg-slate-400",
-    badge: "bg-slate-100 text-slate-600",
-    text: "text-slate-600"
-  },
-  Doc: {
-    dot: "bg-amber-400",
-    badge: "bg-amber-100 text-amber-700",
-    text: "text-amber-700"
-  },
-  Posted: {
-    dot: "bg-sky-400",
-    badge: "bg-sky-100 text-sky-700",
-    text: "text-sky-700"
-  },
-  Notice: {
-    dot: "bg-violet-400",
-    badge: "bg-violet-100 text-violet-700",
-    text: "text-violet-700"
-  },
-  Done: {
-    dot: "bg-emerald-400",
-    badge: "bg-emerald-100 text-emerald-700",
-    text: "text-emerald-700"
-  }
+const statusStyles: Record<CalendarStatus, { dot: string }> = {
+  Draft: { dot: "bg-slate-500" },
+  Doc: { dot: "bg-amber-500" },
+  Posted: { dot: "bg-sky-500" },
+  Notice: { dot: "bg-violet-500" },
+  Done: { dot: "bg-emerald-500" }
 };
 
-type CalendarSummaryItem = {
-  date: string;
-  total: number;
-  byStatus: Record<string, number>;
+const flowStepStyles = [
+  "border-amber-500 bg-amber-500 text-white",
+  "border-amber-500 bg-amber-500 text-white",
+  "border-amber-500 bg-amber-500 text-white",
+  "border-violet-500 bg-violet-500 text-white",
+  "border-sky-500 bg-sky-500 text-white",
+  "border-emerald-500 bg-emerald-500 text-white"
+] as const;
+
+const responsibleUnitChipStyles: Record<ResponsibleUnit, string> = {
+  "แผนกปฏิบัติการ": "border-blue-900 bg-blue-900 text-white",
+  "แผนกก่อสร้าง": "border-teal-700 bg-teal-700 text-white",
+  "กฟส.อ่าวนาง": "border-purple-800 bg-purple-800 text-white"
 };
+
+const legacyResponsibleUnitChipStyle =
+  "border-slate-500 bg-slate-500 text-white";
+
+const getResponsibleUnitChipStyle = (
+  responsibleUnit: ResponsibleUnit | null
+) =>
+  responsibleUnit
+    ? responsibleUnitChipStyles[responsibleUnit]
+    : legacyResponsibleUnitChipStyle;
+
+function CalendarSummaryRow({ entry }: { entry: CalendarSummaryEntry }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 leading-5">
+      <span
+        className={`inline-flex h-5 max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none ${getResponsibleUnitChipStyle(entry.responsible_unit)}`}
+      >
+        {getResponsibleUnitShortLabel(entry.responsible_unit)}
+      </span>
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-slate-700">
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${statusStyles[entry.status].dot}`}
+        />
+        <span
+          className="truncate"
+          title={getCalendarStatusLabel(entry.status)}
+        >
+          {getCalendarStatusLabel(entry.status)}
+        </span>
+        <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+          {entry.count}
+        </span>
+      </span>
+    </div>
+  );
+}
 
 type DayJob = {
   id: string;
@@ -52,7 +92,18 @@ type DayJob = {
   time_end: string | null;
   area_title: string | null;
   status: string;
+  responsible_unit: ResponsibleUnit | null;
 };
+
+const responsibleUnitFilters: Array<{
+  id: ResponsibleUnitFilter;
+  label: string;
+}> = [
+  { id: "all", label: "ทั้งหมด" },
+  { id: "แผนกปฏิบัติการ", label: "ผปบ." },
+  { id: "แผนกก่อสร้าง", label: "ผกส." },
+  { id: "กฟส.อ่าวนาง", label: "อ่าวนาง" }
+];
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -91,6 +142,8 @@ export default function CalendarPage() {
   const [summary, setSummary] = useState<CalendarSummaryItem[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [responsibleUnitFilter, setResponsibleUnitFilter] =
+    useState<ResponsibleUnitFilter>("all");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dayJobs, setDayJobs] = useState<DayJob[]>([]);
@@ -112,19 +165,32 @@ export default function CalendarPage() {
     return days;
   }, [gridStart, gridEnd]);
 
+  const filteredSummary = useMemo(
+    () => filterCalendarSummary(summary, responsibleUnitFilter),
+    [summary, responsibleUnitFilter]
+  );
+
   const summaryByDate = useMemo(() => {
     const map = new Map<string, CalendarSummaryItem>();
-    summary.forEach((item) => {
+    filteredSummary.forEach((item) => {
       map.set(item.date, item);
     });
     return map;
-  }, [summary]);
+  }, [filteredSummary]);
+
+  const visibleDayJobs = useMemo(
+    () =>
+      dayJobs.filter((job) =>
+        matchesResponsibleUnitFilter(
+          job.responsible_unit,
+          responsibleUnitFilter
+        )
+      ),
+    [dayJobs, responsibleUnitFilter]
+  );
 
   const monthLabel = useMemo(() => {
-    return currentMonth.toLocaleString("en-US", {
-      month: "long",
-      year: "numeric"
-    });
+    return formatThaiCalendarMonth(currentMonth);
   }, [currentMonth]);
 
   useEffect(() => {
@@ -191,17 +257,31 @@ export default function CalendarPage() {
     setCurrentMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
     );
+    setSelectedDate(null);
+    setDrawerOpen(false);
   };
 
   const handleNextMonth = () => {
     setCurrentMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
     );
+    setSelectedDate(null);
+    setDrawerOpen(false);
+  };
+
+  const handleToday = () => {
+    setCurrentMonth(new Date());
+    setSelectedDate(null);
+    setDrawerOpen(false);
   };
 
   const handleDayClick = (date: Date) => {
     setSelectedDate(date);
     setDrawerOpen(true);
+  };
+
+  const handleMobileDayClick = (date: Date) => {
+    setSelectedDate(date);
   };
 
   const closeDrawer = () => {
@@ -210,72 +290,158 @@ export default function CalendarPage() {
     setDayError(null);
   };
 
+  const selectedDaySummary = selectedDate
+    ? summaryByDate.get(formatDateKey(selectedDate))
+    : undefined;
+  const selectedDateIsToday = selectedDate
+    ? isSameDate(selectedDate, new Date())
+    : false;
+
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
       <Card className="!border-0 !bg-transparent !shadow-none">
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 !px-0 py-1">
-          <div>
-            <p className="page-eyebrow">
-              Month view
-            </p>
-            <h1 className="page-title">
+        <CardContent className="grid gap-3 !px-0 py-0 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0">
+            <h1 className="page-title">ปฏิทินงานดับไฟ</h1>
+            <p className="mt-0.5 text-lg font-semibold text-slate-700">
               {monthLabel}
-            </h1>
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handlePreviousMonth}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleNextMonth}
-            >
-              Next
-            </Button>
+          <div className="grid min-w-0 max-w-full gap-2 md:flex md:items-center md:justify-end">
+            <Segmented
+              options={responsibleUnitFilters}
+              value={responsibleUnitFilter}
+              onChange={setResponsibleUnitFilter}
+              className="w-full max-w-full md:w-auto md:max-w-[22rem]"
+            />
+            <div className="grid w-full grid-cols-3 gap-2 md:flex md:w-auto md:items-center">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handlePreviousMonth}
+                className="min-h-10 w-full md:min-h-0 md:w-auto"
+              >
+                ก่อนหน้า
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleToday}
+                className="min-h-10 w-full md:min-h-0 md:w-auto"
+              >
+                วันนี้
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleNextMonth}
+                className="min-h-10 w-full md:min-h-0 md:w-auto"
+              >
+                ถัดไป
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="py-6">
-          <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {dayLabels.map((label) => (
-              <div key={label} className="px-2">
+      <section
+        aria-label="ลำดับการดำเนินงาน"
+        className="min-h-12 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 md:flex md:flex-wrap md:items-center md:gap-x-3 md:gap-y-1.5"
+      >
+        <h2 className="mb-1.5 shrink-0 text-xs font-semibold text-slate-800 md:mb-0">
+          ขั้นตอนงาน
+        </h2>
+        <ol className="grid min-w-0 flex-1 grid-cols-3 gap-x-1 gap-y-2 md:flex md:flex-wrap md:items-center md:gap-x-2 md:gap-y-1.5">
+          {CALENDAR_FLOW_STEPS.map((step, index) => (
+            <li
+              key={step}
+              className="inline-flex min-w-0 items-center gap-1 text-[11px] font-medium text-slate-700 md:shrink-0 md:gap-1.5 md:text-xs"
+            >
+              <span
+                className={`inline-flex h-5 w-5 items-center justify-center rounded-md border text-[10px] font-bold ${flowStepStyles[index]}`}
+              >
+                {index + 1}
+              </span>
+              <span>{step}</span>
+              {index < CALENDAR_FLOW_STEPS.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className={`ml-auto text-slate-400 md:ml-0.5 ${index === 2 ? "hidden md:inline" : ""}`}
+                >
+                  →
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <Card
+        data-desktop-calendar
+        className="hidden min-w-0 max-w-full overflow-hidden border-slate-200/80 shadow-sm lg:block"
+      >
+        <CardContent className="max-w-full overflow-x-auto !px-3 py-3 sm:!px-4">
+          <div className="grid min-w-[960px] grid-cols-7 gap-1.5 text-xs font-semibold tracking-wide text-slate-600 xl:min-w-[1240px]">
+            {THAI_CALENDAR_DAY_LABELS.map((label) => (
+              <div key={label} className="px-2 py-0.5">
                 {label}
               </div>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-7 gap-3">
+          <div className="mt-1.5 grid min-w-[960px] grid-cols-7 gap-1.5 xl:min-w-[1240px]">
             {daysInGrid.map((date) => {
               const dateKey = formatDateKey(date);
               const daySummary = summaryByDate.get(dateKey);
+              const visibleEntries = daySummary?.entries.slice(0, 3) ?? [];
+              const hiddenJobCount =
+                daySummary?.entries
+                  .slice(3)
+                  .reduce((total, entry) => total + entry.count, 0) ?? 0;
               const isCurrent = isSameMonth(date, currentMonth);
               const isSelected = selectedDate
                 ? isSameDate(date, selectedDate)
                 : false;
+              const isToday = isSameDate(date, new Date());
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+              const cellSurface = isToday
+                ? "border-orange-400 bg-orange-50/60 ring-1 ring-orange-200"
+                : isSelected
+                  ? "border-slate-400 bg-slate-50"
+                  : !isCurrent
+                    ? "border-slate-200/60 bg-slate-50/35"
+                    : isWeekend
+                      ? "border-slate-200/70 bg-slate-50/70"
+                      : "border-slate-200/70 bg-white";
 
               return (
                 <button
                   type="button"
                   key={dateKey}
                   onClick={() => handleDayClick(date)}
-                  className={`flex min-h-[120px] flex-col gap-2 rounded-2xl border px-3 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50/60 ${
-                    isSelected
-                      ? "border-slate-400 bg-slate-50"
-                      : "border-slate-200/70 bg-white"
-                  } ${isCurrent ? "" : "text-slate-500"}`}
+                  className={`flex min-h-[112px] flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-left transition hover:border-slate-400 hover:bg-slate-50 ${cellSurface} ${
+                    isCurrent ? "" : "text-slate-500"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">
+                    <span
+                      className={`text-[15px] font-bold leading-5 ${
+                        isToday
+                          ? "text-orange-700"
+                          : isCurrent
+                            ? "text-slate-900"
+                            : "text-slate-500"
+                      }`}
+                    >
                       {date.getDate()}
                     </span>
+                    {isToday ? (
+                      <span className="text-[10px] font-semibold text-orange-700">
+                        วันนี้
+                      </span>
+                    ) : null}
                     {/* {daySummary?.total ? (
                       <Badge variant="neutral">{daySummary.total}</Badge>
                     ) : null} */}
@@ -285,24 +451,18 @@ export default function CalendarPage() {
                   ) : summaryError ? (
                     <p className="text-xs text-rose-500">โหลดไม่สำเร็จ</p>
                   ) : daySummary ? (
-                    <div className="flex flex-wrap gap-2">
-                      {statusOrder.map((status) => {
-                        const count = daySummary.byStatus[status];
-                        if (!count) return null;
-                        return (
-                          <span
-                            key={`${dateKey}-${status}`}
-                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                statusStyles[status].dot
-                              }`}
-                            />
-                            {status} {count}
-                          </span>
-                        );
-                      })}
+                    <div className="min-w-0 space-y-1">
+                      {visibleEntries.map((entry) => (
+                        <CalendarSummaryRow
+                          key={`${dateKey}-${entry.responsible_unit ?? "legacy"}-${entry.status}`}
+                          entry={entry}
+                        />
+                      ))}
+                      {hiddenJobCount > 0 ? (
+                        <p className="text-[11px] font-medium leading-4 text-slate-500">
+                          + อีก {hiddenJobCount} งาน
+                        </p>
+                      ) : null}
                     </div>
                   ) : (
                     <div
@@ -320,29 +480,150 @@ export default function CalendarPage() {
         </CardContent>
       </Card>
 
+      <div data-mobile-calendar className="space-y-3 lg:hidden">
+        <Card className="min-w-0 overflow-hidden border-slate-200/80 shadow-sm">
+          <CardContent className="!px-2 py-2.5">
+            <div className="grid grid-cols-7 text-center text-[10px] font-semibold tracking-wide text-slate-600">
+              {THAI_CALENDAR_DAY_LABELS.map((label) => (
+                <div key={`mobile-${label}`} className="py-1">
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div
+              data-mobile-calendar-grid
+              className="mt-1 grid grid-cols-7 gap-1"
+            >
+              {daysInGrid.map((date) => {
+                const dateKey = formatDateKey(date);
+                const daySummary = summaryByDate.get(dateKey);
+                const mobileStatuses = CALENDAR_STATUS_ORDER.filter((status) =>
+                  daySummary?.entries.some((entry) => entry.status === status)
+                );
+                const isCurrent = isSameMonth(date, currentMonth);
+                const isSelected = selectedDate
+                  ? isSameDate(date, selectedDate)
+                  : false;
+                const isToday = isSameDate(date, new Date());
+                const statusDescription = mobileStatuses
+                  .map(getCalendarStatusLabel)
+                  .join(", ");
+
+                return (
+                  <button
+                    type="button"
+                    key={`mobile-${dateKey}`}
+                    onClick={() => handleMobileDayClick(date)}
+                    aria-label={`วันที่ ${date.getDate()}${daySummary ? ` มี ${daySummary.total} งาน${statusDescription ? `: ${statusDescription}` : ""}` : " ไม่มีงาน"}`}
+                    aria-pressed={isSelected}
+                    className={`flex min-h-[52px] min-w-0 flex-col items-center justify-center rounded-md border px-0.5 py-1 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
+                      isToday
+                        ? "border-orange-400 bg-orange-50/70 text-orange-800"
+                        : isSelected
+                          ? "border-slate-700 bg-slate-100 text-slate-950 ring-1 ring-slate-300"
+                          : isCurrent
+                            ? "border-slate-200 bg-white text-slate-800"
+                            : "border-slate-100 bg-slate-50/60 text-slate-400"
+                    } ${isToday && isSelected ? "ring-2 ring-orange-300" : ""}`}
+                  >
+                    <span className="text-xs font-bold leading-4 tabular-nums">
+                      {date.getDate()}
+                    </span>
+                    {loadingSummary ? (
+                      <span className="mt-1 h-1.5 w-4 animate-pulse rounded-full bg-slate-200" />
+                    ) : daySummary ? (
+                      <span className="mt-1 flex min-w-0 items-center justify-center gap-0.5">
+                        {mobileStatuses.map((status) => (
+                          <span
+                            key={`${dateKey}-${status}`}
+                            aria-hidden="true"
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusStyles[status].dot}`}
+                          />
+                        ))}
+                        <span className="ml-0.5 text-[9px] font-semibold leading-none tabular-nums text-slate-600">
+                          {daySummary.total}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="mt-1 h-1.5" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {summaryError ? (
+              <p className="mt-2 text-center text-xs font-medium text-rose-600">
+                โหลดข้อมูลปฏิทินไม่สำเร็จ
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <section
+          aria-live="polite"
+          className={`rounded-lg border px-3 py-3 ${
+            selectedDateIsToday
+              ? "border-orange-300 bg-orange-50/50"
+              : "border-slate-200 bg-white"
+          }`}
+        >
+          {selectedDate ? (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  งาน{formatThaiCalendarDate(selectedDate)}
+                </h2>
+                {selectedDateIsToday ? (
+                  <span className="shrink-0 text-[10px] font-semibold text-orange-700">
+                    วันนี้
+                  </span>
+                ) : null}
+              </div>
+              {loadingSummary ? (
+                <div className="mt-3 h-12 animate-pulse rounded-md bg-slate-100" />
+              ) : summaryError ? (
+                <p className="mt-3 text-xs font-medium text-rose-600">
+                  โหลดรายละเอียดไม่สำเร็จ
+                </p>
+              ) : selectedDaySummary?.entries.length ? (
+                <div className="mt-3 space-y-2">
+                  {selectedDaySummary.entries.map((entry) => (
+                    <CalendarSummaryRow
+                      key={`mobile-detail-${entry.responsible_unit ?? "legacy"}-${entry.status}`}
+                      entry={entry}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">
+                  ไม่มีงานในวันนี้
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-center text-sm text-slate-500">
+              เลือกวันที่เพื่อดูรายละเอียดงาน
+            </p>
+          )}
+        </section>
+      </div>
+
       {drawerOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 hidden justify-end lg:flex">
           <button
             type="button"
             className="absolute inset-0 bg-slate-900/40"
             onClick={closeDrawer}
-            aria-label="Close calendar drawer"
+            aria-label="ปิดรายละเอียดงานประจำวัน"
           />
           <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
               <div>
                 <p className="text-xs font-semibold text-slate-500">
-                  Daily outages
+                  งานประจำวัน
                 </p>
                 <h2 className="mt-1 text-xl font-semibold text-slate-900">
-                  {selectedDate
-                    ? selectedDate.toLocaleDateString("en-US", {
-                        weekday: "long",
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric"
-                      })
-                    : ""}
+                  {selectedDate ? formatThaiCalendarDate(selectedDate) : ""}
                 </h2>
               </div>
               <Button
@@ -368,15 +649,15 @@ export default function CalendarPage() {
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
                   {dayError}
                 </div>
-              ) : dayJobs.length ? (
+              ) : visibleDayJobs.length ? (
                 <div className="space-y-3">
-                  {dayJobs.map((job) => {
-                    const statusKey = statusOrder.find(
+                  {visibleDayJobs.map((job) => {
+                    const statusKey = CALENDAR_STATUS_ORDER.find(
                       (status) => status === job.status
                     );
-                    const badgeStyles = statusKey
-                      ? statusStyles[statusKey].badge
-                      : "bg-slate-100 text-slate-600";
+                    const statusDotStyle = statusKey
+                      ? statusStyles[statusKey].dot
+                      : statusStyles.Draft.dot;
 
                     return (
                       <Link
@@ -384,15 +665,25 @@ export default function CalendarPage() {
                         href={`/job/${job.id}`}
                         className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-900">
                             {formatTimeRange(job.time_start, job.time_end)}
                           </p>
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeStyles}`}
-                          >
-                            {job.status}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className={`inline-flex h-5 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none ${getResponsibleUnitChipStyle(job.responsible_unit)}`}
+                            >
+                              {getResponsibleUnitShortLabel(
+                                job.responsible_unit
+                              )}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                              <span
+                                className={`h-2 w-2 shrink-0 rounded-full ${statusDotStyle}`}
+                              />
+                              {getCalendarStatusLabel(job.status)}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-sm text-slate-600">
                           {job.area_title ?? "ไม่ระบุพื้นที่"}

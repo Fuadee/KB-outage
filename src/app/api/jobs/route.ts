@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
+import { isResponsibleUnit, parseCustomerCount } from "@/lib/jobMetadata";
+import { authorizeServerRequest } from "@/lib/serverAuth";
+import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const fetchWithoutCache: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
 
 function createSupabaseServerClient() {
   if (!SUPABASE_URL) {
@@ -15,7 +21,11 @@ function createSupabaseServerClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var.");
   }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  ensureSystemCertificateAuthorities();
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: fetchWithoutCache }
+  });
 }
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -64,7 +74,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, doc_time_start, doc_time_end, doc_area_title, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
+        "id, outage_date, responsible_unit, doc_time_start, doc_time_end, doc_area_title, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })
@@ -77,17 +87,95 @@ export async function GET(request: Request) {
     const jobs = (data ?? []).map((job) => ({
       id: job.id,
       outage_date: job.outage_date,
+      responsible_unit: job.responsible_unit ?? null,
       time_start: job.doc_time_start ?? null,
       time_end: job.doc_time_end ?? null,
       area_title: job.doc_area_title ?? null,
       status: deriveJobStatus(job)
     }));
 
-    return NextResponse.json(jobs);
+    return NextResponse.json(jobs, {
+      headers: { "Cache-Control": "no-store, max-age=0" }
+    });
   } catch (error) {
     console.error("Jobs by date failed", error);
     return NextResponse.json(
       { ok: false, error: "ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    ensureSystemCertificateAuthorities();
+
+    const { authorized } = await authorizeServerRequest();
+    if (!authorized) {
+      return NextResponse.json(
+        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
+        { status: 401 }
+      );
+    }
+
+    const body = (await request.json().catch(() => null)) as {
+      outage_date?: unknown;
+      equipment_code?: unknown;
+      responsible_unit?: unknown;
+      customer_count?: unknown;
+      note?: unknown;
+    } | null;
+    const outageDate =
+      typeof body?.outage_date === "string" ? body.outage_date : "";
+    const equipmentCode =
+      typeof body?.equipment_code === "string"
+        ? body.equipment_code.trim()
+        : "";
+    const customerCount = parseCustomerCount(body?.customer_count);
+
+    if (!customerCount.success) {
+      return NextResponse.json(
+        { ok: false, error: customerCount.error },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !isValidDateString(outageDate) ||
+      !equipmentCode ||
+      !isResponsibleUnit(body?.responsible_unit) ||
+      (body?.note !== undefined &&
+        body.note !== null &&
+        typeof body.note !== "string")
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "ข้อมูลสร้างงานไม่ถูกต้อง กรุณาเลือกหน่วยงานผู้รับผิดชอบ" },
+        { status: 400 }
+      );
+    }
+
+    const note = typeof body.note === "string" ? body.note.trim() || null : null;
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("outage_jobs")
+      .insert({
+        outage_date: outageDate,
+        equipment_code: equipmentCode,
+        responsible_unit: body.responsible_unit,
+        customer_count: customerCount.value,
+        note
+      })
+      .select(
+        "id, outage_date, equipment_code, responsible_unit, customer_count, note"
+      )
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ ok: true, data }, { status: 201 });
+  } catch (error) {
+    console.error("Create job failed", error);
+    return NextResponse.json(
+      { ok: false, error: "สร้างงานไม่สำเร็จ กรุณาลองใหม่" },
       { status: 500 }
     );
   }

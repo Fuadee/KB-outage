@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       jobId?: string | number;
       notice_date?: string;
-      notice_by?: string;
+      notice_by?: string | null;
     };
 
     const jobId = body?.jobId;
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!noticeDate || !noticeBy) {
+    if (!noticeDate) {
       return NextResponse.json(
         { ok: false, error: "missing required fields" },
         { status: 400 }
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       .update({
         notice_status: "SCHEDULED",
         notice_date: noticeDate,
-        notice_by: noticeBy,
+        notice_by: noticeBy || null,
         notice_scheduled_at: scheduledAt
       })
       .eq("id", jobId);

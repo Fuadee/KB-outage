@@ -23,6 +23,14 @@ import {
 } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
+import {
+  formatCustomerCount,
+  isResponsibleUnit,
+  MAX_CUSTOMER_COUNT,
+  parseCustomerCount,
+  RESPONSIBLE_UNITS,
+  type ResponsibleUnit
+} from "@/lib/jobMetadata";
 import { supabase } from "@/lib/supabaseClient";
 import { AUTH_DISABLED } from "@/lib/authConfig";
 import {
@@ -44,6 +52,8 @@ export default function JobDetailPage() {
   const routeJobId = normalizeJobId(params.id);
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
+  const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
+  const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,6 +91,12 @@ export default function JobDetailPage() {
       setJob(data);
       setOutageDate(data.outage_date);
       setEquipmentCode(data.equipment_code);
+      setResponsibleUnit(
+        isResponsibleUnit(data.responsible_unit) ? data.responsible_unit : ""
+      );
+      setCustomerCount(
+        data.customer_count === null ? "" : String(data.customer_count)
+      );
       setNote(data.note ?? "");
       try {
         const countsResponse = await fetch("/api/gis-issues/job-counts", {
@@ -120,10 +136,18 @@ export default function JobDetailPage() {
       return;
     }
 
+    const parsedCustomerCount = parseCustomerCount(customerCount);
+    if (!parsedCustomerCount.success) {
+      setError(parsedCustomerCount.error);
+      return;
+    }
+
     setSaving(true);
     const { error: updateError } = await updateJob(routeJobId, {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
+      responsible_unit: responsibleUnit || null,
+      customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
     });
 
@@ -243,6 +267,11 @@ export default function JobDetailPage() {
   const workflowNextActionLabel = job
     ? getDocumentWorkflowActionLabel(getDocumentWorkflowAction(job))
     : "-";
+  const customerCountPreview = parseCustomerCount(customerCount);
+  const customerCountDisplay =
+    customerCountPreview.success && customerCountPreview.value !== null
+      ? `${formatCustomerCount(customerCountPreview.value)} ราย`
+      : "—";
 
   return (
     <AppShell>
@@ -391,6 +420,56 @@ export default function JobDetailPage() {
                   disabled={isClosed}
                   required
                 />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                หน่วยงานผู้รับผิดชอบ
+                <select
+                  value={responsibleUnit}
+                  onChange={(event) =>
+                    setResponsibleUnit(event.target.value as ResponsibleUnit | "")
+                  }
+                  disabled={isClosed}
+                  className={inputLight}
+                >
+                  <option value="">ไม่ระบุหน่วยงาน</option>
+                  {RESPONSIBLE_UNITS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                <span className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span>จำนวนผู้ใช้ไฟฟ้า</span>
+                  <span className="font-normal text-slate-500">
+                    {customerCountDisplay}
+                  </span>
+                </span>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={MAX_CUSTOMER_COUNT}
+                    step={1}
+                    value={customerCount}
+                    onChange={(event) => setCustomerCount(event.target.value)}
+                    placeholder="350"
+                    disabled={isClosed}
+                    className="pr-12"
+                    aria-describedby="edit-job-customer-count-helper"
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-normal text-slate-500">
+                    ราย
+                  </span>
+                </div>
+                <span
+                  id="edit-job-customer-count-helper"
+                  className="text-xs font-normal text-slate-500"
+                >
+                  ไม่บังคับ ล้างค่าเพื่อบันทึกเป็นไม่ระบุ
+                </span>
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                 หมายเหตุเพิ่มเติม

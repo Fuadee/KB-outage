@@ -1,4 +1,4 @@
-import { parseLocalDate } from "./dateUtils";
+import { parseLocalDate } from "./dateUtils.ts";
 
 const THAI_MONTHS = [
   "มกราคม",

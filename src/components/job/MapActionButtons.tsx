@@ -3,38 +3,12 @@
 import type { ReactElement, SyntheticEvent } from "react";
 import { MapPin } from "lucide-react";
 import { buttonStyles } from "@/components/ui/Button";
+import { normalizeGoogleMapsUrl } from "@/lib/mapUrl";
 import { cn } from "@/lib/utils";
 
 type MapActionButtonsProps = {
   googleUrl?: string | null;
   className?: string;
-};
-
-const normalizeMapUrl = (value?: string | null): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-
-  const normalized = /^https?:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-
-  try {
-    const parsed = new URL(normalized);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return null;
-    }
-    const hostname = parsed.hostname.toLowerCase();
-    const pathname = parsed.pathname.toLowerCase();
-    const isGoogleMaps =
-      (hostname.includes("google.") && pathname.includes("map")) ||
-      hostname === "maps.app.goo.gl";
-    if (!isGoogleMaps) {
-      return null;
-    }
-    return parsed.toString();
-  } catch {
-    return null;
-  }
 };
 
 const stopPropagation = (event: SyntheticEvent) => {
@@ -45,7 +19,7 @@ export default function MapActionButtons({
   googleUrl,
   className = ""
 }: MapActionButtonsProps): ReactElement | null {
-  const googleMap = normalizeMapUrl(googleUrl);
+  const googleMap = normalizeGoogleMapsUrl(googleUrl);
 
   if (!googleMap) return null;
 

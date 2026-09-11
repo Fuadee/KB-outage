@@ -62,7 +62,9 @@ export default function DocumentWorkflowPanel({
       id: "notice",
       label: "แจ้งดับไฟ",
       done: isNoticeScheduled(job) || isSocialPosted(job),
-      detail: job.notice_date ? `${job.notice_date} · ${job.notice_by ?? "-"}` : "รอกำหนดผู้แจ้งและวันแจ้ง"
+      detail: job.notice_date
+        ? `${job.notice_date}${job.notice_by ? ` · ผู้แจกจริง ${job.notice_by}` : " · ยังไม่บันทึกผู้แจกจริง"}`
+        : "รอกำหนดวันที่แจ้ง"
     },
     {
       id: "social",
@@ -147,7 +149,7 @@ export default function DocumentWorkflowPanel({
           ) : null}
           {isNoticeScheduled(job) ? (
             <Button type="button" variant="secondary" onClick={onNotice}>
-              แก้ไขผู้แจ้ง / วันที่แจ้ง
+              แก้ไขวันที่แจ้ง / ผู้แจกจริง
             </Button>
           ) : null}
         </div>

@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Megaphone, MapPin, TriangleAlert } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Megaphone, MapPin, TriangleAlert, Users } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
 import { parseLocalDate } from "@/lib/dateUtils";
 import { getDistributionReminderStatus } from "@/lib/distributionReminder";
+import { formatCustomerCount, getResponsibleUnitLabel } from "@/lib/jobMetadata";
 import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
 import { cn } from "@/lib/utils";
 
@@ -221,6 +222,26 @@ export default function JobCard({
           <p className="text-xl font-semibold tracking-tight text-slate-900 [overflow-wrap:anywhere]">
             {job.equipment_code}
           </p>
+          <p
+            className={cn(
+              "text-sm leading-5",
+              job.responsible_unit
+                ? "font-medium text-slate-600"
+                : "text-slate-400"
+            )}
+          >
+            {getResponsibleUnitLabel(job.responsible_unit)}
+          </p>
+          {typeof job.customer_count === "number" ? (
+            <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-5 text-slate-500">
+              <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+              <span>ผู้ใช้ไฟ</span>
+              <strong className="font-semibold tabular-nums text-slate-800">
+                {formatCustomerCount(job.customer_count)}
+              </strong>
+              <span>ราย</span>
+            </p>
+          ) : null}
           <p className="text-xs font-medium text-slate-500">{countdown.label}</p>
           {isClosed ? (
             <p className="text-[11px] text-slate-500">

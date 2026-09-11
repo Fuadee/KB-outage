@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
+import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
+import {
+  buildCalendarSummary,
+  type CalendarStatus
+} from "@/lib/calendarSummary";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const fetchWithoutCache: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
 
 function createSupabaseServerClient() {
   if (!SUPABASE_URL) {
@@ -15,7 +24,13 @@ function createSupabaseServerClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var.");
   }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  ensureSystemCertificateAuthorities();
+
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: fetchWithoutCache }
+  });
 }
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,8 +58,7 @@ type JobStatusSource = {
   notice_date: string | null;
   is_closed: boolean | null;
 };
-type DerivedStatus = "Done" | "Notice" | "Posted" | "Doc" | "Draft";
-function deriveJobStatus(job: JobStatusSource): DerivedStatus {
+function deriveJobStatus(job: JobStatusSource): CalendarStatus {
   return getLegacyCalendarStatus(job);
 }
 
@@ -72,7 +86,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "outage_date, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed"
+        "outage_date, responsible_unit, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed"
       )
       .gte("outage_date", from)
       .lte("outage_date", to);
@@ -81,44 +95,22 @@ export async function GET(request: Request) {
       throw new Error(error.message);
     }
 
-    const summaryMap = new Map<
-  string,
-  { date: string; total: number; byStatus: Record<DerivedStatus, number> }
->();
-
-    (data ?? []).forEach((job) => {
-      const date = job.outage_date;
-      if (!date) return;
-
-
-const status = deriveJobStatus(job);
-
-type SummaryRow = {
-  date: string;
-  total: number;
-  byStatus: Record<DerivedStatus, number>;
-};
-
-const existing: SummaryRow =
-  summaryMap.get(date) ??
-  ({
-    date,
-    total: 0,
-    byStatus: {} as Record<DerivedStatus, number>
-  } satisfies SummaryRow);
-
-existing.total += 1;
-existing.byStatus[status] = (existing.byStatus[status] ?? 0) + 1;
-
-summaryMap.set(date, existing);
-
-    });
-
-    const summary = Array.from(summaryMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date)
+    const summary = buildCalendarSummary(
+      (data ?? []).flatMap((job) => {
+        if (!job.outage_date) return [];
+        return [
+          {
+            date: job.outage_date,
+            responsible_unit: job.responsible_unit,
+            status: deriveJobStatus(job)
+          }
+        ];
+      })
     );
 
-    return NextResponse.json(summary);
+    return NextResponse.json(summary, {
+      headers: { "Cache-Control": "no-store, max-age=0" }
+    });
   } catch (error) {
     console.error("Calendar summary failed", error);
     return NextResponse.json(

@@ -42,6 +42,7 @@ import {
   isDocumentReady,
   isSocialPosted
 } from "@/lib/documentWorkflow";
+import { normalizeGoogleMapsUrl } from "@/lib/mapUrl";
 
 type TabOption = "active" | "closed";
 type ActionKey =
@@ -93,21 +94,8 @@ type SpecialWatchlistPreview = {
   longitude: number | null;
 };
 
-const isValidGoogleMapsUrl = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  const normalized = /^https?:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-  try {
-    const parsed = new URL(normalized);
-    const hostname = parsed.hostname.toLowerCase();
-    const pathname = parsed.pathname.toLowerCase();
-    return (hostname.includes("google.") && pathname.includes("map")) || hostname === "maps.app.goo.gl";
-  } catch {
-    return false;
-  }
-};
+const isValidGoogleMapsUrl = (value: string) =>
+  Boolean(normalizeGoogleMapsUrl(value));
 
 const getFilenameFromContentDisposition = (
   headerValue: string | null

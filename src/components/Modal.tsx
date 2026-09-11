@@ -1,4 +1,4 @@
-import { type FormEventHandler, type ReactNode, useEffect } from "react";
+import { type FormEventHandler, type ReactNode, useEffect, useRef } from "react";
 import { cardDark, titleText } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -23,13 +23,16 @@ export default function Modal({
   panelClassName,
   bodyClassName
 }: ModalProps) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!isOpen) return undefined;
 
     const originalOverflow = document.body.style.overflow;
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -40,7 +43,7 @@ export default function Modal({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

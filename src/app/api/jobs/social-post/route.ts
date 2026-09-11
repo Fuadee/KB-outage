@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           code: "NOTICE_NOT_SCHEDULED",
-          error: "กรุณากำหนดผู้แจ้งและวันที่แจ้งดับไฟก่อนโพสต์ Social"
+          error: "กรุณากำหนดวันที่แจ้งดับไฟก่อนโพสต์ Social"
         },
         { status: 409 }
       );

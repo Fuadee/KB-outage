@@ -1,9 +1,12 @@
 import { supabase } from "./supabaseClient";
+import type { ResponsibleUnit } from "./jobMetadata";
 
 export type OutageJob = {
   id: string;
   outage_date: string;
   equipment_code: string;
+  responsible_unit: ResponsibleUnit | null;
+  customer_count: number | null;
   note: string | null;
   nakhon_status: "PENDING" | "NOTIFIED" | "NOT_REQUIRED";
   nakhon_notified_date: string | null;
@@ -52,6 +55,16 @@ export type OutageJob = {
 export type NewOutageJob = {
   outage_date: string;
   equipment_code: string;
+  responsible_unit: ResponsibleUnit;
+  customer_count: number | null;
+  note?: string | null;
+};
+
+export type UpdateOutageJob = {
+  outage_date: string;
+  equipment_code: string;
+  responsible_unit: ResponsibleUnit | null;
+  customer_count: number | null;
   note?: string | null;
 };
 
@@ -59,7 +72,7 @@ export async function listJobs() {
   return supabase
     .from("outage_jobs")
     .select(
-      "id, outage_date, equipment_code, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by, notice_scheduled_at, is_closed, closed_at, closed_by, created_at, updated_at"
+      "id, outage_date, equipment_code, responsible_unit, customer_count, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by, notice_scheduled_at, is_closed, closed_at, closed_by, created_at, updated_at"
     )
     .order("outage_date", { ascending: true });
 }
@@ -73,25 +86,68 @@ export async function getJob(id: string) {
 }
 
 export async function createJob(data: NewOutageJob) {
-  return supabase.from("outage_jobs").insert({
-    outage_date: data.outage_date,
-    equipment_code: data.equipment_code,
-    note: data.note ?? null
-  });
+  try {
+    const response = await fetch("/api/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      return {
+        data: null,
+        error: new Error(result?.error ?? "ไม่สามารถสร้างงานได้")
+      };
+    }
+
+    return { data: result.data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error("ไม่สามารถสร้างงานได้")
+    };
+  }
 }
 
 export async function updateJob(
   id: string,
-  patch: Partial<NewOutageJob>
+  patch: UpdateOutageJob
 ) {
-  return supabase
-    .from("outage_jobs")
-    .update({
-      outage_date: patch.outage_date,
-      equipment_code: patch.equipment_code,
-      note: patch.note ?? null
-    })
-    .eq("id", id);
+  try {
+    const response = await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      return {
+        data: null,
+        error: new Error(result?.error ?? "ไม่สามารถแก้ไขงานได้")
+      };
+    }
+    if (result.data?.responsible_unit !== patch.responsible_unit) {
+      return {
+        data: null,
+        error: new Error("ระบบตอบกลับไม่ตรงกับหน่วยงานที่บันทึก กรุณาลองใหม่")
+      };
+    }
+    if (result.data?.customer_count !== patch.customer_count) {
+      return {
+        data: null,
+        error: new Error("ระบบตอบกลับไม่ตรงกับจำนวนผู้ใช้ไฟฟ้าที่บันทึก กรุณาลองใหม่")
+      };
+    }
+
+    return { data: result.data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error("ไม่สามารถแก้ไขงานได้")
+    };
+  }
 }
 
 export async function setNakhonNotified(
