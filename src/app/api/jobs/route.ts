@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, responsible_unit, doc_time_start, doc_time_end, doc_area_title, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
+        "id, outage_date, equipment_code, responsible_unit, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })
@@ -87,10 +87,12 @@ export async function GET(request: Request) {
     const jobs = (data ?? []).map((job) => ({
       id: job.id,
       outage_date: job.outage_date,
+      equipment_code: job.equipment_code,
       responsible_unit: job.responsible_unit ?? null,
       time_start: job.doc_time_start ?? null,
       time_end: job.doc_time_end ?? null,
       area_title: job.doc_area_title ?? null,
+      display_area: job.doc_area_title ?? job.doc_purpose ?? null,
       status: deriveJobStatus(job)
     }));
 

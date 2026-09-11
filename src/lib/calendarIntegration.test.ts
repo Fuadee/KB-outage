@@ -33,8 +33,11 @@ test("calendar exposes all unit filters and applies them to day details", () => 
   assert.match(calendarPage, /label: "อ่าวนาง"/);
   assert.match(calendarPage, /visibleDayJobs/);
   assert.match(calendarPage, /matchesResponsibleUnitFilter/);
-  assert.match(jobsRoute, /id, outage_date, responsible_unit,/);
+  assert.match(jobsRoute, /id, outage_date, equipment_code, responsible_unit,/);
   assert.match(jobsRoute, /responsible_unit: job\.responsible_unit \?\? null/);
+  assert.match(jobsRoute, /equipment_code: job\.equipment_code/);
+  assert.match(jobsRoute, /area_title: job\.doc_area_title \?\? null/);
+  assert.match(jobsRoute, /display_area: job\.doc_area_title \?\? job\.doc_purpose \?\? null/);
 });
 
 test("calendar keeps month navigation, today navigation, and caps summaries at three rows", () => {
@@ -103,7 +106,8 @@ test("mobile keeps a seven-column month overview and moves detail below it", () 
   assert.match(calendarPage, /handleMobileDayClick\(date\)/);
   assert.match(calendarPage, /aria-pressed=\{isSelected\}/);
   assert.match(calendarPage, /งาน\{formatThaiCalendarDate\(selectedDate\)\}/);
-  assert.match(calendarPage, /selectedDaySummary\?\.entries\.length/);
+  assert.match(calendarPage, /visibleDayJobs\.length/);
+  assert.match(calendarPage, /<MobileSelectedDayJobCard/);
   assert.match(calendarPage, /ไม่มีงานในวันนี้/);
   assert.match(calendarPage, /fixed inset-0 z-50 hidden justify-end lg:flex/);
   assert.doesNotMatch(calendarPage, /window\.innerWidth|matchMedia/);
@@ -114,8 +118,35 @@ test("mobile cells show only status dots and counts while reusing filtered summa
   assert.match(calendarPage, /const mobileStatuses = CALENDAR_STATUS_ORDER\.filter/);
   assert.match(calendarPage, /statusStyles\[status\]\.dot/);
   assert.match(calendarPage, /\{daySummary\.total\}/);
-  assert.match(calendarPage, /selectedDaySummary = selectedDate/);
-  assert.match(calendarPage, /summaryByDate\.get\(formatDateKey\(selectedDate\)\)/);
+  assert.match(calendarPage, /setDayRequestRevision/);
+  assert.match(calendarPage, /fetch\(`\/api\/jobs\?date=\$\{dateKey\}`\)/);
+});
+
+test("mobile selected-day detail renders actual compact jobs without drill-down", () => {
+  const componentStart = calendarPage.indexOf(
+    "function MobileSelectedDayJobCard"
+  );
+  const componentEnd = calendarPage.indexOf(
+    "const responsibleUnitFilters",
+    componentStart
+  );
+  const mobileCard = calendarPage.slice(componentStart, componentEnd);
+
+  assert.match(mobileCard, /data-mobile-selected-job/);
+  assert.match(mobileCard, /getResponsibleUnitShortLabel\(job\.responsible_unit\)/);
+  assert.match(mobileCard, /getCalendarStatusLabel\(job\.status\)/);
+  assert.match(mobileCard, /job\.equipment_code/);
+  assert.match(mobileCard, /job\.display_area/);
+  assert.match(mobileCard, /break-words text-sm leading-5/);
+  assert.doesNotMatch(mobileCard, /formatTimeRange|<Link|href=|onClick|chevron/i);
+  assert.match(calendarPage, /visibleDayJobs\.map\(\(job\) =>/);
+  assert.doesNotMatch(
+    calendarPage.slice(
+      calendarPage.indexOf('<section\n          aria-live="polite"'),
+      calendarPage.indexOf("</section>", calendarPage.indexOf('<section\n          aria-live="polite"'))
+    ),
+    /selectedDaySummary|CalendarSummaryRow/
+  );
 });
 
 test("mobile controls stay compact while wide tablet and desktop keep full presentation", () => {

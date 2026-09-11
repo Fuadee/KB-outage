@@ -88,12 +88,51 @@ function CalendarSummaryRow({ entry }: { entry: CalendarSummaryEntry }) {
 type DayJob = {
   id: string;
   outage_date: string;
+  equipment_code: string | null;
   time_start: string | null;
   time_end: string | null;
   area_title: string | null;
+  display_area: string | null;
   status: string;
   responsible_unit: ResponsibleUnit | null;
 };
+
+function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
+  const statusKey = CALENDAR_STATUS_ORDER.find(
+    (status) => status === job.status
+  );
+  const statusDotStyle = statusKey
+    ? statusStyles[statusKey].dot
+    : statusStyles.Draft.dot;
+
+  return (
+    <article
+      data-mobile-selected-job
+      className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex h-5 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none ${getResponsibleUnitChipStyle(job.responsible_unit)}`}
+        >
+          {getResponsibleUnitShortLabel(job.responsible_unit)}
+        </span>
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-700">
+          <span
+            aria-hidden="true"
+            className={`h-2 w-2 shrink-0 rounded-full ${statusDotStyle}`}
+          />
+          {getCalendarStatusLabel(job.status)}
+        </span>
+      </div>
+      <p className="mt-2 break-words text-sm font-semibold leading-5 text-slate-900">
+        {job.equipment_code || "ไม่ระบุรหัสอุปกรณ์"}
+      </p>
+      <p className="mt-0.5 break-words text-sm leading-5 text-slate-600">
+        {job.display_area || "ไม่ระบุพื้นที่"}
+      </p>
+    </article>
+  );
+}
 
 const responsibleUnitFilters: Array<{
   id: ResponsibleUnitFilter;
@@ -149,6 +188,7 @@ export default function CalendarPage() {
   const [dayJobs, setDayJobs] = useState<DayJob[]>([]);
   const [dayLoading, setDayLoading] = useState(false);
   const [dayError, setDayError] = useState<string | null>(null);
+  const [dayRequestRevision, setDayRequestRevision] = useState(0);
 
   const monthStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
   const monthEnd = useMemo(() => endOfMonth(currentMonth), [currentMonth]);
@@ -225,7 +265,7 @@ export default function CalendarPage() {
   }, [gridStart, gridEnd]);
 
   useEffect(() => {
-    if (!drawerOpen || !selectedDate) return;
+    if (!selectedDate || dayRequestRevision === 0) return;
     const fetchDayJobs = async () => {
       setDayLoading(true);
       setDayError(null);
@@ -251,7 +291,7 @@ export default function CalendarPage() {
     };
 
     fetchDayJobs();
-  }, [drawerOpen, selectedDate]);
+  }, [dayRequestRevision, selectedDate]);
 
   const handlePreviousMonth = () => {
     setCurrentMonth(
@@ -277,11 +317,16 @@ export default function CalendarPage() {
 
   const handleDayClick = (date: Date) => {
     setSelectedDate(date);
+    setDayRequestRevision((revision) => revision + 1);
     setDrawerOpen(true);
   };
 
   const handleMobileDayClick = (date: Date) => {
+    setDayJobs([]);
+    setDayError(null);
+    setDayLoading(true);
     setSelectedDate(date);
+    setDayRequestRevision((revision) => revision + 1);
   };
 
   const closeDrawer = () => {
@@ -290,9 +335,6 @@ export default function CalendarPage() {
     setDayError(null);
   };
 
-  const selectedDaySummary = selectedDate
-    ? summaryByDate.get(formatDateKey(selectedDate))
-    : undefined;
   const selectedDateIsToday = selectedDate
     ? isSameDate(selectedDate, new Date())
     : false;
@@ -579,18 +621,18 @@ export default function CalendarPage() {
                   </span>
                 ) : null}
               </div>
-              {loadingSummary ? (
+              {dayLoading ? (
                 <div className="mt-3 h-12 animate-pulse rounded-md bg-slate-100" />
-              ) : summaryError ? (
+              ) : dayError ? (
                 <p className="mt-3 text-xs font-medium text-rose-600">
                   โหลดรายละเอียดไม่สำเร็จ
                 </p>
-              ) : selectedDaySummary?.entries.length ? (
+              ) : visibleDayJobs.length ? (
                 <div className="mt-3 space-y-2">
-                  {selectedDaySummary.entries.map((entry) => (
-                    <CalendarSummaryRow
-                      key={`mobile-detail-${entry.responsible_unit ?? "legacy"}-${entry.status}`}
-                      entry={entry}
+                  {visibleDayJobs.map((job) => (
+                    <MobileSelectedDayJobCard
+                      key={`mobile-detail-${job.id}`}
+                      job={job}
                     />
                   ))}
                 </div>
