@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import Button, { buttonStyles } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
+import SwitchingField from "@/components/job/SwitchingField";
 import { createJob } from "@/lib/jobsRepo";
 import {
   MAX_CUSTOMER_COUNT,
@@ -24,10 +25,12 @@ export default function NewJobPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
+  const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const switchingFirstOptionRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -35,6 +38,12 @@ export default function NewJobPage() {
 
     if (!outageDate || !equipmentCode.trim() || !responsibleUnit) {
       setError("กรุณากรอกวันที่ รหัสอุปกรณ์ และเลือกหน่วยงานผู้รับผิดชอบ");
+      return;
+    }
+
+    if (hasSwitching === null) {
+      setError("กรุณาเลือกว่ามี Switching หรือไม่มี Switching");
+      requestAnimationFrame(() => switchingFirstOptionRef.current?.focus());
       return;
     }
 
@@ -49,6 +58,7 @@ export default function NewJobPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit,
+      has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
     });
@@ -112,6 +122,16 @@ export default function NewJobPage() {
                 ))}
               </select>
             </label>
+            <SwitchingField
+              value={hasSwitching}
+              onChange={(value) => {
+                setHasSwitching(value);
+                if (error?.includes("Switching")) setError(null);
+              }}
+              name="new-job-switching"
+              invalid={error?.includes("Switching") ?? false}
+              firstOptionRef={switchingFirstOptionRef}
+            />
             <label className={cn("flex flex-col gap-2", labelText)}>
               จำนวนผู้ใช้ไฟฟ้า
               <div className="relative">

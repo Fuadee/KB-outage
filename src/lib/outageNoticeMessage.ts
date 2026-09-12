@@ -1,12 +1,18 @@
 import { formatCustomerCount } from "./jobMetadata.ts";
 import { normalizeGoogleMyMapsViewerUrl } from "./mapUrl.ts";
+import {
+  getDistributionWorkflow,
+  OPERATIONS_DISTRIBUTION_ASSIGNEE
+} from "./distributionWorkflow.ts";
+import { formatThaiDateBE } from "./reminder.ts";
 
 export const OUTAGE_CALENDAR_URL = "https://kb-outage.vercel.app/calendar";
 export const NOTICE_BOOK_PICKUP_LOCATION = "ผปบ. ชั้น 3";
-export const NOTICE_ASSIGNMENT_RESPONSIBLE = "กะ 1";
+export const NOTICE_ASSIGNMENT_RESPONSIBLE = OPERATIONS_DISTRIBUTION_ASSIGNEE;
 
 export type OutageNoticeMessageJob = {
   outage_date: string;
+  responsible_unit?: unknown;
   customer_count?: number | null;
   doc_purpose?: string | null;
   doc_area_title?: string | null;
@@ -34,6 +40,7 @@ export function getOutageNoticeAreaText(
 export function buildOutageNoticeLineMessage(
   job: OutageNoticeMessageJob
 ): string {
+  const workflow = getDistributionWorkflow(job);
   const customerCount =
     typeof job.customer_count === "number"
       ? formatCustomerCount(job.customer_count)
@@ -41,13 +48,20 @@ export function buildOutageNoticeLineMessage(
   const mapUrl =
     normalizeGoogleMyMapsViewerUrl(job.map_link) || "ไม่มีข้อมูลแผนที่";
 
-  return [
-    "📢 แจ้งงานแจกหนังสือดับไฟวันนี้",
+  const lines = [
+    workflow.route === "OPERATIONS"
+      ? "📢 แจ้งงานแจกหนังสือดับไฟวันนี้"
+      : "📢 แจ้งดำเนินการแจกหนังสือดับไฟ",
     "",
     `📍 พื้นที่: ${getOutageNoticeAreaText(job)}`,
     `📄 จำนวนหนังสือ: ${customerCount} ราย`,
-    `👷 ผู้ดำเนินการ: ${NOTICE_ASSIGNMENT_RESPONSIBLE}`,
-    `📌 รับหนังสือ: ${NOTICE_BOOK_PICKUP_LOCATION}`,
+    `👷 ผู้ดำเนินการ: ${workflow.assignmentLabel ?? "ไม่ระบุหน่วยงาน"}`,
+    workflow.route === "OPERATIONS"
+      ? null
+      : `📅 วันดับไฟ: ${formatThaiDateBE(job.outage_date)}`,
+    workflow.route === "OPERATIONS"
+      ? `📌 รับหนังสือ: ${NOTICE_BOOK_PICKUP_LOCATION}`
+      : null,
     `🗺️ แผนที่: ${mapUrl}`,
     "⚠️ หากข้อมูลพื้นที่ไม่ตรง กรุณาแจ้งกลับเพื่อแก้ไข",
     "",
@@ -55,5 +69,7 @@ export function buildOutageNoticeLineMessage(
     `📅 แผนดับไฟ: ${OUTAGE_CALENDAR_URL}`,
     "",
     "ขอบคุณครับ 🙏"
-  ].join("\n");
+  ];
+
+  return lines.filter((line): line is string => line !== null).join("\n");
 }

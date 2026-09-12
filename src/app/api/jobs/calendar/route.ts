@@ -56,6 +56,7 @@ type JobStatusSource = {
   social_posted_at: string | null;
   notice_status: string | null;
   notice_date: string | null;
+  notice_completed_at?: string | null;
   is_closed: boolean | null;
 };
 function deriveJobStatus(job: JobStatusSource): CalendarStatus {
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "outage_date, responsible_unit, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed"
+        "outage_date, responsible_unit, has_switching, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed"
       )
       .gte("outage_date", from)
       .lte("outage_date", to);
@@ -102,6 +103,7 @@ export async function GET(request: Request) {
           {
             date: job.outage_date,
             responsible_unit: job.responsible_unit,
+            has_switching: job.has_switching,
             status: deriveJobStatus(job)
           }
         ];

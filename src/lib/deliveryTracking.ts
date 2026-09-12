@@ -1,5 +1,10 @@
 import { randomBytes } from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
+import {
+  decodeSupabaseJwtPayload,
+  isPrivilegedSupabaseServerKey
+} from "@/lib/supabaseServerKey";
 import type {
   DeliveryBatch,
   DeliveryBatchWithTargets,
@@ -23,20 +28,10 @@ export class DeliveryTrackingError extends Error {
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_ENV_CANDIDATES = [
+  "SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SERVICE_ROLE_KEY"
 ] as const;
-
-const decodeJwtPayload = (token: string) => {
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-  try {
-    const payload = Buffer.from(parts[1], "base64url").toString("utf8");
-    return JSON.parse(payload) as { role?: string };
-  } catch {
-    return null;
-  }
-};
 
 const resolveServiceRoleKey = () => {
   for (const key of SERVICE_ROLE_ENV_CANDIDATES) {
@@ -67,10 +62,10 @@ const createAdminClient = () => {
     );
   }
 
-  const payload = decodeJwtPayload(serviceRole.value);
-  if (payload?.role !== "service_role") {
+  if (!isPrivilegedSupabaseServerKey(serviceRole.value)) {
+    const payload = decodeSupabaseJwtPayload(serviceRole.value);
     throw new DeliveryTrackingError(
-      `ค่า ${serviceRole.keyName} ไม่ใช่ service role key (role=${payload?.role ?? "unknown"})`,
+      `ค่า ${serviceRole.keyName} ไม่ใช่ Supabase secret/service role key (role=${payload?.role ?? "unknown"})`,
       "INVALID_SERVICE_ROLE_KEY",
       { env: serviceRole.keyName, role: payload?.role ?? null }
     );
@@ -82,10 +77,15 @@ const createAdminClient = () => {
     );
   }
 
+  ensureSystemCertificateAuthorities();
+
   return createClient(SUPABASE_URL, serviceRole.value, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" })
     }
   });
 };

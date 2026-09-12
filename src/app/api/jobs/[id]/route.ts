@@ -60,6 +60,7 @@ export async function PATCH(
       outage_date?: unknown;
       equipment_code?: unknown;
       responsible_unit?: unknown;
+      has_switching?: unknown;
       customer_count?: unknown;
       note?: unknown;
     } | null;
@@ -70,6 +71,7 @@ export async function PATCH(
         ? body.equipment_code.trim()
         : "";
     const responsibleUnit = body?.responsible_unit;
+    const hasSwitching = body?.has_switching;
     const validResponsibleUnit =
       responsibleUnit === null || isResponsibleUnit(responsibleUnit);
     const customerCount = parseCustomerCount(body?.customer_count);
@@ -85,6 +87,7 @@ export async function PATCH(
       !isValidDateString(outageDate) ||
       !equipmentCode ||
       !validResponsibleUnit ||
+      !(hasSwitching === null || typeof hasSwitching === "boolean") ||
       (body?.note !== undefined &&
         body.note !== null &&
         typeof body.note !== "string")
@@ -104,13 +107,14 @@ export async function PATCH(
         outage_date: outageDate,
         equipment_code: equipmentCode,
         responsible_unit: responsibleUnit,
+        has_switching: hasSwitching,
         customer_count: customerCount.value,
         note
       })
       .eq("id", jobId)
       .eq("is_closed", false)
       .select(
-        "id, outage_date, equipment_code, responsible_unit, customer_count, note"
+        "id, outage_date, equipment_code, responsible_unit, has_switching, customer_count, note"
       )
       .maybeSingle();
 
@@ -126,6 +130,9 @@ export async function PATCH(
     }
     if (data.customer_count !== customerCount.value) {
       throw new Error("Customer count was not persisted by the database.");
+    }
+    if (data.has_switching !== hasSwitching) {
+      throw new Error("Switching value was not persisted by the database.");
     }
 
     return NextResponse.json({ ok: true, data });

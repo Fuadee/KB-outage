@@ -11,9 +11,10 @@ const DATE = "2026-09-15";
 
 function record(
   responsible_unit: CalendarSummaryRecord["responsible_unit"],
-  status: CalendarSummaryRecord["status"]
+  status: CalendarSummaryRecord["status"],
+  has_switching = false
 ): CalendarSummaryRecord {
-  return { date: DATE, responsible_unit, status };
+  return { date: DATE, responsible_unit, status, has_switching };
 }
 
 test("separates two units that share the same status", () => {
@@ -25,8 +26,8 @@ test("separates two units that share the same status", () => {
 
   assert.equal(summary[0].total, 3);
   assert.deepEqual(summary[0].entries, [
-    { responsible_unit: "แผนกปฏิบัติการ", status: "Posted", count: 2 },
-    { responsible_unit: "แผนกก่อสร้าง", status: "Posted", count: 1 }
+    { responsible_unit: "แผนกปฏิบัติการ", status: "Posted", count: 2, switching_count: 0 },
+    { responsible_unit: "แผนกก่อสร้าง", status: "Posted", count: 1, switching_count: 0 }
   ]);
 });
 
@@ -94,6 +95,24 @@ test("normalizes missing and unknown units as legacy without guessing", () => {
   ]);
 
   assert.deepEqual(summary[0].entries, [
-    { responsible_unit: null, status: "Doc", count: 2 }
+    { responsible_unit: null, status: "Doc", count: 2, switching_count: 0 }
   ]);
+});
+
+test("counts Switching as supplemental calendar information", () => {
+  const summary = buildCalendarSummary([
+    record("แผนกปฏิบัติการ", "Posted", true),
+    record("แผนกปฏิบัติการ", "Posted", false),
+    record("แผนกก่อสร้าง", "Posted", true)
+  ]);
+
+  assert.equal(summary[0].switching_count, 2);
+  assert.deepEqual(
+    summary[0].entries.map((entry) => entry.switching_count),
+    [1, 1]
+  );
+  assert.equal(
+    filterCalendarSummary(summary, "แผนกปฏิบัติการ")[0].switching_count,
+    1
+  );
 });

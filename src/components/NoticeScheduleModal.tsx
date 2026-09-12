@@ -7,6 +7,11 @@ import Input from "@/components/ui/Input";
 import type { OutageJob } from "@/lib/jobsRepo";
 import { normalizeGoogleMyMapsViewerUrl } from "@/lib/mapUrl";
 import { buildOutageNoticeLineMessage } from "@/lib/outageNoticeMessage";
+import { isNoticeCompleted, isNoticeScheduled } from "@/lib/documentWorkflow";
+import {
+  getDistributionWorkflow,
+  isDirectDistributionRoute
+} from "@/lib/distributionWorkflow";
 
 const TOAST_TIMEOUT_MS = 2000;
 
@@ -19,8 +24,16 @@ type NoticeScheduleModalProps = {
 
 type NoticeScheduleErrors = {
   noticeDate?: string;
+  completion?: string;
   submit?: string;
 };
+
+function toDateTimeLocal(value?: string | null): string {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
 
 export default function NoticeScheduleModal({
   open,
@@ -28,10 +41,20 @@ export default function NoticeScheduleModal({
   job,
   onJobUpdate
 }: NoticeScheduleModalProps) {
-  const [noticeDate, setNoticeDate] = useState("");
-  const [noticeBy, setNoticeBy] = useState("");
+  const distributionWorkflow = useMemo(
+    () => (job ? getDistributionWorkflow(job) : null),
+    [job]
+  );
+  const [noticeDate, setNoticeDate] = useState(() => job?.notice_date ?? "");
+  const [completedAt, setCompletedAt] = useState(() =>
+    toDateTimeLocal(job?.notice_completed_at)
+  );
+  const [completedBy, setCompletedBy] = useState(
+    () => job?.notice_by ?? distributionWorkflow?.assignmentLabel ?? ""
+  );
   const [errors, setErrors] = useState<NoticeScheduleErrors>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [deliverySummary, setDeliverySummary] = useState<{
     total: number;
@@ -44,15 +67,6 @@ export default function NoticeScheduleModal({
       delivered_at: string | null;
     }>;
   } | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setNoticeDate(job?.notice_date ?? "");
-    setNoticeBy(job?.notice_by ?? "");
-    setErrors({});
-    setToastMessage(null);
-    setIsSaving(false);
-  }, [open, job]);
 
   const previewText = useMemo(
     () => (job ? buildOutageNoticeLineMessage(job) : ""),
@@ -75,9 +89,22 @@ export default function NoticeScheduleModal({
     [job?.customer_count, mapUrl]
   );
 
+  const jobId = job?.id ?? null;
+  const noticeScheduled = job ? isNoticeScheduled(job) : false;
+  const isOperationsFlow = distributionWorkflow?.route === "OPERATIONS";
+  const isDirectFlow = distributionWorkflow
+    ? isDirectDistributionRoute(distributionWorkflow.route)
+    : false;
+  const isCompleted = distributionWorkflow?.completed ?? false;
+  const showMessagePreview =
+    Boolean(job) && !isCompleted && distributionWorkflow?.route !== "UNASSIGNED";
+  const showCompletion =
+    Boolean(job) &&
+    (isCompleted || isDirectFlow || (isOperationsFlow && noticeScheduled));
+
   const fetchDeliverySummary = useCallback(async () => {
-    if (!job) return;
-    const response = await fetch(`/api/jobs/${job.id}/delivery-batch`, {
+    if (!jobId) return;
+    const response = await fetch(`/api/jobs/${jobId}/delivery-batch`, {
       method: "GET"
     });
     const result = await response.json().catch(() => null);
@@ -109,16 +136,12 @@ export default function NoticeScheduleModal({
         })
       )
     });
-  }, [job]);
+  }, [jobId]);
 
   useEffect(() => {
-    if (!open || !job || job.notice_status !== "SCHEDULED") return;
-    console.info("[notice-modal] scheduled job ready for delivery tracking", {
-      jobId: job.id,
-      noticeStatus: job.notice_status
-    });
+    if (!open || !noticeScheduled) return;
     fetchDeliverySummary();
-  }, [fetchDeliverySummary, job, open]);
+  }, [fetchDeliverySummary, noticeScheduled, open]);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -146,8 +169,7 @@ export default function NoticeScheduleModal({
     try {
       const payload = {
         jobId: job.id,
-        notice_date: noticeDate,
-        notice_by: noticeBy.trim() || null
+        notice_date: noticeDate
       };
       const response = await fetch("/api/jobs/notice-schedule", {
         method: "POST",
@@ -160,15 +182,15 @@ export default function NoticeScheduleModal({
         throw new Error(result?.error ?? "ไม่สามารถบันทึกกำหนดการได้");
       }
 
-      const scheduledAt =
-        result.notice_scheduled_at ?? new Date().toISOString();
-
-      onJobUpdate?.(job.id, {
-        notice_status: "SCHEDULED",
-        notice_date: payload.notice_date,
-        notice_by: payload.notice_by,
-        notice_scheduled_at: scheduledAt
-      });
+      onJobUpdate?.(
+        job.id,
+        result.job ?? {
+          notice_status: "SCHEDULED",
+          notice_date: payload.notice_date,
+          notice_scheduled_at:
+            result.notice_scheduled_at ?? new Date().toISOString()
+        }
+      );
 
       await fetchDeliverySummary();
       return true;
@@ -180,6 +202,47 @@ export default function NoticeScheduleModal({
       return false;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!job) return;
+    const completedDate = new Date(completedAt);
+    if (
+      !completedAt ||
+      Number.isNaN(completedDate.getTime()) ||
+      !completedBy.trim()
+    ) {
+      setErrors({ completion: "กรุณาระบุวันเวลาและผู้แจกจริง" });
+      return;
+    }
+
+    setIsCompleting(true);
+    setErrors({});
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/notice-completion`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completed_at: completedDate.toISOString(),
+          completed_by: completedBy.trim()
+        })
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "บันทึกผลการแจกหนังสือไม่สำเร็จ");
+      }
+      onJobUpdate?.(job.id, result.job ?? {});
+      setToastMessage("บันทึกว่าแจกหนังสือแล้ว");
+    } catch (error) {
+      setErrors({
+        completion:
+          error instanceof Error
+            ? error.message
+            : "บันทึกผลการแจกหนังสือไม่สำเร็จ"
+      });
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -222,7 +285,7 @@ export default function NoticeScheduleModal({
   return (
     <Modal
       isOpen={open}
-      title="กำหนดการแจ้งหนังสือดับไฟ"
+      title={distributionWorkflow?.modalTitle ?? "การแจกหนังสือดับไฟ"}
       onClose={() => onOpenChange(false)}
       panelClassName="max-w-3xl"
     >
@@ -232,50 +295,53 @@ export default function NoticeScheduleModal({
             {toastMessage}
           </div>
         ) : null}
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-          วันที่จะไปดำเนินการแจ้ง
-          <Input
-            type="date"
-            value={noticeDate}
-            onChange={(event) => setNoticeDate(event.target.value)}
-            required
-          />
-          {errors.noticeDate ? (
-            <span className="text-xs text-red-600">{errors.noticeDate}</span>
-          ) : null}
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-          ผู้แจกจริง (บันทึกภายหลัง)
-          <Input
-            type="text"
-            value={noticeBy}
-            onChange={(event) => setNoticeBy(event.target.value)}
-            placeholder="เช่น พี่บ่าว (ไม่บังคับ)"
-          />
-          <span className="text-xs font-normal leading-5 text-slate-500">
-            ชื่อนี้ใช้บันทึกผู้ที่ไปแจกจริงภายหลัง และไม่ถูกนำไปใส่ข้อความ LINE
-          </span>
-        </label>
-        <section className="space-y-3 border-t border-slate-200 pt-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
-              ข้อความสำหรับส่ง LINE
-            </h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              ข้อความสร้างจากข้อมูลล่าสุดของ Job และจะไม่ถูกบันทึกซ้ำในฐานข้อมูล
-            </p>
+        {isOperationsFlow && !isCompleted ? (
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            วันที่จะไปดำเนินการแจ้ง
+            <Input
+              type="date"
+              value={noticeDate}
+              onChange={(event) => setNoticeDate(event.target.value)}
+              required
+            />
+            {errors.noticeDate ? (
+              <span className="text-xs text-red-600">{errors.noticeDate}</span>
+            ) : null}
+          </label>
+        ) : null}
+        {showMessagePreview ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            ผู้รับผิดชอบตอนมอบหมายงาน:{" "}
+            <strong>{distributionWorkflow?.assignmentLabel}</strong>
           </div>
-          {missingSourceMessage ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              ข้อมูลยังไม่ครบ: {missingSourceMessage}
+        ) : null}
+        {distributionWorkflow?.route === "UNASSIGNED" && !isCompleted ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            กรุณาระบุหน่วยงานผู้รับผิดชอบในรายละเอียดงานก่อนมอบหมายการแจกหนังสือ
+          </div>
+        ) : null}
+        {showMessagePreview ? (
+          <section className="space-y-3 border-t border-slate-200 pt-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                ข้อความสำหรับส่ง LINE
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                ข้อความสร้างจากข้อมูลล่าสุดของ Job และจะไม่ถูกบันทึกซ้ำในฐานข้อมูล
+              </p>
             </div>
-          ) : null}
-          <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
-              {previewText || "—"}
-            </pre>
-          </div>
-        </section>
+            {missingSourceMessage ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                ข้อมูลยังไม่ครบ: {missingSourceMessage}
+              </div>
+            ) : null}
+            <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
+                {previewText || "—"}
+              </pre>
+            </div>
+          </section>
+        ) : null}
         {errors.submit ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {errors.submit}
@@ -290,25 +356,89 @@ export default function NoticeScheduleModal({
           >
             ยกเลิก
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleCopy()}
-            disabled={isSaving}
-            className="w-full sm:w-auto"
-          >
-            คัดลอกข้อความ
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSaving}
-            className="w-full sm:w-auto"
-          >
-            {isSaving ? "กำลังบันทึก..." : "บันทึกและคัดลอกข้อความ"}
-          </Button>
+          {showMessagePreview ? (
+            <Button
+              type="button"
+              variant={isOperationsFlow ? "secondary" : "primary"}
+              onClick={() => void handleCopy()}
+              disabled={isSaving || isCompleting}
+              className="w-full sm:w-auto"
+            >
+              คัดลอกข้อความ
+            </Button>
+          ) : null}
+          {isOperationsFlow && !isCompleted ? (
+            <Button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSaving || isCompleting}
+              className="w-full sm:w-auto"
+            >
+              {isSaving ? "กำลังบันทึก..." : "บันทึกและคัดลอกข้อความ"}
+            </Button>
+          ) : null}
         </div>
-        {job?.notice_status === "SCHEDULED" ? (
+        {job && showCompletion ? (
+          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                ผลการแจกหนังสือจริง
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {isOperationsFlow
+                  ? "กำหนดการไม่ถือว่าแจกเสร็จ ให้ยืนยันส่วนนี้เมื่อทราบผู้ที่ไปแจกจริงแล้ว"
+                  : "ยืนยันส่วนนี้เมื่อทราบวันเวลาและผู้ที่แจกจริงแล้ว"}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                วันและเวลาที่แจกจริง
+                <Input
+                  type="datetime-local"
+                  value={completedAt}
+                  onChange={(event) => setCompletedAt(event.target.value)}
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                ผู้แจกจริง
+                <Input
+                  type="text"
+                  value={completedBy}
+                  maxLength={200}
+                  onChange={(event) => setCompletedBy(event.target.value)}
+                  placeholder="ชื่อผู้ที่ดำเนินการจริง"
+                />
+              </label>
+            </div>
+            {errors.completion ? (
+              <p className="text-sm text-rose-700">{errors.completion}</p>
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span
+                className={
+                  isNoticeCompleted(job)
+                    ? "text-sm font-semibold text-emerald-700"
+                    : "text-sm font-medium text-amber-700"
+                }
+              >
+                {isNoticeCompleted(job) ? "แจกหนังสือแล้ว" : "สถานะ: รอแจก"}
+              </span>
+              <Button
+                type="button"
+                onClick={() => void handleComplete()}
+                disabled={isSaving || isCompleting}
+                className="w-full sm:w-auto"
+              >
+                {isCompleting
+                  ? "กำลังบันทึก..."
+                  : isNoticeCompleted(job)
+                    ? "แก้ไขผลการแจกจริง"
+                    : "ยืนยันว่าแจกหนังสือแล้ว"}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+        {job && isNoticeScheduled(job) ? (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-900">

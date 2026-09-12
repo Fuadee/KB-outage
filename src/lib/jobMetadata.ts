@@ -71,3 +71,9 @@ export function parseCustomerCount(value: unknown): CustomerCountParseResult {
 export function formatCustomerCount(value: number): string {
   return value.toLocaleString("en-US");
 }
+
+export function getSwitchingLabel(value: boolean | null | undefined): string {
+  if (value === true) return "มี";
+  if (value === false) return "ไม่มี";
+  return "ยังไม่ได้ระบุ";
+}

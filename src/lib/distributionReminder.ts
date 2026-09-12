@@ -11,6 +11,7 @@ export type DistributionReminderState =
 export type DistributionReminderStatus = {
   state: DistributionReminderState;
   dueDate: string | null;
+  plannedDate: string | null;
   distributionDate: string | null;
   distributionBy: string | null;
   daysUntilDue: number | null;
@@ -94,23 +95,30 @@ export function getDistributionReminderStatus({
   noticeDate,
   noticeBy,
   noticeStatus,
+  noticeCompletedAt,
   now = new Date()
 }: {
   outageDate?: string | null;
   noticeDate?: string | null;
   noticeBy?: string | null;
   noticeStatus?: string | null;
+  noticeCompletedAt?: string | null;
   now?: Date;
 }): DistributionReminderStatus {
-  const distributionDate = normalizeCalendarDate(noticeDate);
+  const plannedDate = normalizeCalendarDate(noticeDate);
+  const distributionDate = normalizeCalendarDate(noticeCompletedAt);
   const distributionBy = noticeBy?.trim() || null;
-  const isDone = noticeStatus === "SCHEDULED" || Boolean(distributionDate);
-  const dueDate = getDistributionDueDate(outageDate);
+  const isDone =
+    noticeStatus === "COMPLETED" ||
+    noticeStatus === "SENT" ||
+    Boolean(distributionDate);
+  const dueDate = plannedDate ?? getDistributionDueDate(outageDate);
 
   if (isDone) {
     return {
       state: "DONE",
       dueDate,
+      plannedDate,
       distributionDate,
       distributionBy,
       daysUntilDue: null,
@@ -122,6 +130,7 @@ export function getDistributionReminderStatus({
     return {
       state: "OUTAGE_DATE_UNKNOWN",
       dueDate: null,
+      plannedDate,
       distributionDate: null,
       distributionBy,
       daysUntilDue: null,
@@ -136,6 +145,7 @@ export function getDistributionReminderStatus({
     return {
       state: "UPCOMING",
       dueDate,
+      plannedDate,
       distributionDate: null,
       distributionBy,
       daysUntilDue: difference,
@@ -147,6 +157,7 @@ export function getDistributionReminderStatus({
     return {
       state: "DUE_TODAY",
       dueDate,
+      plannedDate,
       distributionDate: null,
       distributionBy,
       daysUntilDue: 0,
@@ -157,10 +168,10 @@ export function getDistributionReminderStatus({
   return {
     state: "OVERDUE",
     dueDate,
+    plannedDate,
     distributionDate: null,
     distributionBy,
     daysUntilDue: null,
     daysOverdue: Math.abs(difference)
   };
 }
-

@@ -1,4 +1,7 @@
+"use client";
+
 import { type FormEventHandler, type ReactNode, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { cardDark, titleText } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +15,42 @@ type ModalProps = {
   panelClassName?: string;
   bodyClassName?: string;
 };
+
+// Keep background isolation until the last modal closes (including nested
+// dialogs). Preserve pre-existing inline styles and inert state on cleanup.
+let openModalCount = 0;
+let restoreEnvironment: (() => void) | undefined;
+
+function isolateModalBackground() {
+  if (openModalCount++ === 0) {
+    const body = document.body;
+    const overflow = body.style.overflow;
+    const paddingRight = body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const workspaces = Array.from(
+      document.querySelectorAll<HTMLElement>(".operations-workspace")
+    ).map((element) => ({ element, inert: element.inert }));
+
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight) + scrollbarWidth}px`;
+    }
+    body.style.overflow = "hidden";
+    workspaces.forEach(({ element }) => { element.inert = true; });
+
+    restoreEnvironment = () => {
+      body.style.overflow = overflow;
+      body.style.paddingRight = paddingRight;
+      workspaces.forEach(({ element, inert }) => { element.inert = inert; });
+    };
+  }
+
+  return () => {
+    if (--openModalCount === 0) {
+      restoreEnvironment?.();
+      restoreEnvironment = undefined;
+    }
+  };
+}
 
 export default function Modal({
   isOpen,
@@ -29,28 +68,29 @@ export default function Modal({
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    const originalOverflow = document.body.style.overflow;
+    const restoreBackground = isolateModalBackground();
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onCloseRef.current();
       }
     };
 
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      restoreBackground();
       window.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  // A body portal prevents page spacing (e.g. space-y-6), scroll containers,
+  // and ancestor effects from affecting the fixed overlay's viewport bounds.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-modal-root>
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/40"
         onClick={onClose}
         role="presentation"
       />
@@ -109,6 +149,7 @@ export default function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

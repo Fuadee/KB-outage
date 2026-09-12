@@ -12,6 +12,7 @@ export type DocumentWorkflowAction =
   | "CREATE_DOCUMENT"
   | "RECEIVE_DOCUMENT"
   | "DELIVER_DOCUMENT"
+  | "COMPLETE_NOTICE"
   | "POST_SOCIAL"
   | "SCHEDULE_NOTICE"
   | "CLOSE_JOB"
@@ -29,6 +30,7 @@ export type DocumentWorkflowSource = {
   social_posted_at?: string | null;
   notice_status?: string | null;
   notice_date?: string | null;
+  notice_completed_at?: string | null;
   is_closed?: boolean | null;
 };
 
@@ -50,8 +52,8 @@ export const DOCUMENT_WORKFLOW_STAGE_LABELS: Record<
   WAITING_DOCUMENT: "Document ready / รอรับเอกสาร",
   WAITING_DELIVERY: "Received / รอส่งเอกสาร",
   READY_FOR_NOTICE: "Delivered / รอกำหนดแจ้งดับไฟ",
-  NOTICE_SCHEDULED: "Notice scheduled / รอลง Social",
-  READY_FOR_SOCIAL: "Notice scheduled / รอลง Social",
+  NOTICE_SCHEDULED: "Notice scheduled / รอแจกหนังสือ",
+  READY_FOR_SOCIAL: "Notice delivered / รอลง Social",
   SOCIAL_POSTED: "Social posted",
   CLOSED: "Closed"
 };
@@ -67,8 +69,18 @@ export function isSocialPosted(job: DocumentWorkflowSource): boolean {
 export function isNoticeScheduled(job: DocumentWorkflowSource): boolean {
   return (
     job.notice_status === "SCHEDULED" ||
+    job.notice_status === "COMPLETED" ||
     job.notice_status === "SENT" ||
-    Boolean(job.notice_date)
+    Boolean(job.notice_date) ||
+    Boolean(job.notice_completed_at)
+  );
+}
+
+export function isNoticeCompleted(job: DocumentWorkflowSource): boolean {
+  return (
+    job.notice_status === "COMPLETED" ||
+    job.notice_status === "SENT" ||
+    Boolean(job.notice_completed_at)
   );
 }
 
@@ -82,7 +94,8 @@ export function getDocumentWorkflowStage(
 ): DocumentWorkflowStage {
   if (job.is_closed) return "CLOSED";
   if (isSocialPosted(job)) return "SOCIAL_POSTED";
-  if (isNoticeScheduled(job)) return "READY_FOR_SOCIAL";
+  if (isNoticeCompleted(job)) return "READY_FOR_SOCIAL";
+  if (isNoticeScheduled(job)) return "NOTICE_SCHEDULED";
   if (job.document_delivered_at) return "READY_FOR_NOTICE";
   if (job.document_received_at) return "WAITING_DELIVERY";
   if (isDocumentReady(job)) return "WAITING_DOCUMENT";
@@ -102,6 +115,7 @@ export function getDocumentWorkflowAction(
     case "READY_FOR_NOTICE":
       return "SCHEDULE_NOTICE";
     case "NOTICE_SCHEDULED":
+      return "COMPLETE_NOTICE";
     case "READY_FOR_SOCIAL":
       return "POST_SOCIAL";
     case "SOCIAL_POSTED":
@@ -118,6 +132,7 @@ export function getDocumentWorkflowActionLabel(
     CREATE_DOCUMENT: "สร้างเอกสารดับไฟ",
     RECEIVE_DOCUMENT: "รับเอกสารแล้ว",
     DELIVER_DOCUMENT: "บันทึกการส่งเอกสาร",
+    COMPLETE_NOTICE: "ยืนยันว่าแจกหนังสือแล้ว",
     POST_SOCIAL: "Post ลงสื่อ Social",
     SCHEDULE_NOTICE: "แจ้งหนังสือดับไฟ",
     CLOSE_JOB: "ปิดงาน",
@@ -132,7 +147,8 @@ export function getLegacyCalendarStatus(
   const stage = getDocumentWorkflowStage(job);
   if (stage === "CLOSED") return "Done";
   if (stage === "SOCIAL_POSTED") return "Posted";
-  if (stage === "NOTICE_SCHEDULED" || stage === "READY_FOR_SOCIAL") return "Notice";
+  if (stage === "READY_FOR_SOCIAL") return "Notice";
+  if (stage === "NOTICE_SCHEDULED") return "Doc";
   if (stage !== "DRAFT") return "Doc";
   return "Draft";
 }

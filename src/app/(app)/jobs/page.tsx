@@ -38,11 +38,16 @@ import { inputLight } from "@/lib/theme";
 import { getJobCountdown, parseLocalDate } from "@/lib/dateUtils";
 import {
   getDocumentWorkflowAction,
-  getDocumentWorkflowStage,
   isDocumentReady,
+  isNoticeCompleted,
+  isNoticeScheduled,
   isSocialPosted
 } from "@/lib/documentWorkflow";
 import { normalizeGoogleMapsUrl } from "@/lib/mapUrl";
+import {
+  getDistributionWorkflow,
+  isDirectDistributionRoute
+} from "@/lib/distributionWorkflow";
 
 type TabOption = "active" | "closed";
 type ActionKey =
@@ -50,6 +55,7 @@ type ActionKey =
   | "create_doc"
   | "receive_document"
   | "deliver_document"
+  | "complete_notice"
   | "wait_approval"
   | "notify_outage_letter"
   | "close_job";
@@ -117,9 +123,19 @@ const getFilenameFromContentDisposition = (
 
 const getNextAction = (job: OutageJob): ActionKey => {
   const action = getDocumentWorkflowAction(job);
+  const distributionWorkflow = getDistributionWorkflow(job);
+  if (
+    !distributionWorkflow.completed &&
+    (isDirectDistributionRoute(distributionWorkflow.route) ||
+      distributionWorkflow.route === "UNASSIGNED") &&
+    (action === "SCHEDULE_NOTICE" || action === "COMPLETE_NOTICE")
+  ) {
+    return "notify_outage_letter";
+  }
   if (action === "CREATE_DOCUMENT") return "create_doc";
   if (action === "RECEIVE_DOCUMENT") return "receive_document";
   if (action === "DELIVER_DOCUMENT") return "deliver_document";
+  if (action === "COMPLETE_NOTICE") return "complete_notice";
   if (action === "POST_SOCIAL") return "wait_approval";
   if (action === "SCHEDULE_NOTICE") return "notify_outage_letter";
   return "close_job";
@@ -130,6 +146,7 @@ const actionLabelMap: Record<ActionKey, string> = {
   create_doc: "สร้างเอกสารดับไฟ",
   receive_document: "รับเอกสารแล้ว",
   deliver_document: "บันทึกการส่งเอกสาร",
+  complete_notice: "ยืนยันว่าแจกหนังสือแล้ว",
   wait_approval: "Post ลงสื่อ Social",
   notify_outage_letter: "แจ้งหนังสือดับไฟ",
   close_job: "ปิดงาน"
@@ -138,7 +155,8 @@ const actionLabelMap: Record<ActionKey, string> = {
 const getWorkflowSteps = (job: OutageJob): JobStep[] => {
   const isDocGenerated = isDocumentReady(job);
   const socialPosted = isSocialPosted(job);
-  const noticeScheduled = job.notice_status === "SCHEDULED" || Boolean(job.notice_date);
+  const noticeScheduled = isNoticeScheduled(job);
+  const noticeCompleted = isNoticeCompleted(job);
   const isClosed = job.is_closed ?? false;
 
   return [
@@ -152,25 +170,25 @@ const getWorkflowSteps = (job: OutageJob): JobStep[] => {
       label: "รับเอกสาร",
       state: !isDocGenerated
         ? "locked"
-        : job.document_received_at || noticeScheduled || socialPosted
+        : job.document_received_at || noticeCompleted || socialPosted
           ? "done"
           : "current"
     },
     {
       id: "delivered",
       label: "ส่งเอกสาร",
-      state: !job.document_received_at && !noticeScheduled && !socialPosted
+      state: !job.document_received_at && !noticeCompleted && !socialPosted
         ? "locked"
-        : job.document_delivered_at || noticeScheduled || socialPosted
+        : job.document_delivered_at || noticeCompleted || socialPosted
           ? "done"
           : "current"
     },
     {
       id: "notice",
-      label: "แจ้งดับไฟ",
-      state: !job.document_delivered_at && !socialPosted
+      label: "แจกหนังสือ",
+      state: !job.document_delivered_at && !noticeCompleted && !socialPosted
         ? "locked"
-        : noticeScheduled || socialPosted
+        : noticeCompleted || socialPosted
           ? "done"
           : "current"
     },
@@ -179,7 +197,7 @@ const getWorkflowSteps = (job: OutageJob): JobStep[] => {
       label: "Social",
       state: socialPosted
         ? "done"
-        : !noticeScheduled
+        : !noticeCompleted
           ? "locked"
           : "current"
     },
@@ -303,16 +321,12 @@ export default function JobsPage() {
 
   useEffect(() => {
     if (!selectedJob) return;
-    window.setTimeout(() => {
-      notifiedDateRef.current?.focus();
-    }, 0);
+    notifiedDateRef.current?.focus({ preventScroll: true });
   }, [selectedJob]);
 
   useEffect(() => {
     if (!docJob) return;
-    window.setTimeout(() => {
-      docIssueDateRef.current?.focus();
-    }, 0);
+    docIssueDateRef.current?.focus({ preventScroll: true });
   }, [docJob]);
 
   const closeModal = () => {
@@ -928,11 +942,13 @@ export default function JobsPage() {
             const isDocGenerated = isDocumentReady(job);
             const isDocGenerating = job.doc_status === "GENERATING";
             const socialStatus = job.social_status ?? "DRAFT";
-            const noticeStatus = job.notice_status ?? "NONE";
-            const noticeScheduled = noticeStatus === "SCHEDULED" || Boolean(job.notice_date);
+            const noticeScheduled = isNoticeScheduled(job);
+            const noticeCompleted = isNoticeCompleted(job);
+            const distributionWorkflow = getDistributionWorkflow(job);
             const socialPosted = socialStatus === "POSTED" || Boolean(job.social_posted_at);
-            const showSocialButton = noticeScheduled;
-            const showNoticeButton = Boolean(job.document_delivered_at) || socialPosted;
+            const showSocialButton = noticeCompleted;
+            const showNoticeButton =
+              Boolean(job.document_delivered_at) || noticeScheduled || socialPosted;
             const canCloseJob = socialPosted && !isClosed;
             const nextAction = getNextAction(job);
             const workflowSteps = getWorkflowSteps(job);
@@ -1006,9 +1022,7 @@ export default function JobsPage() {
               secondaryActions.push({
                 id: "notify_outage_letter",
                 label:
-                  noticeScheduled
-                    ? "แก้ไขกำหนดการแจ้งหนังสือ"
-                    : "แจ้งหนังสือดับไฟ",
+                  distributionWorkflow.actionLabel,
                 onClick: () => setNoticeJob(job)
               });
             }
@@ -1026,9 +1040,8 @@ export default function JobsPage() {
               label:
                 nextAction === "wait_approval" && socialPosted
                   ? "Posted แล้วสื่อ Social"
-                  : nextAction === "notify_outage_letter" &&
-                      noticeScheduled
-                    ? "กำหนดการแจ้งเรียบร้อยแล้ว"
+                  : nextAction === "notify_outage_letter"
+                    ? distributionWorkflow.actionLabel
                     : actionLabelMap[nextAction],
               onClick: () => {
                 if (nextAction === "notify_nakhon") return openNotifiedModal(job);
@@ -1046,6 +1059,7 @@ export default function JobsPage() {
                 if (nextAction === "deliver_document") {
                   return openDocumentModal(job, "deliver");
                 }
+                if (nextAction === "complete_notice") return setNoticeJob(job);
                 if (nextAction === "notify_outage_letter") return setNoticeJob(job);
                 return openCloseModal(job);
               },
@@ -1069,7 +1083,14 @@ export default function JobsPage() {
               tertiaryItems.push(`ส่งเอกสารแล้ว · ${job.document_delivered_by ?? "-"}`);
             }
             if (socialStatus === "POSTED") tertiaryItems.push("โพสต์ Social แล้ว");
-            if (noticeStatus === "SCHEDULED") tertiaryItems.push("กำหนดการแจ้งเรียบร้อยแล้ว");
+            if (noticeCompleted) {
+              tertiaryItems.push(`แจกหนังสือแล้ว · ${job.notice_by ?? "-"}`);
+            } else if (
+              noticeScheduled &&
+              distributionWorkflow.route === "OPERATIONS"
+            ) {
+              tertiaryItems.push("กำหนดแจกแล้ว · รอแจก");
+            }
 
             return (
               <JobCard
@@ -1330,31 +1351,35 @@ export default function JobsPage() {
         </div>
       </Modal>
 
-      <SocialPostPreviewModal
-        job={socialJob}
-        isOpen={Boolean(socialJob)}
-        onClose={closeSocialModal}
-        onJobUpdate={handleSocialJobUpdate}
-      />
+      {socialJob ? (
+        <SocialPostPreviewModal
+          job={socialJob}
+          isOpen
+          onClose={closeSocialModal}
+          onJobUpdate={handleSocialJobUpdate}
+        />
+      ) : null}
 
-      <DocumentWorkflowModal
-        job={documentModal?.job ?? null}
-        mode={documentModal?.mode ?? "receive"}
-        open={Boolean(documentModal)}
-        onClose={() => setDocumentModal(null)}
-        onJobUpdate={handleDocumentJobUpdate}
-      />
+      {documentModal ? (
+        <DocumentWorkflowModal
+          job={documentModal.job}
+          mode={documentModal.mode}
+          open
+          onClose={() => setDocumentModal(null)}
+          onJobUpdate={handleDocumentJobUpdate}
+        />
+      ) : null}
 
-      <NoticeScheduleModal
-        job={noticeJob}
-        open={Boolean(noticeJob)}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            closeNoticeModal();
-          }
-        }}
-        onJobUpdate={handleNoticeJobUpdate}
-      />
+      {noticeJob ? (
+        <NoticeScheduleModal
+          job={noticeJob}
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) closeNoticeModal();
+          }}
+          onJobUpdate={handleNoticeJobUpdate}
+        />
+      ) : null}
 
       <Modal
         isOpen={Boolean(vulnerableJob)}

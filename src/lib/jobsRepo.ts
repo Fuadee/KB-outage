@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import type { PostgrestError } from "@supabase/supabase-js";
 import type { ResponsibleUnit } from "./jobMetadata";
 
 export type OutageJob = {
@@ -6,6 +7,7 @@ export type OutageJob = {
   outage_date: string;
   equipment_code: string;
   responsible_unit: ResponsibleUnit | null;
+  has_switching: boolean | null;
   customer_count: number | null;
   note: string | null;
   nakhon_status: "PENDING" | "NOTIFIED" | "NOT_REQUIRED";
@@ -41,10 +43,11 @@ export type OutageJob = {
   social_post_text: string | null;
   social_posted_at: string | null;
   social_approved_at: string | null;
-  notice_status: "NONE" | "SCHEDULED";
+  notice_status: "NONE" | "SCHEDULED" | "COMPLETED";
   notice_date: string | null;
   notice_by: string | null;
   notice_scheduled_at: string | null;
+  notice_completed_at: string | null;
   is_closed: boolean;
   closed_at: string | null;
   closed_by: string | null;
@@ -56,6 +59,7 @@ export type NewOutageJob = {
   outage_date: string;
   equipment_code: string;
   responsible_unit: ResponsibleUnit;
+  has_switching: boolean;
   customer_count: number | null;
   note?: string | null;
 };
@@ -64,17 +68,39 @@ export type UpdateOutageJob = {
   outage_date: string;
   equipment_code: string;
   responsible_unit: ResponsibleUnit | null;
+  has_switching: boolean | null;
   customer_count: number | null;
   note?: string | null;
 };
 
-export async function listJobs() {
-  return supabase
+const JOB_SELECT =
+  "id, outage_date, equipment_code, responsible_unit, has_switching, customer_count, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by, notice_scheduled_at, notice_completed_at, is_closed, closed_at, closed_by, created_at, updated_at";
+
+const LEGACY_JOB_SELECT = JOB_SELECT.replace(", notice_completed_at", "");
+
+type JobsQueryResult = {
+  data: OutageJob[] | null;
+  error: PostgrestError | null;
+};
+
+export async function listJobs(): Promise<JobsQueryResult> {
+  const response = await supabase
     .from("outage_jobs")
-    .select(
-      "id, outage_date, equipment_code, responsible_unit, customer_count, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by, notice_scheduled_at, is_closed, closed_at, closed_by, created_at, updated_at"
-    )
+    .select(JOB_SELECT)
     .order("outage_date", { ascending: true });
+
+  if (
+    response.error?.code === "42703" &&
+    /notice_completed_at/i.test(response.error.message)
+  ) {
+    const legacyResponse = await supabase
+      .from("outage_jobs")
+      .select(LEGACY_JOB_SELECT)
+      .order("outage_date", { ascending: true });
+    return legacyResponse as unknown as JobsQueryResult;
+  }
+
+  return response as unknown as JobsQueryResult;
 }
 
 export async function getJob(id: string) {
@@ -138,6 +164,12 @@ export async function updateJob(
       return {
         data: null,
         error: new Error("ระบบตอบกลับไม่ตรงกับจำนวนผู้ใช้ไฟฟ้าที่บันทึก กรุณาลองใหม่")
+      };
+    }
+    if (result.data?.has_switching !== patch.has_switching) {
+      return {
+        data: null,
+        error: new Error("ระบบตอบกลับไม่ตรงกับข้อมูล Switching ที่บันทึก กรุณาลองใหม่")
       };
     }
 

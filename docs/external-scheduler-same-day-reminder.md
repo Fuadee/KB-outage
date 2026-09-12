@@ -5,6 +5,11 @@
 - Canonical execution endpoint: `https://<your-production-domain>/api/jobs/reminder/same-day/run`
 - This endpoint is the **primary production entrypoint** for scheduler calls.
 - Business logic stays in `runSameDayReminder` service.
+- The run first processes the existing same-day outage reminder, then sends one
+  notice-distribution assignment per eligible Operations job
+  (`responsible_unit = แผนกปฏิบัติการ`) whose `notice_date` is the Bangkok
+  target date. Construction and Ao Nang jobs are distributed directly and are
+  excluded even if they retain a historical `notice_date`.
 - Vercel Cron is removed from same-day production path to avoid duplicate triggers.
 - 5-day reminder flow is intentionally not changed in this migration.
 
@@ -118,6 +123,8 @@ Response includes ops-friendly fields:
 - `updatedRows`
 - `trigger`
 - `errors`
+- `noticeDistribution` (nested counters, skip reasons, LINE failures, and
+  successful idempotency-log writes for notice-distribution assignments)
 
 ## 7) Verify after run
 
@@ -135,6 +142,11 @@ Response includes ops-friendly fields:
    - sent flag update result (`updatedRows`)
 3. Check DB:
    - `line_same_day_reminder_sent_at` written for successfully sent records
+   - `line_notification_events` contains one
+      `NOTICE_DISTRIBUTION:{jobId}:{YYYY-MM-DD}` row per successfully accepted
+      distribution assignment
+   - every notice-distribution event belongs to an Operations job; Construction
+     and Ao Nang jobs must not create an event
 4. Re-run same date:
    - should skip with `already_sent_same_day`
 
@@ -145,6 +157,7 @@ Response includes ops-friendly fields:
 - [ ] Confirm `LINE_DEFAULT_TARGET_ID`
 - [ ] Confirm `SUPABASE_URL`
 - [ ] Confirm `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] Apply `sql/024_notice_distribution_line_notifications.sql` before deploying the application change
 - [ ] Run one manual dry-run
 - [ ] Validate response counters + `skipReasons` + `sampleRows`
 - [ ] Configure external scheduler only after dry-run passes

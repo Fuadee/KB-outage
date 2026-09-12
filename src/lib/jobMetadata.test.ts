@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getResponsibleUnitLabel,
   getResponsibleUnitShortLabel,
+  getSwitchingLabel,
   formatCustomerCount,
   isResponsibleUnit,
   parseCustomerCount,
@@ -59,4 +60,11 @@ test("formats customer counts with thousands separators", () => {
   assert.equal(formatCustomerCount(0), "0");
   assert.equal(formatCustomerCount(350), "350");
   assert.equal(formatCustomerCount(1250), "1,250");
+});
+
+test("formats explicit and legacy Switching values", () => {
+  assert.equal(getSwitchingLabel(true), "มี");
+  assert.equal(getSwitchingLabel(false), "ไม่มี");
+  assert.equal(getSwitchingLabel(null), "ยังไม่ได้ระบุ");
+  assert.equal(getSwitchingLabel(undefined), "ยังไม่ได้ระบุ");
 });

@@ -9,6 +9,8 @@ import DocumentWorkflowModal, {
   type DocumentWorkflowModalMode
 } from "@/components/job/DocumentWorkflowModal";
 import DocumentWorkflowPanel from "@/components/job/DocumentWorkflowPanel";
+import WorkflowAuditHistory from "@/components/job/WorkflowAuditHistory";
+import WorkflowRollbackModal from "@/components/job/WorkflowRollbackModal";
 import NoticeScheduleModal from "@/components/NoticeScheduleModal";
 import SocialPostPreviewModal from "@/components/SocialPostPreviewModal";
 import Modal from "@/components/Modal";
@@ -22,6 +24,7 @@ import {
   CardTitle
 } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
+import SwitchingField from "@/components/job/SwitchingField";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import {
   formatCustomerCount,
@@ -41,8 +44,11 @@ import {
 import { inputLight } from "@/lib/theme";
 import {
   getDocumentWorkflowAction,
-  getDocumentWorkflowActionLabel
+  getDocumentWorkflowActionLabel,
+  isNoticeCompleted,
+  isNoticeScheduled
 } from "@/lib/documentWorkflow";
+import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
 
 const textareaStyles = `${inputLight} min-h-[96px]`;
 
@@ -53,6 +59,7 @@ export default function JobDetailPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
+  const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
@@ -65,6 +72,8 @@ export default function JobDetailPage() {
   const [documentMode, setDocumentMode] =
     useState<DocumentWorkflowModalMode | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
+  const [workflowHistoryRevision, setWorkflowHistoryRevision] = useState(0);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -94,6 +103,7 @@ export default function JobDetailPage() {
       setResponsibleUnit(
         isResponsibleUnit(data.responsible_unit) ? data.responsible_unit : ""
       );
+      setHasSwitching(data.has_switching ?? null);
       setCustomerCount(
         data.customer_count === null ? "" : String(data.customer_count)
       );
@@ -147,6 +157,7 @@ export default function JobDetailPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit || null,
+      has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
     });
@@ -201,6 +212,13 @@ export default function JobDetailPage() {
 
   const handleWorkflowJobUpdate = (patch: Partial<OutageJob>) => {
     setJob((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  const handleRollbackSuccess = (updatedJob: OutageJob) => {
+    setJob(updatedJob);
+    setWorkflowHistoryRevision((revision) => revision + 1);
+    setToast({ message: "ย้อน Workflow เรียบร้อยแล้ว", tone: "success" });
+    router.refresh();
   };
 
   const handleCloseJob = async (jobId: string) => {
@@ -264,9 +282,18 @@ export default function JobDetailPage() {
   const isClosed = job?.is_closed ?? false;
   const canCloseJob =
     (job?.social_status === "POSTED" || Boolean(job?.social_posted_at)) && !isClosed;
-  const workflowNextActionLabel = job
-    ? getDocumentWorkflowActionLabel(getDocumentWorkflowAction(job))
-    : "-";
+  const documentWorkflowAction = job ? getDocumentWorkflowAction(job) : null;
+  const distributionWorkflow = job ? getDistributionWorkflow(job) : null;
+  const workflowNextActionLabel =
+    job &&
+    distributionWorkflow &&
+    !distributionWorkflow.completed &&
+    (documentWorkflowAction === "SCHEDULE_NOTICE" ||
+      documentWorkflowAction === "COMPLETE_NOTICE")
+      ? distributionWorkflow.actionLabel
+      : documentWorkflowAction
+        ? getDocumentWorkflowActionLabel(documentWorkflowAction)
+        : "-";
   const customerCountPreview = parseCustomerCount(customerCount);
   const customerCountDisplay =
     customerCountPreview.success && customerCountPreview.value !== null
@@ -322,16 +349,14 @@ export default function JobDetailPage() {
             >
               ⚠ พบปัญหาข้อมูล GIS
             </Link>
-            {job?.document_delivered_at && !isClosed ? (
+            {job && (job.document_delivered_at || isNoticeScheduled(job)) && !isClosed ? (
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={() => setNoticeOpen(true)}
               >
-                {(job.notice_status ?? "NONE") === "SCHEDULED"
-                  ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                  : "กำหนดการแจ้งดับไฟ"}
+                {distributionWorkflow?.actionLabel ?? "การแจกหนังสือดับไฟ"}
               </Button>
             ) : null}
             {canCloseJob ? (
@@ -378,7 +403,7 @@ export default function JobDetailPage() {
           <CardHeader>
             <CardTitle>ขั้นตอนดำเนินการ</CardTitle>
             <CardDescription>
-              เอกสารพร้อม → รับเอกสาร → ส่งเอกสาร → แจ้งดับไฟ → Social
+              สร้างเอกสาร → รับเอกสาร → ส่งเอกสาร → แจกหนังสือ → Social → ปิดงาน
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -388,6 +413,11 @@ export default function JobDetailPage() {
               onDeliver={() => setDocumentMode("deliver")}
               onNotice={() => setNoticeOpen(true)}
               onSocial={() => setSocialOpen(true)}
+              onRollback={() => setRollbackOpen(true)}
+            />
+            <WorkflowAuditHistory
+              jobId={job.id}
+              refreshKey={workflowHistoryRevision}
             />
           </CardContent>
         </Card>
@@ -439,6 +469,13 @@ export default function JobDetailPage() {
                   ))}
                 </select>
               </label>
+              <SwitchingField
+                value={hasSwitching}
+                onChange={setHasSwitching}
+                name="edit-job-switching"
+                disabled={isClosed}
+                showValueLabel
+              />
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                 <span className="flex flex-wrap items-baseline justify-between gap-2">
                   <span>จำนวนผู้ใช้ไฟฟ้า</span>
@@ -549,16 +586,14 @@ export default function JobDetailPage() {
                   ดู GIS Issues ที่เชื่อมอยู่ ({gisIssueCount})
                 </Link>
               ) : null}
-              {job?.document_delivered_at && !isClosed ? (
+              {job && (job.document_delivered_at || isNoticeScheduled(job)) && !isClosed ? (
                 <Button
                   type="button"
                   variant="secondary"
                   className="w-full"
                   onClick={() => setNoticeOpen(true)}
                 >
-                  {(job.notice_status ?? "NONE") === "SCHEDULED"
-                    ? "กำหนดการแจ้งเรียบร้อยแล้ว (แก้ไขได้)"
-                    : "กำหนดการแจ้งดับไฟ"}
+                  {distributionWorkflow?.actionLabel ?? "การแจกหนังสือดับไฟ"}
                 </Button>
               ) : (
                 <Badge variant="default">ขั้นตอนถัดไป: {workflowNextActionLabel}</Badge>
@@ -582,27 +617,42 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      <NoticeScheduleModal
-        job={job}
-        open={noticeOpen}
-        onOpenChange={setNoticeOpen}
-        onJobUpdate={(_, patch) => handleNoticeJobUpdate(patch)}
-      />
+      {noticeOpen && job ? (
+        <NoticeScheduleModal
+          job={job}
+          open
+          onOpenChange={setNoticeOpen}
+          onJobUpdate={(_, patch) => handleNoticeJobUpdate(patch)}
+        />
+      ) : null}
 
-      <DocumentWorkflowModal
-        job={job}
-        mode={documentMode ?? "receive"}
-        open={Boolean(documentMode)}
-        onClose={() => setDocumentMode(null)}
-        onJobUpdate={handleWorkflowJobUpdate}
-      />
+      {documentMode && job ? (
+        <DocumentWorkflowModal
+          job={job}
+          mode={documentMode}
+          open
+          onClose={() => setDocumentMode(null)}
+          onJobUpdate={handleWorkflowJobUpdate}
+        />
+      ) : null}
 
-      <SocialPostPreviewModal
-        job={job}
-        isOpen={socialOpen}
-        onClose={() => setSocialOpen(false)}
-        onJobUpdate={(_, patch) => handleWorkflowJobUpdate(patch)}
-      />
+      {socialOpen && job ? (
+        <SocialPostPreviewModal
+          job={job}
+          isOpen
+          onClose={() => setSocialOpen(false)}
+          onJobUpdate={(_, patch) => handleWorkflowJobUpdate(patch)}
+        />
+      ) : null}
+
+      {rollbackOpen && job ? (
+        <WorkflowRollbackModal
+          job={job}
+          open
+          onClose={() => setRollbackOpen(false)}
+          onSuccess={handleRollbackSuccess}
+        />
+      ) : null}
 
       <Modal
         isOpen={closeOpen}

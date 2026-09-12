@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { computeBangkokTodayDateOnly, normalizeDateOnly } from "@/lib/reminder";
-import { runSameDayReminder, type SameDayReminderRunSummary } from "@/lib/sameDayReminderService";
+import {
+  createEmptyNoticeDistributionSummary,
+  runSameDayReminder,
+  type SameDayReminderRunSummary
+} from "@/lib/sameDayReminderService";
 
 export const runtime = "nodejs";
 
@@ -32,6 +37,7 @@ function buildFailedSummary(trigger: "external-get" | "external-post", error: st
     updatedRows: 0,
     trigger,
     errors: [{ error }],
+    noticeDistribution: createEmptyNoticeDistributionSummary()
   };
 }
 
@@ -54,8 +60,11 @@ function validateSecret(req: NextRequest): { ok: true } | { ok: false; status: n
 }
 
 async function handleRun(req: NextRequest, trigger: "external-get" | "external-post") {
+  const startedAt = Date.now();
+  const runId = randomUUID();
   const requestedAt = new Date().toISOString();
   console.log("same-day-reminder-request-received", {
+    runId,
     requestedAt,
     method: req.method,
     trigger,
@@ -68,6 +77,7 @@ async function handleRun(req: NextRequest, trigger: "external-get" | "external-p
   if (!auth.ok) {
     const failedSummary = buildFailedSummary(trigger, auth.error);
     console.warn("same-day-reminder-auth-failed", {
+      runId,
       requestedAt,
       trigger,
       status: auth.status,
@@ -76,7 +86,7 @@ async function handleRun(req: NextRequest, trigger: "external-get" | "external-p
     return NextResponse.json(failedSummary, { status: auth.status });
   }
 
-  console.log("same-day-reminder-auth-passed", { requestedAt, trigger });
+  console.log("same-day-reminder-auth-passed", { runId, requestedAt, trigger });
 
   const queryDate = normalizeDateOnly(req.nextUrl.searchParams.get("date"));
   const queryDryRun = parseFlag(req.nextUrl.searchParams.get("dryRun"));
@@ -91,9 +101,20 @@ async function handleRun(req: NextRequest, trigger: "external-get" | "external-p
   }
 
   const run = await runSameDayReminder({
+    runId,
     date: queryDate ?? bodyDate,
     dryRun: queryDryRun || bodyDryRun,
     trigger,
+  });
+
+  console.log("same-day-reminder-request-completed", {
+    runId,
+    requestedAt,
+    trigger,
+    status: run.status,
+    ok: run.summary.ok,
+    targetDateUsed: run.summary.targetDateUsed,
+    durationMs: Date.now() - startedAt,
   });
 
   return NextResponse.json(run.summary, { status: run.status });

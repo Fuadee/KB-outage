@@ -99,7 +99,8 @@ function getStageDetail(job: DashboardJob): string | null {
   if (job.step === "READY_FOR_NOTICE") {
     return `ส่งโดย ${job.document_delivered_by ?? "ไม่ระบุ"}`;
   }
-  if (job.step === "READY_FOR_SOCIAL") return "กำหนดการแจ้งดับไฟแล้ว";
+  if (job.step === "NOTICE_SCHEDULED") return "กำหนดแจกแล้ว · รอแจกจริง";
+  if (job.step === "READY_FOR_SOCIAL") return "แจกหนังสือแล้ว · รอ Social";
   if (job.step === "SOCIAL_POSTED") return "โพสต์ Social แล้ว";
   return null;
 }

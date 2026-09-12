@@ -39,18 +39,32 @@ test("derives upcoming, due today, and overdue states", () => {
   assert.equal(overdue.daysOverdue, 2);
 });
 
-test("existing notice workflow data always takes precedence as done", () => {
+test("confirmed delivery data takes precedence as done", () => {
   const status = getDistributionReminderStatus({
     outageDate: "2026-09-21",
     noticeDate: "2026-09-10",
     noticeBy: "สมชาย",
-    noticeStatus: "SCHEDULED",
+    noticeStatus: "COMPLETED",
+    noticeCompletedAt: "2026-09-10T04:00:00.000Z",
     now: new Date("2026-09-20T05:00:00Z")
   });
 
   assert.equal(status.state, "DONE");
   assert.equal(status.distributionDate, "2026-09-10");
   assert.equal(status.distributionBy, "สมชาย");
+});
+
+test("a scheduled date remains pending until completion is confirmed", () => {
+  const status = getDistributionReminderStatus({
+    outageDate: "2026-09-21",
+    noticeDate: "2026-09-15",
+    noticeStatus: "SCHEDULED",
+    now: new Date("2026-09-14T05:00:00Z")
+  });
+
+  assert.equal(status.state, "UPCOMING");
+  assert.equal(status.plannedDate, "2026-09-15");
+  assert.equal(status.distributionDate, null);
 });
 
 test("uses the Bangkok calendar day around the UTC date boundary", () => {
@@ -72,7 +86,6 @@ test("legacy jobs with missing optional fields do not throw", () => {
     getDistributionReminderStatus({
       noticeStatus: "SCHEDULED"
     }).state,
-    "DONE"
+    "OUTAGE_DATE_UNKNOWN"
   );
 });
-

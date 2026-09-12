@@ -11,15 +11,18 @@
     "test:docx:qr": "node scripts/test-docx-qr.js",
     "test:reminder": "node --test --experimental-strip-types src/lib/reminder.test.ts",
     "test:gis-issues": "node --test --experimental-strip-types src/lib/gisIssues.test.ts",
-    "test:workflow": "node --test --experimental-strip-types src/lib/documentWorkflow.test.ts",
+    "test:workflow": "node --test --experimental-strip-types src/lib/documentWorkflow.test.ts src/lib/workflowRollback.test.ts",
     "test:social-publication": "node --test --experimental-strip-types src/lib/socialPublication.test.ts",
-    "test:distribution-reminder": "node --test --experimental-strip-types src/lib/distributionReminder.test.ts",
+    "test:distribution-reminder": "node --test --experimental-strip-types src/lib/distributionReminder.test.ts src/lib/distributionWorkflow.test.ts",
     "test:date-utils": "node --test --experimental-strip-types src/lib/dateUtils.test.ts",
     "test:jobs-presentation": "node --test --experimental-strip-types src/lib/jobsPresentation.test.ts",
     "test:job-metadata": "node --test --experimental-strip-types src/lib/jobMetadata.test.ts src/lib/jobMetadataIntegration.test.ts",
     "test:calendar-summary": "node --test --experimental-strip-types src/lib/calendarSummary.test.ts src/lib/calendarPresentation.test.ts src/lib/calendarIntegration.test.ts",
     "test:notice-message": "node --test --experimental-strip-types src/lib/outageNoticeMessage.test.ts",
-    "test:modal-lifecycle": "node --test --experimental-strip-types src/components/Modal.lifecycle.test.ts"
+    "test:daily-notice-notification": "node --test --experimental-strip-types src/lib/dailyNoticeDistribution.test.ts",
+    "test:modal-lifecycle": "node --test --experimental-strip-types src/components/Modal.lifecycle.test.ts",
+    "test:dashboard-api": "node --test --experimental-strip-types src/lib/dashboardSupabase.test.ts",
+    "test:delivery-key": "node --test --experimental-strip-types src/lib/deliveryTrackingKey.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

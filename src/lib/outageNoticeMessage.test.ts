@@ -14,6 +14,7 @@ import {
 
 const completeJob = {
   outage_date: "2026-09-15",
+  responsible_unit: "แผนกปฏิบัติการ",
   customer_count: 300,
   doc_purpose: "ข้อความสำรอง",
   doc_area_title: "อ่าวนางซอย 1, หน้าโรงเรียนอ่าวนาง, ซอยนาไทย",
@@ -81,6 +82,25 @@ test("keeps the LINE assignment on shift 1 regardless of the actual distributor"
   assert.doesNotMatch(message, /พี่บ่าว/);
 });
 
+test("builds direct messages for construction and Ao Nang without shift 1 rules", () => {
+  const construction = buildOutageNoticeLineMessage({
+    ...completeJob,
+    responsible_unit: "แผนกก่อสร้าง"
+  });
+  const aoNang = buildOutageNoticeLineMessage({
+    ...completeJob,
+    responsible_unit: "กฟส.อ่าวนาง"
+  });
+
+  assert.match(construction, /^📢 แจ้งดำเนินการแจกหนังสือดับไฟ/);
+  assert.match(construction, /ผู้ดำเนินการ: แผนกก่อสร้าง/);
+  assert.match(construction, /วันดับไฟ: 15 ก\.ย\. 2569/);
+  assert.doesNotMatch(construction, /กะ 1|รับหนังสือ:/);
+  assert.match(aoNang, /ผู้ดำเนินการ: อ่าวนาง/);
+  assert.match(aoNang, /วันดับไฟ: 15 ก\.ย\. 2569/);
+  assert.doesNotMatch(aoNang, /กะ 1|รับหนังสือ:/);
+});
+
 test("handles missing optional Job sources without forbidden wording", () => {
   const message = buildOutageNoticeLineMessage({
     ...completeJob,
@@ -118,13 +138,23 @@ test("preview and both copy actions share the same builder output", () => {
     new URL("../app/api/jobs/notice-schedule/route.ts", import.meta.url),
     "utf8"
   );
+  const completionRoute = readFileSync(
+    new URL("../app/api/jobs/[id]/notice-completion/route.ts", import.meta.url),
+    "utf8"
+  );
 
   assert.equal(modal.match(/buildOutageNoticeLineMessage\(/g)?.length, 1);
   assert.match(modal, /navigator\.clipboard\.writeText\(previewText\)/);
-  assert.match(modal, /ผู้แจกจริง \(บันทึกภายหลัง\)/);
-  assert.match(modal, /notice_by: noticeBy\.trim\(\) \|\| null/);
+  assert.match(modal, /ผลการแจกหนังสือจริง/);
+  assert.match(modal, /completed_by: completedBy\.trim\(\)/);
   assert.doesNotMatch(modal, /responsibleMissing/);
   assert.equal(modal.match(/if \(!validateSchedule\(\)\) return;/g)?.length, 1);
-  assert.match(scheduleRoute, /if \(!noticeDate\)/);
-  assert.match(scheduleRoute, /notice_by: noticeBy \|\| null/);
+  assert.match(scheduleRoute, /distributionWorkflow\.route !== "OPERATIONS"/);
+  assert.match(scheduleRoute, /notice_status: "SCHEDULED"/);
+  assert.doesNotMatch(scheduleRoute, /notice_by:/);
+  assert.match(completionRoute, /notice_status: "COMPLETED"/);
+  assert.match(completionRoute, /notice_by: completedBy/);
+  assert.match(completionRoute, /isDirectDistributionRoute/);
+  assert.match(modal, /isOperationsFlow && !isCompleted/);
+  assert.match(modal, /isDirectFlow/);
 });

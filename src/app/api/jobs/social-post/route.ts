@@ -4,7 +4,7 @@ import {
   buildSocialPostText,
   getSocialPostPreview
 } from "@/lib/socialPost";
-import { isDocumentReady } from "@/lib/documentWorkflow";
+import { isDocumentReady, isNoticeCompleted } from "@/lib/documentWorkflow";
 
 export const runtime = "nodejs";
 
@@ -99,12 +99,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (job.notice_status !== "SCHEDULED" && !job.notice_date) {
+    if (!isNoticeCompleted(job)) {
       return NextResponse.json(
         {
           ok: false,
           code: "NOTICE_NOT_SCHEDULED",
-          error: "กรุณากำหนดวันที่แจ้งดับไฟก่อนโพสต์ Social"
+          error: "ต้องยืนยันว่าแจกหนังสือแล้วก่อนโพสต์ Social"
         },
         { status: 409 }
       );

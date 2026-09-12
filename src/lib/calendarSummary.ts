@@ -19,11 +19,13 @@ export type CalendarSummaryEntry = {
   responsible_unit: ResponsibleUnit | null;
   status: CalendarStatus;
   count: number;
+  switching_count: number;
 };
 
 export type CalendarSummaryItem = {
   date: string;
   total: number;
+  switching_count: number;
   entries: CalendarSummaryEntry[];
 };
 
@@ -31,6 +33,7 @@ export type CalendarSummaryRecord = {
   date: string;
   responsible_unit: unknown;
   status: CalendarStatus;
+  has_switching?: unknown;
 };
 
 const statusRank = new Map(
@@ -70,6 +73,7 @@ export function buildCalendarSummary(
     const summary = byDate.get(record.date) ?? {
       date: record.date,
       total: 0,
+      switching_count: 0,
       entries: []
     };
     const entry = summary.entries.find(
@@ -79,13 +83,18 @@ export function buildCalendarSummary(
     );
 
     summary.total += 1;
+    if (record.has_switching === true) {
+      summary.switching_count += 1;
+    }
     if (entry) {
       entry.count += 1;
+      if (record.has_switching === true) entry.switching_count += 1;
     } else {
       summary.entries.push({
         responsible_unit: responsibleUnit,
         status: record.status,
-        count: 1
+        count: 1,
+        switching_count: record.has_switching === true ? 1 : 0
       });
     }
     byDate.set(record.date, summary);
@@ -115,6 +124,10 @@ export function filterCalendarSummary(
       {
         ...item,
         total: entries.reduce((total, entry) => total + entry.count, 0),
+        switching_count: entries.reduce(
+          (total, entry) => total + entry.switching_count,
+          0
+        ),
         entries
       }
     ];

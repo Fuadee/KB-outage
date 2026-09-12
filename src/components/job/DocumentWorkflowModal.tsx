@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Modal from "@/components/Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -33,19 +33,15 @@ export default function DocumentWorkflowModal({
     mode === "receive" ? job?.document_received_at : job?.document_delivered_at;
   const existingBy =
     mode === "receive" ? job?.document_received_by : job?.document_delivered_by;
-  const [occurredAt, setOccurredAt] = useState("");
-  const [operator, setOperator] = useState("");
-  const [note, setNote] = useState("");
+  const [occurredAt, setOccurredAt] = useState(() =>
+    toDateTimeLocal(existingAt)
+  );
+  const [operator, setOperator] = useState(() => existingBy ?? "");
+  const [note, setNote] = useState(() =>
+    mode === "deliver" ? job?.document_delivery_note ?? "" : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setOccurredAt(toDateTimeLocal(existingAt));
-    setOperator(existingBy ?? "");
-    setNote(mode === "deliver" ? job?.document_delivery_note ?? "" : "");
-    setError(null);
-  }, [existingAt, existingBy, job?.document_delivery_note, mode, open]);
 
   const update = async (body: Record<string, unknown>) => {
     if (!job) return false;
@@ -95,18 +91,6 @@ export default function DocumentWorkflowModal({
     if (ok) onClose();
   };
 
-  const handleClear = async () => {
-    const message =
-      mode === "receive"
-        ? "ยกเลิกสถานะรับเอกสาร? ข้อมูลการส่งเอกสารจะถูกยกเลิกด้วย"
-        : "ยกเลิกสถานะส่งเอกสาร?";
-    if (!window.confirm(message)) return;
-    const ok = await update({
-      action: mode === "receive" ? "clear-receipt" : "clear-delivery"
-    });
-    if (ok) onClose();
-  };
-
   return (
     <Modal
       isOpen={open}
@@ -123,20 +107,7 @@ export default function DocumentWorkflowModal({
       onSubmit={handleSubmit}
       panelClassName="max-w-xl"
       footer={
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            {existingAt ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                disabled={saving}
-                onClick={() => void handleClear()}
-              >
-                ยกเลิกสถานะนี้
-              </Button>
-            ) : null}
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               ยกเลิก
@@ -190,4 +161,3 @@ export default function DocumentWorkflowModal({
     </Modal>
   );
 }
-

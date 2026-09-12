@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isDocumentReady } from "@/lib/documentWorkflow";
+import { authorizeServerRequest } from "@/lib/serverAuth";
+import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
 
@@ -9,7 +11,7 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 type WorkflowRequest = {
-  action?: "receive" | "deliver" | "clear-receipt" | "clear-delivery";
+  action?: "receive" | "deliver";
   occurred_at?: string;
   operator?: string;
   note?: string;
@@ -20,7 +22,10 @@ function createSupabaseServerClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var.");
   }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  ensureSystemCertificateAuthorities();
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
 }
 
 function normalizeDateTime(value: unknown): string | null {
@@ -43,10 +48,18 @@ export async function PATCH(
   try {
     const jobId = params.id?.trim();
     const body = (await request.json()) as WorkflowRequest;
-    if (!jobId || !body.action) {
+    if (!jobId || (body.action !== "receive" && body.action !== "deliver")) {
       return NextResponse.json(
         { ok: false, error: "ข้อมูลคำขอไม่ครบถ้วน" },
         { status: 400 }
+      );
+    }
+
+    const { authorized } = await authorizeServerRequest();
+    if (!authorized) {
+      return NextResponse.json(
+        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
+        { status: 401 }
       );
     }
 
@@ -119,20 +132,11 @@ export async function PATCH(
         document_delivered_by: operator,
         document_delivery_note: note || null
       };
-    } else if (body.action === "clear-delivery") {
-      patch = {
-        document_delivered_at: null,
-        document_delivered_by: null,
-        document_delivery_note: null
-      };
     } else {
-      patch = {
-        document_received_at: null,
-        document_received_by: null,
-        document_delivered_at: null,
-        document_delivered_by: null,
-        document_delivery_note: null
-      };
+      return NextResponse.json(
+        { ok: false, error: "คำขอแก้ไข Workflow ไม่ถูกต้อง" },
+        { status: 400 }
+      );
     }
 
     const { data: updated, error: updateError } = await supabase

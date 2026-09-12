@@ -89,7 +89,7 @@ test("list, detail, and card expose the same customer count field", () => {
   assert.match(jobsRepo, /customer_count: number \| null/);
   assert.match(
     jobsRepo,
-    /equipment_code, responsible_unit, customer_count, note/
+    /equipment_code, responsible_unit, has_switching, customer_count, note/
   );
   assert.match(editPage, /customerCountDisplay/);
   assert.match(editPage, /formatCustomerCount\(customerCountPreview\.value\)/);

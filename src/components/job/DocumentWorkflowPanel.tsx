@@ -4,10 +4,13 @@ import type { OutageJob } from "@/lib/jobsRepo";
 import {
   getDocumentWorkflowStage,
   isDocumentReady,
+  isNoticeCompleted,
   isNoticeScheduled,
   isSocialPosted
 } from "@/lib/documentWorkflow";
 import { cn } from "@/lib/utils";
+import { getAvailableWorkflowRollbackOptions } from "@/lib/workflowRollback";
+import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
 
 type Props = {
   job: OutageJob;
@@ -15,6 +18,7 @@ type Props = {
   onDeliver: () => void;
   onNotice: () => void;
   onSocial: () => void;
+  onRollback: () => void;
 };
 
 function formatDate(value?: string | null): string {
@@ -32,20 +36,24 @@ export default function DocumentWorkflowPanel({
   onReceive,
   onDeliver,
   onNotice,
-  onSocial
+  onSocial,
+  onRollback
 }: Props) {
   const stage = getDocumentWorkflowStage(job);
+  const noticeCompleted = isNoticeCompleted(job);
+  const distributionWorkflow = getDistributionWorkflow(job);
+  const rollbackAvailable = getAvailableWorkflowRollbackOptions(job).length > 0;
   const items = [
     {
       id: "ready",
-      label: "เอกสารพร้อม",
+      label: "สร้างเอกสาร",
       done: isDocumentReady(job),
       detail: job.doc_generated_at ? formatDate(job.doc_generated_at) : "รอสร้างเอกสาร"
     },
     {
       id: "received",
       label: "รับเอกสาร",
-      done: Boolean(job.document_received_at) || isSocialPosted(job),
+      done: Boolean(job.document_received_at) || noticeCompleted || isSocialPosted(job),
       detail: job.document_received_at
         ? `${formatDate(job.document_received_at)} · ${job.document_received_by ?? "-"}`
         : "รอรับเอกสารฉบับจริง"
@@ -53,36 +61,53 @@ export default function DocumentWorkflowPanel({
     {
       id: "delivered",
       label: "ส่งเอกสาร",
-      done: Boolean(job.document_delivered_at) || isNoticeScheduled(job) || isSocialPosted(job),
+      done: Boolean(job.document_delivered_at) || noticeCompleted || isSocialPosted(job),
       detail: job.document_delivered_at
         ? `${formatDate(job.document_delivered_at)} · ${job.document_delivered_by ?? "-"}`
         : "รอนำเอกสารไปส่ง"
     },
     {
       id: "notice",
-      label: "แจ้งดับไฟ",
-      done: isNoticeScheduled(job) || isSocialPosted(job),
-      detail: job.notice_date
-        ? `${job.notice_date}${job.notice_by ? ` · ผู้แจกจริง ${job.notice_by}` : " · ยังไม่บันทึกผู้แจกจริง"}`
-        : "รอกำหนดวันที่แจ้ง"
+      label: "แจกหนังสือ",
+      done: noticeCompleted || isSocialPosted(job),
+      detail: noticeCompleted
+        ? `${formatDate(job.notice_completed_at)} · ${job.notice_by ?? "ไม่ระบุผู้แจกจริง"}`
+        : isNoticeScheduled(job) && job.notice_date
+          && distributionWorkflow.route === "OPERATIONS"
+          ? `กำหนดแจก ${new Date(`${job.notice_date}T00:00:00`).toLocaleDateString("th-TH", { dateStyle: "medium" })} · รอแจก`
+          : distributionWorkflow.route === "DIRECT_CONSTRUCTION"
+            ? "แผนกก่อสร้างรับผิดชอบแจกเอง"
+            : distributionWorkflow.route === "DIRECT_AO_NANG"
+              ? "อ่าวนางรับผิดชอบแจกเอง"
+              : distributionWorkflow.route === "UNASSIGNED"
+                ? "รอระบุหน่วยงานผู้รับผิดชอบ"
+                : "รอกำหนดการแจก"
     },
     {
       id: "social",
       label: "Social",
       done: isSocialPosted(job),
       detail: job.social_posted_at ? formatDate(job.social_posted_at) : "รอโพสต์ประชาสัมพันธ์"
+    },
+    {
+      id: "close",
+      label: "ปิดงาน",
+      done: Boolean(job.is_closed),
+      detail: job.is_closed ? "ปิดงานเรียบร้อยแล้ว" : "รอปิดงาน"
     }
   ];
 
   return (
     <div className="space-y-4">
-      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {items.map((item) => {
           const current =
             (item.id === "received" && stage === "WAITING_DOCUMENT") ||
             (item.id === "delivered" && stage === "WAITING_DELIVERY") ||
             (item.id === "notice" && stage === "READY_FOR_NOTICE") ||
+            (item.id === "notice" && stage === "NOTICE_SCHEDULED") ||
             (item.id === "social" && stage === "READY_FOR_SOCIAL") ||
+            (item.id === "close" && stage === "SOCIAL_POSTED") ||
             (item.id === "ready" && stage === "DRAFT");
           return (
             <li
@@ -132,7 +157,10 @@ export default function DocumentWorkflowPanel({
             <Button type="button" onClick={onDeliver}>บันทึกการส่งเอกสาร</Button>
           ) : null}
           {stage === "READY_FOR_NOTICE" ? (
-            <Button type="button" onClick={onNotice}>กำหนดการแจ้งดับไฟ</Button>
+            <Button type="button" onClick={onNotice}>{distributionWorkflow.actionLabel}</Button>
+          ) : null}
+          {stage === "NOTICE_SCHEDULED" ? (
+            <Button type="button" onClick={onNotice}>{distributionWorkflow.actionLabel}</Button>
           ) : null}
           {stage === "READY_FOR_SOCIAL" ? (
             <Button type="button" onClick={onSocial}>Post ลงสื่อ Social</Button>
@@ -149,9 +177,25 @@ export default function DocumentWorkflowPanel({
           ) : null}
           {isNoticeScheduled(job) ? (
             <Button type="button" variant="secondary" onClick={onNotice}>
-              แก้ไขวันที่แจ้ง / ผู้แจกจริง
+              แก้ไขกำหนดการ / ผลการแจก
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {rollbackAvailable ? (
+        <div className="border-t border-slate-200 pt-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">แก้ไข Workflow</p>
+              <p className="text-xs leading-5 text-slate-500">
+                ใช้เมื่อต้องแก้สถานะที่บันทึกผิด ระบบจะย้อนขั้นตอนหลังจากจุดที่เลือกให้สอดคล้องกัน
+              </p>
+            </div>
+            <Button type="button" variant="danger" size="sm" onClick={onRollback}>
+              แก้ไข / ย้อนขั้นตอน
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>

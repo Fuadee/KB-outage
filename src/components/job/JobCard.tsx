@@ -3,10 +3,12 @@ import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Me
 import MapActionButtons from "@/components/job/MapActionButtons";
 import JobPrimaryAction from "@/components/job/JobPrimaryAction";
 import JobStatusStepper, { type JobStep } from "@/components/job/JobStatusStepper";
+import SwitchingBadge from "@/components/job/SwitchingBadge";
 import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
 import { parseLocalDate } from "@/lib/dateUtils";
 import { getDistributionReminderStatus } from "@/lib/distributionReminder";
+import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
 import { formatCustomerCount, getResponsibleUnitLabel } from "@/lib/jobMetadata";
 import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
 import { cn } from "@/lib/utils";
@@ -177,18 +179,37 @@ export default function JobCard({
     outageDate: job.outage_date,
     noticeDate: job.notice_date,
     noticeBy: job.notice_by,
-    noticeStatus: job.notice_status
+    noticeStatus: job.notice_status,
+    noticeCompletedAt: job.notice_completed_at
   });
+  const distributionWorkflow = getDistributionWorkflow(job);
   const distributionStateUi =
-    distributionReminder.state === "DONE"
+    distributionWorkflow.completed
       ? {
           className: "border-emerald-200 bg-emerald-50 text-emerald-800",
           label: "แจกแล้ว"
         }
+      : distributionWorkflow.route === "DIRECT_CONSTRUCTION"
+        ? {
+            className: "border-blue-200 bg-blue-50 text-blue-800",
+            label: "ก่อสร้างรับผิดชอบแจกเอง"
+          }
+        : distributionWorkflow.route === "DIRECT_AO_NANG"
+          ? {
+              className: "border-purple-200 bg-purple-50 text-purple-800",
+              label: "อ่าวนางรับผิดชอบแจกเอง"
+            }
+          : distributionWorkflow.route === "UNASSIGNED"
+            ? {
+                className: "border-slate-200 bg-white text-slate-500",
+                label: "รอระบุหน่วยงาน"
+              }
       : distributionReminder.state === "DUE_TODAY"
         ? {
             className: "border-amber-200 bg-amber-50 text-amber-800",
-            label: "ควรแจกวันนี้"
+            label: distributionReminder.plannedDate
+              ? "กำหนดแจกวันนี้ · รอแจก"
+              : "ควรแจกวันนี้"
           }
         : distributionReminder.state === "OVERDUE"
           ? {
@@ -198,8 +219,10 @@ export default function JobCard({
           : distributionReminder.state === "UPCOMING"
             ? {
                 className: "border-slate-200 bg-white text-slate-600",
-                label: distributionReminder.dueDate
-                  ? `ควรแจก ${formatThaiShortDate(distributionReminder.dueDate)}`
+                label: distributionReminder.plannedDate
+                  ? `กำหนดแจก ${formatThaiShortDate(distributionReminder.plannedDate)} · รอแจก`
+                  : distributionReminder.dueDate
+                    ? `ควรแจก ${formatThaiShortDate(distributionReminder.dueDate)}`
                   : "ยังไม่ถึงกำหนดแจก"
               }
             : {
@@ -232,6 +255,7 @@ export default function JobCard({
           >
             {getResponsibleUnitLabel(job.responsible_unit)}
           </p>
+          {job.has_switching === true ? <SwitchingBadge /> : null}
           {typeof job.customer_count === "number" ? (
             <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-5 text-slate-500">
               <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
@@ -295,10 +319,10 @@ export default function JobCard({
               <span className={cn("rounded-md border px-2 py-1 font-semibold", distributionStateUi.className)}>
                 {distributionStateUi.label}
               </span>
-              {distributionReminder.state === "UPCOMING" && distributionReminder.daysUntilDue !== null ? (
+              {distributionWorkflow.route === "OPERATIONS" && distributionReminder.state === "UPCOMING" && distributionReminder.daysUntilDue !== null ? (
                 <span className="text-[11px] text-slate-500">อีก {distributionReminder.daysUntilDue} วัน</span>
               ) : null}
-              {distributionReminder.state === "DONE" ? (
+              {distributionWorkflow.completed ? (
                 <span className="text-[11px] text-emerald-700/80">
                   {distributionReminder.distributionDate
                     ? formatThaiShortDate(distributionReminder.distributionDate)
