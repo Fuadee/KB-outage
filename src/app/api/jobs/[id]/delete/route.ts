@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -23,14 +22,6 @@ export async function DELETE(
   context: { params: { id: string } }
 ) {
   try {
-    const { authorized } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, error: "UNAUTHENTICATED" },
-        { status: 401 }
-      );
-    }
-
     const jobId = context.params.id;
     if (!jobId) {
       return NextResponse.json(

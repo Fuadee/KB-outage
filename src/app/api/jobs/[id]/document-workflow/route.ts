@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isDocumentReady } from "@/lib/documentWorkflow";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
@@ -52,14 +51,6 @@ export async function PATCH(
       return NextResponse.json(
         { ok: false, error: "ข้อมูลคำขอไม่ครบถ้วน" },
         { status: 400 }
-      );
-    }
-
-    const { authorized } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
       );
     }
 

@@ -1,5 +1,4 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { AUTH_DISABLED_ACTOR_NAME } from "@/lib/authConfig";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 const SUPABASE_URL =
@@ -24,7 +23,7 @@ export const getGisContext = async (): Promise<GisContext> => {
     admin: createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { autoRefreshToken: false, persistSession: false }
     }),
-    actorName: AUTH_DISABLED_ACTOR_NAME
+    actorName: "ผู้ใช้งานไม่ระบุชื่อ"
   };
 };
 

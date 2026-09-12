@@ -136,6 +136,10 @@ The default flow is `Draft → Document ready → Received document → Document
 
 ## Notes
 
-- No authentication or login UI is included yet (open access).
+- KB-outage intentionally has no user login requirement. Operational pages and APIs work without a user account, session, or authentication feature flag. Old login bookmarks redirect to the dashboard.
+- Supabase database/storage credentials remain required. The browser uses anonymous access without loading or refreshing saved sessions; privileged credentials stay on the server. Delivery-link tokens and the scheduler secret remain required for their respective external flows.
+- Operator names for document receipt/delivery and notice completion remain operational data. New jobs keep nullable user attribution; closing a job does not overwrite historical identity values. GIS uses an unnamed-operator label when no identity is available.
+- Auth removal does not change SQL policies or historical data. Existing numbered migrations must already be applied; do not disable RLS to troubleshoot a database configuration error.
+- Run `npm run test:no-login` for isolated route-handler regression tests (no real database/storage writes), and `npm run test:no-login:routing -- --base-url=http://localhost:3000` against a running production build for anonymous navigation and cookie-independence checks.
 - Data is stored in the `outage_jobs` table and is shared across devices in the same Supabase project.
 - Dashboard cards now include an in-card workflow to record นคร notifications and request document creation.

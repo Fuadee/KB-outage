@@ -27,10 +27,7 @@ import {
   setNakhonNotified,
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
-import { supabase } from "@/lib/supabaseClient";
-import { AUTH_DISABLED } from "@/lib/authConfig";
 import {
-  CloseJobRequestError,
   closeOutageJob,
   normalizeJobId
 } from "@/lib/closeJob";
@@ -483,16 +480,6 @@ export default function JobsPage() {
     setCloseSaving(true);
     setCloseError(null);
 
-    if (!AUTH_DISABLED) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        setCloseSaving(false);
-        setCloseTarget(null);
-        router.push("/login");
-        return;
-      }
-    }
-
     try {
       const result = await closeOutageJob(jobId);
 
@@ -511,16 +498,6 @@ export default function JobsPage() {
       setCloseTarget(null);
       await fetchJobs();
     } catch (closeError) {
-      if (
-        !AUTH_DISABLED &&
-        closeError instanceof CloseJobRequestError &&
-        closeError.status === 401
-      ) {
-        setCloseTarget(null);
-        router.push("/login");
-        return;
-      }
-
       const message =
         closeError instanceof Error
           ? closeError.message

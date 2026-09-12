@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeJobId } from "@/lib/closeJob";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
@@ -112,14 +111,6 @@ export async function POST(
   }
 
   try {
-    const { authorized, user } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, code: "AUTH_REQUIRED", error: "กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
-      );
-    }
-
     const admin = createSupabaseAdminClient();
     const closedAt = new Date().toISOString();
 
@@ -129,8 +120,8 @@ export async function POST(
       .from("outage_jobs")
       .update({
         is_closed: true,
-        closed_at: closedAt,
-        closed_by: user?.id ?? null
+        // Leave nullable attribution untouched, including historical user IDs.
+        closed_at: closedAt
       })
       .eq("id", jobId)
       .eq("is_closed", false)

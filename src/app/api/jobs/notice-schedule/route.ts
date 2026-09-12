@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
 
@@ -64,14 +63,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "missing required fields" },
         { status: 400 }
-      );
-    }
-
-    const { authorized } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
       );
     }
 

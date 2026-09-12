@@ -34,10 +34,7 @@ import {
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
-import { supabase } from "@/lib/supabaseClient";
-import { AUTH_DISABLED } from "@/lib/authConfig";
 import {
-  CloseJobRequestError,
   closeOutageJob,
   normalizeJobId
 } from "@/lib/closeJob";
@@ -225,16 +222,6 @@ export default function JobDetailPage() {
     setCloseSaving(true);
     setCloseError(null);
 
-    if (!AUTH_DISABLED) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        setCloseSaving(false);
-        setCloseOpen(false);
-        router.push("/login");
-        return;
-      }
-    }
-
     try {
       const result = await closeOutageJob(jobId);
       setToast({ message: "✅ ปิดงานเรียบร้อย", tone: "success" });
@@ -250,16 +237,6 @@ export default function JobDetailPage() {
       setCloseOpen(false);
       router.refresh();
     } catch (closeError) {
-      if (
-        !AUTH_DISABLED &&
-        closeError instanceof CloseJobRequestError &&
-        closeError.status === 401
-      ) {
-        setCloseOpen(false);
-        router.push("/login");
-        return;
-      }
-
       const message =
         closeError instanceof Error
           ? closeError.message

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 import {
   isWorkflowRollbackTarget,
@@ -83,11 +82,6 @@ function errorResponse(error: SupabaseErrorLike) {
   );
 }
 
-async function authorize() {
-  const authorization = await authorizeServerRequest();
-  return authorization.authorized;
-}
-
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
@@ -99,13 +93,6 @@ export async function GET(
       { status: 400 }
     );
   }
-  if (!(await authorize())) {
-    return NextResponse.json(
-      { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-      { status: 401 }
-    );
-  }
-
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
@@ -136,13 +123,6 @@ export async function POST(
       { status: 400 }
     );
   }
-  if (!(await authorize())) {
-    return NextResponse.json(
-      { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-      { status: 401 }
-    );
-  }
-
   let body: { target_step?: unknown; reason?: unknown };
   try {
     body = (await request.json()) as typeof body;

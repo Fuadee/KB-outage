@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeJobId } from "@/lib/closeJob";
 import { isResponsibleUnit, parseCustomerCount } from "@/lib/jobMetadata";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
@@ -47,14 +46,6 @@ export async function PATCH(
 
   try {
     ensureSystemCertificateAuthorities();
-
-    const { authorized } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
-      );
-    }
 
     const body = (await request.json().catch(() => null)) as {
       outage_date?: unknown;

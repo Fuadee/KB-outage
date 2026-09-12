@@ -3,7 +3,7 @@ import {
   DeliveryTrackingError,
   getOrCreateDeliveryBatchByJobId
 } from "@/lib/deliveryTracking";
-import { buildDeliveryErrorResponse, ensureAuthenticated, isUuid } from "../_shared";
+import { buildDeliveryErrorResponse, isUuid } from "../_shared";
 
 export const runtime = "nodejs";
 
@@ -12,11 +12,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const isAuthenticated = await ensureAuthenticated();
-    if (!isAuthenticated) {
-      return NextResponse.json({ ok: false, error: "UNAUTHENTICATED" }, { status: 401 });
-    }
-
     const { id: jobId } = await params;
     if (!jobId?.trim()) {
       return NextResponse.json({ ok: false, error: "ไม่พบ job_id" }, { status: 400 });

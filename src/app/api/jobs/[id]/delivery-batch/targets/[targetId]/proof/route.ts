@@ -5,7 +5,7 @@ import {
   markTargetDeliveredByToken,
   uploadDeliveryProof
 } from "@/lib/deliveryTracking";
-import { buildDeliveryErrorResponse, ensureAuthenticated, isUuid } from "../../../_shared";
+import { buildDeliveryErrorResponse, isUuid } from "../../../_shared";
 
 export const runtime = "nodejs";
 const MAX_PROOF_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -15,11 +15,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string; targetId: string }> }
 ) {
   try {
-    const isAuthenticated = await ensureAuthenticated();
-    if (!isAuthenticated) {
-      return NextResponse.json({ ok: false, error: "UNAUTHENTICATED" }, { status: 401 });
-    }
-
     const { id: jobId, targetId } = await params;
 
     if (!jobId?.trim()) {

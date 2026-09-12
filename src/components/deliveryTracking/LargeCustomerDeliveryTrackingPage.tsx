@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import LargeCustomerDeliverySummary from "./LargeCustomerDeliverySummary";
 import LargeCustomerDeliveryList from "./LargeCustomerDeliveryList";
-import CustomerMapSection from "./CustomerMapSection";
 import ExcelEditableTargetTable from "./ExcelEditableTargetTable";
 import EditLargeCustomerDeliveryItemModal from "./EditLargeCustomerDeliveryItemModal";
 import CreateLargeCustomerDeliveryItemModal from "./CreateLargeCustomerDeliveryItemModal";
@@ -15,6 +15,11 @@ import { fetchDeliveryTargetsByJobId, persistDeliveryTargetsByJobId } from "./se
 import { createEmptyTarget, type EditableTarget } from "./types";
 import type { DeliveryStatus, DeliveryTargetInput } from "@/types/deliveryTracking";
 import { getJob } from "@/lib/jobsRepo";
+
+// Leaflet reads window at import time, including on direct page requests.
+const CustomerMapSection = dynamic(() => import("./CustomerMapSection"), {
+  ssr: false
+});
 
 type JobContext = {
   id: string;

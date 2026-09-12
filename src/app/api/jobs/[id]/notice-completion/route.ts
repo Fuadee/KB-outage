@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 import {
   getDistributionWorkflow,
@@ -34,14 +33,6 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { authorized } = await authorizeServerRequest();
-    if (!authorized) {
-      return NextResponse.json(
-        { ok: false, error: "กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
-      );
-    }
-
     const jobId = params.id?.trim();
     const body = (await request.json()) as {
       completed_at?: unknown;

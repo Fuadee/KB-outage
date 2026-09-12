@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { DeliveryTrackingError } from "@/lib/deliveryTracking";
-import { authorizeServerRequest } from "@/lib/serverAuth";
 
 const parsePgCode = (details: unknown) => {
   if (typeof details !== "object" || details === null) return "";
@@ -85,9 +84,4 @@ export const buildDeliveryErrorResponse = (error: DeliveryTrackingError) => {
     },
     { status: 500 }
   );
-};
-
-export const ensureAuthenticated = async () => {
-  const { authorized } = await authorizeServerRequest();
-  return authorized;
 };

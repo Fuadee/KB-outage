@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import NavLinks from "@/components/layout/NavLinks";
 import MobileNav from "@/components/layout/MobileNav";
-import UserMenu from "@/components/layout/UserMenu";
 import { brandBadge, topbarBase } from "@/lib/theme";
 
 export default function AppNavbar() {
@@ -38,7 +37,6 @@ export default function AppNavbar() {
             >
               + สร้างงาน
             </Link>
-            <UserMenu />
             <button
               type="button"
               className="inline-flex h-9 w-9 items-center justify-center rounded-[9px] border border-white/20 bg-white/10 text-white transition hover:bg-white/15 md:hidden"

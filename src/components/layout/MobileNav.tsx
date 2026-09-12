@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import NavLinks from "@/components/layout/NavLinks";
-import UserMenu from "@/components/layout/UserMenu";
 import { cn } from "@/lib/utils";
 
 interface MobileNavProps {
@@ -54,9 +53,6 @@ export default function MobileNav({ open, onClose }: MobileNavProps) {
           + สร้างงาน
         </Link>
 
-        <div className="mt-4 border-t border-slate-200 pt-4">
-          <UserMenu compact onAfterLogout={onClose} />
-        </div>
       </aside>
     </div>
   );
