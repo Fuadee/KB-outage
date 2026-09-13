@@ -17,6 +17,7 @@ const jobsRoute = readFileSync(
 
 test("calendar API reads the existing responsible unit and reuses status resolver", () => {
   assert.match(calendarRoute, /outage_date, responsible_unit, has_switching,/);
+  assert.match(calendarRoute, /isShiftOneDistributionPending\(job\)/);
   assert.match(calendarRoute, /getLegacyCalendarStatus\(job\)/);
   assert.match(calendarRoute, /buildCalendarSummary/);
   assert.match(calendarRoute, /ensureSystemCertificateAuthorities\(\)/);
@@ -35,6 +36,7 @@ test("calendar exposes all unit filters and applies them to day details", () => 
   assert.match(calendarPage, /matchesResponsibleUnitFilter/);
   assert.match(jobsRoute, /id, outage_date, equipment_code, responsible_unit,/);
   assert.match(jobsRoute, /has_switching: job\.has_switching \?\? null/);
+  assert.match(jobsRoute, /requires_shift_one_distribution: isShiftOneDistributionPending\(job\)/);
   assert.match(jobsRoute, /responsible_unit: job\.responsible_unit \?\? null/);
   assert.match(jobsRoute, /work_supervisor_name: job\.work_supervisor_name \?\? null/);
   assert.match(jobsRoute, /equipment_code: job\.equipment_code/);
@@ -120,9 +122,17 @@ test("mobile cells show only status dots and counts while reusing filtered summa
   assert.match(calendarPage, /const mobileStatuses = CALENDAR_STATUS_ORDER\.filter/);
   assert.match(calendarPage, /statusStyles\[status\]\.dot/);
   assert.match(calendarPage, /\{daySummary\.total\}/);
+  assert.match(calendarPage, />\s*ก1\s*</);
   assert.match(calendarPage, />\s*SW\s*</);
   assert.match(calendarPage, /setDayRequestRevision/);
   assert.match(calendarPage, /fetch\(`\/api\/jobs\?date=\$\{dateKey\}`\)/);
+});
+
+test("calendar shows the shift 1 indicator in desktop and mobile job details", () => {
+  assert.match(calendarPage, /entry\.shift_one_distribution_count > 0/);
+  assert.match(calendarPage, /<ShiftOneDistributionBadge/);
+  assert.match(calendarPage, /hasShiftOneDistribution/);
+  assert.match(calendarPage, /job\.requires_shift_one_distribution/);
 });
 
 test("mobile selected-day detail renders actual compact jobs without drill-down", () => {
@@ -138,6 +148,7 @@ test("mobile selected-day detail renders actual compact jobs without drill-down"
   assert.match(mobileCard, /data-mobile-selected-job/);
   assert.match(mobileCard, /getResponsibleUnitShortLabel\(job\.responsible_unit\)/);
   assert.match(mobileCard, /getCalendarStatusLabel\(job\.status\)/);
+  assert.match(mobileCard, /job\.requires_shift_one_distribution/);
   assert.match(mobileCard, /job\.equipment_code/);
   assert.match(mobileCard, /job\.display_area/);
   assert.match(mobileCard, /job\.work_supervisor_name \|\| "ยังไม่ระบุ"/);

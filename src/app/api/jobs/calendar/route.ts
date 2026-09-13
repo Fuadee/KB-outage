@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
+import { isShiftOneDistributionPending } from "@/lib/distributionWorkflow";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 import {
   buildCalendarSummary,
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "outage_date, responsible_unit, has_switching, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed"
+        "outage_date, responsible_unit, has_switching, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, notice_completed_at, is_closed"
       )
       .gte("outage_date", from)
       .lte("outage_date", to);
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
             date: job.outage_date,
             responsible_unit: job.responsible_unit,
             has_switching: job.has_switching,
+            requires_shift_one_distribution: isShiftOneDistributionPending(job),
             status: deriveJobStatus(job)
           }
         ];

@@ -6,6 +6,7 @@ import { UserRound } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Segmented from "@/components/ui/Segmented";
+import ShiftOneDistributionBadge from "@/components/job/ShiftOneDistributionBadge";
 import SwitchingBadge from "@/components/job/SwitchingBadge";
 import {
   CALENDAR_STATUS_ORDER,
@@ -82,6 +83,12 @@ function CalendarSummaryRow({ entry }: { entry: CalendarSummaryEntry }) {
         <span className="shrink-0 font-semibold tabular-nums text-slate-900">
           {entry.count}
         </span>
+        {entry.shift_one_distribution_count > 0 ? (
+          <ShiftOneDistributionBadge
+            compact
+            count={entry.shift_one_distribution_count}
+          />
+        ) : null}
         {entry.switching_count > 0 ? (
           <SwitchingBadge compact count={entry.switching_count} />
         ) : null}
@@ -102,6 +109,7 @@ type DayJob = {
   responsible_unit: ResponsibleUnit | null;
   work_supervisor_name: string | null;
   has_switching: boolean | null;
+  requires_shift_one_distribution: boolean;
 };
 
 function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
@@ -130,6 +138,7 @@ function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
           />
           {getCalendarStatusLabel(job.status)}
         </span>
+        {job.requires_shift_one_distribution ? <ShiftOneDistributionBadge /> : null}
         {job.has_switching === true ? <SwitchingBadge compact /> : null}
       </div>
       <p className="mt-2 break-words text-sm font-semibold leading-5 text-slate-900">
@@ -565,13 +574,15 @@ export default function CalendarPage() {
                   .map(getCalendarStatusLabel)
                   .join(", ");
                 const hasSwitching = (daySummary?.switching_count ?? 0) > 0;
+                const hasShiftOneDistribution =
+                  (daySummary?.shift_one_distribution_count ?? 0) > 0;
 
                 return (
                   <button
                     type="button"
                     key={`mobile-${dateKey}`}
                     onClick={() => handleMobileDayClick(date)}
-                    aria-label={`วันที่ ${date.getDate()}${daySummary ? ` มี ${daySummary.total} งาน${statusDescription ? `: ${statusDescription}` : ""}${hasSwitching ? `, มี Switching ${daySummary.switching_count} งาน` : ""}` : " ไม่มีงาน"}`}
+                    aria-label={`วันที่ ${date.getDate()}${daySummary ? ` มี ${daySummary.total} งาน${statusDescription ? `: ${statusDescription}` : ""}${hasShiftOneDistribution ? `, กะ 1 ต้องแจกหนังสือ ${daySummary.shift_one_distribution_count} งาน` : ""}${hasSwitching ? `, มี Switching ${daySummary.switching_count} งาน` : ""}` : " ไม่มีงาน"}`}
                     aria-pressed={isSelected}
                     className={`flex min-h-[52px] min-w-0 flex-col items-center justify-center rounded-md border px-0.5 py-1 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
                       isToday
@@ -600,6 +611,11 @@ export default function CalendarPage() {
                         <span className="ml-0.5 text-[9px] font-semibold leading-none tabular-nums text-slate-600">
                           {daySummary.total}
                         </span>
+                        {hasShiftOneDistribution ? (
+                          <span className="ml-0.5 text-[8px] font-bold leading-none text-amber-700">
+                            ก1
+                          </span>
+                        ) : null}
                         {hasSwitching ? (
                           <span className="ml-0.5 text-[8px] font-bold leading-none text-orange-700">
                             SW
@@ -742,6 +758,9 @@ export default function CalendarPage() {
                               />
                               {getCalendarStatusLabel(job.status)}
                             </span>
+                            {job.requires_shift_one_distribution ? (
+                              <ShiftOneDistributionBadge />
+                            ) : null}
                             {job.has_switching === true ? (
                               <SwitchingBadge compact />
                             ) : null}

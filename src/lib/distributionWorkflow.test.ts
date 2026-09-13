@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   getDistributionWorkflow,
-  isDirectDistributionRoute
+  isDirectDistributionRoute,
+  isShiftOneDistributionPending
 } from "./distributionWorkflow.ts";
 
 test("operations uses shift 1 scheduling and reminder rules", () => {
@@ -78,6 +79,48 @@ test("legacy jobs without a recognized unit fail closed", () => {
   assert.equal(flow.route, "UNASSIGNED");
   assert.equal(flow.assignmentLabel, null);
   assert.equal(flow.reminderEligible, false);
+});
+
+test("shift 1 indicator requires delivered operations work that is not completed or closed", () => {
+  const deliveredOperationsJob = {
+    responsible_unit: "แผนกปฏิบัติการ",
+    document_delivered_at: "2026-09-13T03:00:00.000Z"
+  };
+
+  assert.equal(isShiftOneDistributionPending(deliveredOperationsJob), true);
+  assert.equal(
+    isShiftOneDistributionPending({
+      ...deliveredOperationsJob,
+      notice_status: "COMPLETED"
+    }),
+    false
+  );
+  assert.equal(
+    isShiftOneDistributionPending({
+      ...deliveredOperationsJob,
+      notice_completed_at: "2026-09-13T04:00:00.000Z"
+    }),
+    false
+  );
+  assert.equal(
+    isShiftOneDistributionPending({
+      ...deliveredOperationsJob,
+      is_closed: true
+    }),
+    false
+  );
+  assert.equal(
+    isShiftOneDistributionPending({ responsible_unit: "แผนกก่อสร้าง", document_delivered_at: deliveredOperationsJob.document_delivered_at }),
+    false
+  );
+  assert.equal(
+    isShiftOneDistributionPending({ responsible_unit: "กฟส.อ่าวนาง", document_delivered_at: deliveredOperationsJob.document_delivered_at }),
+    false
+  );
+  assert.equal(
+    isShiftOneDistributionPending({ responsible_unit: "แผนกปฏิบัติการ" }),
+    false
+  );
 });
 
 test("UI and server boundaries reuse the shared resolver", () => {

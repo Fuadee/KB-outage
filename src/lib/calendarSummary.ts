@@ -20,12 +20,14 @@ export type CalendarSummaryEntry = {
   status: CalendarStatus;
   count: number;
   switching_count: number;
+  shift_one_distribution_count: number;
 };
 
 export type CalendarSummaryItem = {
   date: string;
   total: number;
   switching_count: number;
+  shift_one_distribution_count: number;
   entries: CalendarSummaryEntry[];
 };
 
@@ -34,6 +36,7 @@ export type CalendarSummaryRecord = {
   responsible_unit: unknown;
   status: CalendarStatus;
   has_switching?: unknown;
+  requires_shift_one_distribution?: unknown;
 };
 
 const statusRank = new Map(
@@ -74,6 +77,7 @@ export function buildCalendarSummary(
       date: record.date,
       total: 0,
       switching_count: 0,
+      shift_one_distribution_count: 0,
       entries: []
     };
     const entry = summary.entries.find(
@@ -86,15 +90,23 @@ export function buildCalendarSummary(
     if (record.has_switching === true) {
       summary.switching_count += 1;
     }
+    if (record.requires_shift_one_distribution === true) {
+      summary.shift_one_distribution_count += 1;
+    }
     if (entry) {
       entry.count += 1;
       if (record.has_switching === true) entry.switching_count += 1;
+      if (record.requires_shift_one_distribution === true) {
+        entry.shift_one_distribution_count += 1;
+      }
     } else {
       summary.entries.push({
         responsible_unit: responsibleUnit,
         status: record.status,
         count: 1,
-        switching_count: record.has_switching === true ? 1 : 0
+        switching_count: record.has_switching === true ? 1 : 0,
+        shift_one_distribution_count:
+          record.requires_shift_one_distribution === true ? 1 : 0
       });
     }
     byDate.set(record.date, summary);
@@ -126,6 +138,10 @@ export function filterCalendarSummary(
         total: entries.reduce((total, entry) => total + entry.count, 0),
         switching_count: entries.reduce(
           (total, entry) => total + entry.switching_count,
+          0
+        ),
+        shift_one_distribution_count: entries.reduce(
+          (total, entry) => total + entry.shift_one_distribution_count,
           0
         ),
         entries

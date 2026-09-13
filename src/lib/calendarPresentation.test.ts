@@ -9,9 +9,9 @@ import {
 
 test("translates every calendar status without changing its source value", () => {
   assert.equal(getCalendarStatusLabel("Done"), "ปิดงานแล้ว");
-  assert.equal(getCalendarStatusLabel("Posted"), "ประชาสัมพันธ์แล้ว");
+  assert.equal(getCalendarStatusLabel("Posted"), "ลงสื่อแล้ว");
   assert.equal(getCalendarStatusLabel("Doc"), "เอกสาร");
-  assert.equal(getCalendarStatusLabel("Notice"), "แจ้งดับไฟ");
+  assert.equal(getCalendarStatusLabel("Notice"), "แจ้งดับไฟแล้ว");
   assert.equal(getCalendarStatusLabel("Draft"), "เตรียมงาน");
   assert.equal(getCalendarStatusLabel("FutureStatus"), "FutureStatus");
 });
@@ -21,8 +21,8 @@ test("provides the six explanatory workflow steps in their required order", () =
     "สร้างเอกสาร",
     "รับเอกสาร",
     "ส่งเอกสาร",
-    "แจ้งดับไฟ",
-    "ประชาสัมพันธ์",
+    "แจ้งดับไฟแล้ว",
+    "ลงสื่อแล้ว",
     "ปิดงาน"
   ]);
 });

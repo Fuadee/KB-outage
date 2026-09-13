@@ -17,6 +17,11 @@ export type DistributionWorkflowSource = {
   notice_by?: string | null;
 };
 
+export type ShiftOneDistributionPendingSource = DistributionWorkflowSource & {
+  document_delivered_at?: string | null;
+  is_closed?: boolean | null;
+};
+
 export type DistributionWorkflow = {
   route: DistributionRoute;
   responsibleUnit: ResponsibleUnit | null;
@@ -82,4 +87,17 @@ export function getDistributionWorkflow(
 
 export function isDirectDistributionRoute(route: DistributionRoute): boolean {
   return route === "DIRECT_CONSTRUCTION" || route === "DIRECT_AO_NANG";
+}
+
+export function isShiftOneDistributionPending(
+  job: ShiftOneDistributionPendingSource
+): boolean {
+  const workflow = getDistributionWorkflow(job);
+
+  return (
+    workflow.route === "OPERATIONS" &&
+    Boolean(job.document_delivered_at) &&
+    !workflow.completed &&
+    !job.is_closed
+  );
 }

@@ -14,16 +14,16 @@ export const CALENDAR_FLOW_STEPS = [
   "สร้างเอกสาร",
   "รับเอกสาร",
   "ส่งเอกสาร",
-  "แจ้งดับไฟ",
-  "ประชาสัมพันธ์",
+  "แจ้งดับไฟแล้ว",
+  "ลงสื่อแล้ว",
   "ปิดงาน"
 ] as const;
 
 const CALENDAR_STATUS_LABELS: Record<CalendarStatus, string> = {
   Draft: "เตรียมงาน",
   Doc: "เอกสาร",
-  Posted: "ประชาสัมพันธ์แล้ว",
-  Notice: "แจ้งดับไฟ",
+  Posted: CALENDAR_FLOW_STEPS[4],
+  Notice: CALENDAR_FLOW_STEPS[3],
   Done: "ปิดงานแล้ว"
 };
 

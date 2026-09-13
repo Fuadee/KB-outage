@@ -12,9 +12,16 @@ const DATE = "2026-09-15";
 function record(
   responsible_unit: CalendarSummaryRecord["responsible_unit"],
   status: CalendarSummaryRecord["status"],
-  has_switching = false
+  has_switching = false,
+  requires_shift_one_distribution = false
 ): CalendarSummaryRecord {
-  return { date: DATE, responsible_unit, status, has_switching };
+  return {
+    date: DATE,
+    responsible_unit,
+    status,
+    has_switching,
+    requires_shift_one_distribution
+  };
 }
 
 test("separates two units that share the same status", () => {
@@ -26,8 +33,8 @@ test("separates two units that share the same status", () => {
 
   assert.equal(summary[0].total, 3);
   assert.deepEqual(summary[0].entries, [
-    { responsible_unit: "แผนกปฏิบัติการ", status: "Posted", count: 2, switching_count: 0 },
-    { responsible_unit: "แผนกก่อสร้าง", status: "Posted", count: 1, switching_count: 0 }
+    { responsible_unit: "แผนกปฏิบัติการ", status: "Posted", count: 2, switching_count: 0, shift_one_distribution_count: 0 },
+    { responsible_unit: "แผนกก่อสร้าง", status: "Posted", count: 1, switching_count: 0, shift_one_distribution_count: 0 }
   ]);
 });
 
@@ -95,7 +102,7 @@ test("normalizes missing and unknown units as legacy without guessing", () => {
   ]);
 
   assert.deepEqual(summary[0].entries, [
-    { responsible_unit: null, status: "Doc", count: 2, switching_count: 0 }
+    { responsible_unit: null, status: "Doc", count: 2, switching_count: 0, shift_one_distribution_count: 0 }
   ]);
 });
 
@@ -114,5 +121,27 @@ test("counts Switching as supplemental calendar information", () => {
   assert.equal(
     filterCalendarSummary(summary, "แผนกปฏิบัติการ")[0].switching_count,
     1
+  );
+});
+
+test("counts pending shift 1 distribution alongside Switching", () => {
+  const summary = buildCalendarSummary([
+    record("แผนกปฏิบัติการ", "Doc", true, true),
+    record("แผนกปฏิบัติการ", "Doc", false, true),
+    record("แผนกก่อสร้าง", "Doc", true, false)
+  ]);
+
+  assert.equal(summary[0].total, 3);
+  assert.equal(summary[0].switching_count, 2);
+  assert.equal(summary[0].shift_one_distribution_count, 2);
+  assert.deepEqual(
+    summary[0].entries.map((entry) => [
+      entry.switching_count,
+      entry.shift_one_distribution_count
+    ]),
+    [
+      [1, 2],
+      [1, 0]
+    ]
   );
 });
