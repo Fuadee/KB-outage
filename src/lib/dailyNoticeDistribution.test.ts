@@ -100,30 +100,75 @@ test("dry run reports a match without sending or logging", async () => {
   assert.equal(harness.recorded.length, 0);
 });
 
-test("tomorrow and yesterday are not sent by today's run", async () => {
-  const tomorrow = makeJob("tomorrow", { notice_date: "2026-09-13" });
-  const yesterday = makeJob("yesterday", { notice_date: "2026-09-11" });
+test("a pending distribution due before today is sent", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
-    jobs: [tomorrow, yesterday],
+    jobs: [makeJob("yesterday", { notice_date: "2026-09-11" })],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.sent, 1);
+  assert.equal(summary.matched, 1);
+});
+
+test("a pending distribution overdue by several days is sent", async () => {
+  const harness = createHarness();
+  const summary = await processNoticeDistributionJobs({
+    jobs: [makeJob("overdue", { notice_date: "2026-09-01" })],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.sent, 1);
+  assert.equal(summary.matched, 1);
+});
+
+test("a future distribution is not sent", async () => {
+  const tomorrow = makeJob("tomorrow", { notice_date: "2026-09-13" });
+  const harness = createHarness();
+  const summary = await processNoticeDistributionJobs({
+    jobs: [tomorrow],
     targetDate,
     dryRun: false,
     ...harness
   });
 
   assert.equal(summary.sent, 0);
-  assert.equal(summary.skipReasons.notice_date_not_match, 2);
+  assert.equal(summary.skipReasons.notice_date_not_match, 1);
 });
 
-test("completed or closed distribution jobs are not sent", async () => {
+test("a distribution without a notice date is not sent", async () => {
+  const harness = createHarness();
+  const summary = await processNoticeDistributionJobs({
+    jobs: [makeJob("missing-date", { notice_date: null })],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.sent, 0);
+  assert.equal(summary.skipReasons.notice_date_not_match, 1);
+});
+
+test("an overdue completed distribution is not sent", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
     jobs: [
-      makeJob("status-complete", { notice_status: "COMPLETED" }),
+      makeJob("status-complete", {
+        notice_date: "2026-09-10",
+        notice_status: "COMPLETED"
+      }),
       makeJob("timestamp-complete", {
+        notice_date: "2026-09-10",
         notice_completed_at: "2026-09-12T02:00:00.000Z"
       }),
-      makeJob("closed", { is_closed: true })
+      makeJob("legacy-sent", {
+        notice_date: "2026-09-10",
+        notice_status: "SENT"
+      })
     ],
     targetDate,
     dryRun: false,
@@ -131,16 +176,36 @@ test("completed or closed distribution jobs are not sent", async () => {
   });
 
   assert.equal(summary.sent, 0);
-  assert.equal(summary.skipReasons.notice_already_completed, 2);
-  assert.equal(summary.skipReasons["is_closed=true"], 1);
+  assert.equal(summary.skipReasons.notice_already_completed, 3);
 });
 
-test("construction and Ao Nang never enter the shift 1 reminder flow", async () => {
+test("an overdue closed job is not sent", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
     jobs: [
-      makeJob("construction", { responsible_unit: "แผนกก่อสร้าง" }),
-      makeJob("ao-nang", { responsible_unit: "กฟส.อ่าวนาง" })
+      makeJob("closed", { notice_date: "2026-09-10", is_closed: true })
+    ],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.sent, 0);
+  assert.equal(summary.skipReasons["is_closed=true"], 1);
+});
+
+test("overdue construction and Ao Nang jobs never enter the shift 1 reminder flow", async () => {
+  const harness = createHarness();
+  const summary = await processNoticeDistributionJobs({
+    jobs: [
+      makeJob("construction", {
+        notice_date: "2026-09-10",
+        responsible_unit: "แผนกก่อสร้าง"
+      }),
+      makeJob("ao-nang", {
+        notice_date: "2026-09-10",
+        responsible_unit: "กฟส.อ่าวนาง"
+      })
     ],
     targetDate,
     dryRun: false,
@@ -176,11 +241,11 @@ test("three due jobs produce three independent messages", async () => {
   assert.equal(harness.recorded.length, 3);
 });
 
-test("a repeated run skips the same job by stable event key", async () => {
+test("retrying an overdue job on the same day does not send twice", async () => {
   const sentEvents = new Set<string>();
   const first = createHarness(sentEvents);
   await processNoticeDistributionJobs({
-    jobs: [makeJob("same")],
+    jobs: [makeJob("same", { notice_date: "2026-09-10" })],
     targetDate,
     dryRun: false,
     ...first
@@ -188,7 +253,7 @@ test("a repeated run skips the same job by stable event key", async () => {
 
   const second = createHarness(sentEvents);
   const summary = await processNoticeDistributionJobs({
-    jobs: [makeJob("same")],
+    jobs: [makeJob("same", { notice_date: "2026-09-10" })],
     targetDate,
     dryRun: false,
     ...second
@@ -197,6 +262,32 @@ test("a repeated run skips the same job by stable event key", async () => {
   assert.equal(summary.sent, 0);
   assert.equal(summary.skipReasons.already_notified_today, 1);
   assert.equal(second.messages.length, 0);
+});
+
+test("an overdue pending job can be notified again on the next day", async () => {
+  const job = makeJob("next-day", { notice_date: "2026-09-10" });
+  const sentEvents = new Set<string>();
+  const first = createHarness(sentEvents);
+  await processNoticeDistributionJobs({
+    jobs: [job],
+    targetDate,
+    dryRun: false,
+    ...first
+  });
+
+  const nextDate = "2026-09-13";
+  const nextDay = createHarness(sentEvents);
+  const summary = await processNoticeDistributionJobs({
+    jobs: [job],
+    targetDate: nextDate,
+    dryRun: false,
+    ...nextDay
+  });
+
+  assert.equal(summary.sent, 1);
+  assert.deepEqual(nextDay.recorded, [
+    buildNoticeDistributionEventKey(job.id, nextDate)
+  ]);
 });
 
 test("a failed LINE job is not logged and does not stop the next job", async () => {
@@ -285,7 +376,8 @@ test("manual preview and daily notification use the same builder", () => {
   assert.match(migration, /line_notification_events/);
   assert.doesNotMatch(migration, /notice_completed_at\s*=/);
   assert.match(cronService, /processNoticeDistributionJobs\(/);
-  assert.match(cronService, /\.eq\("notice_date", targetDate\)/);
+  assert.match(cronService, /\.lte\("notice_date", targetDate\)/);
+  assert.doesNotMatch(cronService, /\.eq\("notice_date", targetDate\)/);
   assert.match(cronService, /\.eq\("responsible_unit", "แผนกปฏิบัติการ"\)/);
   assert.match(cronService, /X-Line-Retry-Key/);
   assert.match(cronService, /error\.code !== "23505"/);

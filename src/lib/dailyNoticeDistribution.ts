@@ -94,7 +94,8 @@ export function getNoticeDistributionSkipReason(
     return "not_operations_distribution";
   }
 
-  if (normalizeDateOnly(job.notice_date) !== targetDate) {
+  const noticeDate = normalizeDateOnly(job.notice_date);
+  if (!noticeDate || noticeDate > targetDate) {
     return "notice_date_not_match";
   }
 

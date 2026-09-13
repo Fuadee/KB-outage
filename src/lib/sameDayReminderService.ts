@@ -308,7 +308,7 @@ async function fetchNoticeDistributionJobs(
     .select(
       "id,equipment_code,outage_date,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_completed_at,is_closed"
     )
-    .eq("notice_date", targetDate)
+    .lte("notice_date", targetDate)
     .eq("responsible_unit", "แผนกปฏิบัติการ")
     .order("outage_date", { ascending: true });
 
