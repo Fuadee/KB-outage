@@ -17,6 +17,10 @@ import {
   normalizeDateOnly,
 } from "@/lib/reminder";
 import { reminderConfig } from "@/lib/reminderConfig";
+import {
+  runIndependentReminderFlows,
+  type ReminderFlowName
+} from "@/lib/reminderFlowOrchestrator";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export type SameDayReminderJob = {
@@ -36,12 +40,8 @@ export type SameDayReminderRunInput = {
   trigger: "external-get" | "external-post";
 };
 
-export type SameDayReminderRunSummary = {
+export type SameDayReminderFlowSummary = {
   ok: boolean;
-  nowUtc: string;
-  nowBangkok: string;
-  targetDateUsed: string;
-  dryRun: boolean;
   totalRowsChecked: number;
   matched: number;
   sent: number;
@@ -57,8 +57,18 @@ export type SameDayReminderRunSummary = {
   lineSendAttempts: number;
   lineSendFailures: number;
   updatedRows: number;
-  trigger: SameDayReminderRunInput["trigger"];
   errors: Array<{ id?: number | string; error: string }>;
+};
+
+export type SameDayReminderRunSummary = {
+  ok: boolean;
+  runId: string;
+  nowUtc: string;
+  nowBangkok: string;
+  targetDateUsed: string;
+  dryRun: boolean;
+  trigger: SameDayReminderRunInput["trigger"];
+  sameDayReminder: SameDayReminderFlowSummary;
   noticeDistribution: NoticeDistributionRunSummary;
 };
 
@@ -214,6 +224,22 @@ function supabaseError(error: { message: string }) {
   return new Error(error.message, { cause: error });
 }
 
+export function createEmptySameDayReminderSummary(): SameDayReminderFlowSummary {
+  return {
+    ok: true,
+    totalRowsChecked: 0,
+    matched: 0,
+    sent: 0,
+    skipped: 0,
+    skipReasons: {},
+    sampleRows: [],
+    lineSendAttempts: 0,
+    lineSendFailures: 0,
+    updatedRows: 0,
+    errors: []
+  };
+}
+
 export function createEmptyNoticeDistributionSummary(): NoticeDistributionRunSummary {
   return {
     ok: true,
@@ -355,375 +381,396 @@ export async function runSameDayReminder(
   const now = new Date();
   const nowUtc = now.toISOString();
   const nowBangkok = formatBangkokDateTime(now);
-
-  const summary: SameDayReminderRunSummary = {
-    ok: true,
-    nowUtc,
-    nowBangkok,
-    targetDateUsed: normalizeDateOnly(input.date) ?? computeBangkokTodayDateOnly(now),
-    dryRun: Boolean(input.dryRun),
-    totalRowsChecked: 0,
-    matched: 0,
-    sent: 0,
-    skipped: 0,
-    skipReasons: {},
-    sampleRows: [],
-    lineSendAttempts: 0,
-    lineSendFailures: 0,
-    updatedRows: 0,
-    trigger: input.trigger,
-    errors: [],
-    noticeDistribution: createEmptyNoticeDistributionSummary()
-  };
+  const targetDateUsed = normalizeDateOnly(input.date) ?? computeBangkokTodayDateOnly(now);
+  const dryRun = Boolean(input.dryRun);
+  const trigger = input.trigger;
+  const sameDaySummary = createEmptySameDayReminderSummary();
 
   const addSkipReason = (reason: string) => {
-    summary.skipped += 1;
-    summary.skipReasons[reason] = (summary.skipReasons[reason] ?? 0) + 1;
+    sameDaySummary.skipped += 1;
+    sameDaySummary.skipReasons[reason] =
+      (sameDaySummary.skipReasons[reason] ?? 0) + 1;
   };
 
   const runtimeReadiness = getReminderRuntimeReadiness();
   const missing = getReminderMissingEnvKeys(runtimeReadiness);
-  if (missing.length > 0) {
-    console.error("same-day-reminder-missing-env", { nowUtc: summary.nowUtc, trigger: summary.trigger, missing });
-    return {
-      status: 500,
-      summary: {
-        ...summary,
-        ok: false,
-        errors: [{ error: `Missing required env variables: ${missing.join(", ")}` }],
-      },
-    };
-  }
-
-  if (!reminderConfig.allowSameDayReminder) {
-    console.warn("same-day-reminder-disabled", { nowUtc: summary.nowUtc, trigger: summary.trigger });
-    addSkipReason("same_day_reminder_disabled");
-    return {
-      status: 200,
-      summary,
-    };
-  }
-
   const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN as string;
   const lineTargetId = process.env.LINE_DEFAULT_TARGET_ID as string;
   const lineSupabaseUrl = process.env.SUPABASE_URL as string;
   const lineServiceRoleKey = (process.env.SUPABASE_SECRET_KEY ??
     process.env.SUPABASE_SERVICE_ROLE_KEY) as string;
-
-  try {
-    ensureSystemCertificateAuthorities();
-    const originalQueryContext: ReminderBoundaryContext = {
+  const missingEnvironmentError =
+    missing.length > 0
+      ? `Missing required env variables: ${missing.join(", ")}`
+      : null;
+  const flowStartedAt = new Map<ReminderFlowName, number>();
+  if (missingEnvironmentError) {
+    console.error("same-day-reminder-missing-env", {
       runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "original_same_day.query_jobs",
-      service: "supabase",
-    };
-    const { jobs, statusFieldExists } = await runReminderBoundary(
-      originalQueryContext,
-      () =>
-        fetchSameDayReminderJobs(
-          lineSupabaseUrl,
-          lineServiceRoleKey,
-          summary.targetDateUsed,
-          originalQueryContext
-        ),
-      (result) => ({
-        rowCount: result.jobs.length,
-        statusFieldExists: result.statusFieldExists,
-      })
-    );
-
-    summary.totalRowsChecked = jobs.length;
-
-    console.log("same-day-reminder-query-result", {
-      nowUtc: summary.nowUtc,
-      targetDateUsed: summary.targetDateUsed,
-      totalRowsChecked: summary.totalRowsChecked,
-      statusFieldExists,
-      trigger: summary.trigger,
+      nowUtc,
+      trigger,
+      missing
     });
-    summary.sampleRows = jobs.slice(0, 10).map((job) => ({
-      id: job.id,
-      equipment_code: job.equipment_code,
-      outage_date: job.outage_date,
-      status: job.status ?? null,
-      line_same_day_reminder_sent_at: job.line_same_day_reminder_sent_at,
-    }));
+  }
 
-    const updateContext: ReminderBoundaryContext = {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "original_same_day.update_sent_at",
-      service: "supabase",
-    };
-    const supabase = createReminderSupabaseClient(
-      lineSupabaseUrl,
-      lineServiceRoleKey,
-      updateContext
-    );
+  const flows = await runIndependentReminderFlows({
+    sameDayReminder: {
+      run: async () => {
+        if (missingEnvironmentError) throw new Error(missingEnvironmentError);
+        if (!reminderConfig.allowSameDayReminder) {
+          console.warn("same-day-reminder-disabled", { runId, nowUtc, trigger });
+          addSkipReason("same_day_reminder_disabled");
+          return sameDaySummary;
+        }
 
-    for (const job of jobs) {
-      const skipReason = getSameDayReminderSkipReason(job, summary.targetDateUsed, statusFieldExists);
-      if (skipReason) {
-        addSkipReason(skipReason);
-        continue;
-      }
+        ensureSystemCertificateAuthorities();
+        const originalQueryContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "original_same_day.query_jobs",
+          service: "supabase",
+        };
+        const { jobs, statusFieldExists } = await runReminderBoundary(
+          originalQueryContext,
+          () =>
+            fetchSameDayReminderJobs(
+              lineSupabaseUrl,
+              lineServiceRoleKey,
+              targetDateUsed,
+              originalQueryContext
+            ),
+          (result) => ({
+            rowCount: result.jobs.length,
+            statusFieldExists: result.statusFieldExists,
+          })
+        );
 
-      summary.matched += 1;
-
-      if (summary.dryRun) {
-        addSkipReason("dry_run_no_send");
-        continue;
-      }
-
-      const lineText = formatSameDayReminderMessage({
-        equipmentCode: job.equipment_code,
-        outageDate: job.outage_date,
-        mapLink: job.map_link,
-      });
-
-      summary.lineSendAttempts += 1;
-
-      const outageEventKey = `SAME_DAY_OUTAGE:${job.id}:${summary.targetDateUsed}`;
-
-      const originalLineContext: ReminderBoundaryContext = {
-        runId,
-        targetDate: summary.targetDateUsed,
-        trigger: summary.trigger,
-        boundary: "original_same_day.line_push",
-        service: "line",
-        jobId: job.id,
-      };
-      const lineResult = await runReminderBoundary(
-        originalLineContext,
-        () =>
-          pushLineMessage(
-            lineToken,
-            lineTargetId,
-            lineText,
-            buildLineRetryKey(outageEventKey)
-          ),
-        (result) => ({
-          ok: result.ok,
-          httpStatus: result.status,
-          requestId: result.requestId,
-          responseBody: result.ok ? undefined : sanitizeLogText(result.body),
-        })
-      ).catch((error) => ({
-          ok: false,
-          status: 0,
-          body: error instanceof Error ? error.message : "Unknown LINE push error",
-          requestId: null
+        sameDaySummary.totalRowsChecked = jobs.length;
+        console.log("same-day-reminder-query-result", {
+          runId,
+          nowUtc,
+          targetDateUsed,
+          totalRowsChecked: sameDaySummary.totalRowsChecked,
+          statusFieldExists,
+          trigger,
+        });
+        sameDaySummary.sampleRows = jobs.slice(0, 10).map((job) => ({
+          id: job.id,
+          equipment_code: job.equipment_code,
+          outage_date: job.outage_date,
+          status: job.status ?? null,
+          line_same_day_reminder_sent_at: job.line_same_day_reminder_sent_at,
         }));
 
-      if (!lineResult.ok) {
-        summary.lineSendFailures += 1;
-        summary.errors.push({ id: job.id, error: `LINE push failed (${lineResult.status}): ${lineResult.body}` });
-        addSkipReason("line_push_failed");
-        continue;
-      }
-
-      const { data: updatedRows, error: updateError } = await runReminderBoundary(
-        { ...updateContext, jobId: job.id },
-        async () =>
-          await supabase
-            .from("outage_jobs")
-            .update({ line_same_day_reminder_sent_at: new Date().toISOString() })
-            .eq("id", job.id)
-            .is("line_same_day_reminder_sent_at", null)
-            .select("id"),
-        (result) => ({ rowCount: result.data?.length ?? 0, hasError: Boolean(result.error) })
-      );
-
-      if (updateError) {
-        summary.errors.push({
-          id: job.id,
-          error: `Failed to update line_same_day_reminder_sent_at: ${updateError.message}`,
-        });
-        addSkipReason("update_sent_at_failed");
-        continue;
-      }
-
-      if (!updatedRows || updatedRows.length === 0) {
-        addSkipReason("update_conflict_or_already_sent");
-        continue;
-      }
-
-      summary.updatedRows += updatedRows.length;
-      summary.sent += 1;
-    }
-
-    console.log("same-day-reminder-original-flow-completed", {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      matched: summary.matched,
-      sent: summary.sent,
-      skipped: summary.skipped,
-      lineSendFailures: summary.lineSendFailures,
-      updatedRows: summary.updatedRows,
-    });
-
-    const distributionQueryContext: ReminderBoundaryContext = {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "notice_distribution.query_jobs",
-      service: "supabase",
-    };
-    const distributionJobs = await runReminderBoundary(
-      distributionQueryContext,
-      () =>
-        fetchNoticeDistributionJobs(
+        const updateContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "original_same_day.update_sent_at",
+          service: "supabase",
+        };
+        const supabase = createReminderSupabaseClient(
           lineSupabaseUrl,
           lineServiceRoleKey,
-          summary.targetDateUsed,
-          distributionQueryContext
-        ),
-      (jobs) => ({ rowCount: jobs.length })
-    );
-    const eventQueryContext: ReminderBoundaryContext = {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "notice_distribution.query_event_log",
-      service: "supabase",
-    };
-    const sentDistributionEventKeys = await runReminderBoundary(
-      eventQueryContext,
-      () =>
-        fetchNoticeDistributionSentEventKeys(
-          lineSupabaseUrl,
-          lineServiceRoleKey,
-          summary.targetDateUsed,
-          eventQueryContext
-        ),
-      (eventKeys) => ({ rowCount: eventKeys.size })
-    );
-    const eventInsertContext: ReminderBoundaryContext = {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "notice_distribution.notification_log_insert",
-      service: "supabase",
-    };
-    const distributionSupabase = createReminderSupabaseClient(
-      lineSupabaseUrl,
-      lineServiceRoleKey,
-      eventInsertContext
-    );
+          updateContext
+        );
 
-    const distributionProcessContext: ReminderBoundaryContext = {
-      runId,
-      targetDate: summary.targetDateUsed,
-      trigger: summary.trigger,
-      boundary: "notice_distribution.process",
-      service: "application",
-    };
-    summary.noticeDistribution = await runReminderBoundary(
-      distributionProcessContext,
-      () =>
-        processNoticeDistributionJobs({
-          jobs: distributionJobs,
-          targetDate: summary.targetDateUsed,
-          dryRun: summary.dryRun,
-          sentEventKeys: sentDistributionEventKeys,
-          pushMessage: async ({ job, message, retryKey }) => {
-            const lineContext: ReminderBoundaryContext = {
-              runId,
-              targetDate: summary.targetDateUsed,
-              trigger: summary.trigger,
-              boundary: "notice_distribution.line_push",
-              service: "line",
-              jobId: job.id,
-            };
-            return runReminderBoundary(
-              lineContext,
-              () => pushLineMessage(lineToken, lineTargetId, message, retryKey),
-              (result) => ({
-                ok: result.ok,
-                httpStatus: result.status,
-                requestId: result.requestId,
-                responseBody: result.ok ? undefined : sanitizeLogText(result.body),
-              })
-            );
-          },
-          recordSentEvent: async ({ job, eventKey, targetDate, requestId }) => {
-            const insertContext = { ...eventInsertContext, jobId: job.id };
-            await runReminderBoundary(insertContext, async () => {
-              const { error } = await distributionSupabase
-                .from("line_notification_events")
-                .insert({
-                  event_key: eventKey,
-                  event_type: NOTICE_DISTRIBUTION_EVENT_TYPE,
-                  job_id: job.id,
-                  business_date: targetDate,
-                  sent_at: new Date().toISOString(),
-                  line_request_id: requestId
-                });
-
-              // A concurrent invocation may have logged the same successful LINE
-              // retry key first. The primary key makes that a safe success.
-              if (error && error.code !== "23505") throw supabaseError(error);
-            });
+        for (const job of jobs) {
+          const skipReason = getSameDayReminderSkipReason(
+            job,
+            targetDateUsed,
+            statusFieldExists
+          );
+          if (skipReason) {
+            addSkipReason(skipReason);
+            continue;
           }
-        }),
-      (result) => ({
-        ok: result.ok,
-        matched: result.matched,
-        sent: result.sent,
-        logged: result.logged,
-        lineSendFailures: result.lineSendFailures,
-      })
-    );
 
-    console.log("same-day-reminder-run", {
-      runId,
-      nowUtc: summary.nowUtc,
-      nowBangkok: summary.nowBangkok,
-      targetDateUsed: summary.targetDateUsed,
-      dryRun: summary.dryRun,
-      totalRowsChecked: summary.totalRowsChecked,
-      matched: summary.matched,
-      sent: summary.sent,
-      skipped: summary.skipped,
-      skipReasons: summary.skipReasons,
-      sampleRows: summary.sampleRows,
-      lineSendAttempts: summary.lineSendAttempts,
-      lineSendFailures: summary.lineSendFailures,
-      updatedRows: summary.updatedRows,
-      noticeDistribution: summary.noticeDistribution,
-      trigger: summary.trigger,
-      errors: summary.errors,
-    });
+          sameDaySummary.matched += 1;
+          if (dryRun) {
+            addSkipReason("dry_run_no_send");
+            continue;
+          }
 
-    if (!summary.noticeDistribution.ok) {
-      summary.ok = false;
-    }
+          const lineText = formatSameDayReminderMessage({
+            equipmentCode: job.equipment_code,
+            outageDate: job.outage_date,
+            mapLink: job.map_link,
+          });
+          sameDaySummary.lineSendAttempts += 1;
+          const outageEventKey = `SAME_DAY_OUTAGE:${job.id}:${targetDateUsed}`;
+          const originalLineContext: ReminderBoundaryContext = {
+            runId,
+            targetDate: targetDateUsed,
+            trigger,
+            boundary: "original_same_day.line_push",
+            service: "line",
+            jobId: job.id,
+          };
+          const lineResult = await runReminderBoundary(
+            originalLineContext,
+            () =>
+              pushLineMessage(
+                lineToken,
+                lineTargetId,
+                lineText,
+                buildLineRetryKey(outageEventKey)
+              ),
+            (result) => ({
+              ok: result.ok,
+              httpStatus: result.status,
+              requestId: result.requestId,
+              responseBody: result.ok ? undefined : sanitizeLogText(result.body),
+            })
+          ).catch((error) => ({
+            ok: false,
+            status: 0,
+            body: error instanceof Error ? error.message : "Unknown LINE push error",
+            requestId: null
+          }));
 
-    return {
-      status: summary.noticeDistribution.ok ? 200 : 502,
-      summary
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("same-day-reminder-run-failed", {
-      runId,
-      nowUtc: summary.nowUtc,
-      targetDateUsed: summary.targetDateUsed,
-      trigger: summary.trigger,
-      error: message,
-      errorDetail: safeErrorDetail(error),
-    });
-    return {
-      status: 500,
-      summary: {
-        ...summary,
-        ok: false,
-        errors: [...summary.errors, { error: message }],
+          if (!lineResult.ok) {
+            sameDaySummary.ok = false;
+            sameDaySummary.lineSendFailures += 1;
+            sameDaySummary.errors.push({
+              id: job.id,
+              error: `LINE push failed (${lineResult.status}): ${lineResult.body}`
+            });
+            addSkipReason("line_push_failed");
+            continue;
+          }
+
+          const { data: updatedRows, error: updateError } = await runReminderBoundary(
+            { ...updateContext, jobId: job.id },
+            async () =>
+              await supabase
+                .from("outage_jobs")
+                .update({ line_same_day_reminder_sent_at: new Date().toISOString() })
+                .eq("id", job.id)
+                .is("line_same_day_reminder_sent_at", null)
+                .select("id"),
+            (result) => ({
+              rowCount: result.data?.length ?? 0,
+              hasError: Boolean(result.error)
+            })
+          );
+
+          if (updateError) {
+            sameDaySummary.ok = false;
+            sameDaySummary.errors.push({
+              id: job.id,
+              error: `Failed to update line_same_day_reminder_sent_at: ${updateError.message}`,
+            });
+            addSkipReason("update_sent_at_failed");
+            continue;
+          }
+
+          if (!updatedRows || updatedRows.length === 0) {
+            addSkipReason("update_conflict_or_already_sent");
+            continue;
+          }
+
+          sameDaySummary.updatedRows += updatedRows.length;
+          sameDaySummary.sent += 1;
+        }
+
+        console.log("same-day-reminder-original-flow-completed", {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          matched: sameDaySummary.matched,
+          sent: sameDaySummary.sent,
+          skipped: sameDaySummary.skipped,
+          lineSendFailures: sameDaySummary.lineSendFailures,
+          updatedRows: sameDaySummary.updatedRows,
+        });
+        return sameDaySummary;
       },
-    };
-  }
+      failedSummary: (error) => ({
+        ...sameDaySummary,
+        ok: false,
+        errors: [
+          ...sameDaySummary.errors,
+          { error: error instanceof Error ? error.message : "Unknown error" }
+        ]
+      })
+    },
+    noticeDistribution: {
+      run: async () => {
+        if (missingEnvironmentError) throw new Error(missingEnvironmentError);
+        ensureSystemCertificateAuthorities();
+        const distributionQueryContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "notice_distribution.query_jobs",
+          service: "supabase",
+        };
+        const distributionJobs = await runReminderBoundary(
+          distributionQueryContext,
+          () =>
+            fetchNoticeDistributionJobs(
+              lineSupabaseUrl,
+              lineServiceRoleKey,
+              targetDateUsed,
+              distributionQueryContext
+            ),
+          (jobs) => ({ rowCount: jobs.length })
+        );
+        const eventQueryContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "notice_distribution.query_event_log",
+          service: "supabase",
+        };
+        const sentDistributionEventKeys = await runReminderBoundary(
+          eventQueryContext,
+          () =>
+            fetchNoticeDistributionSentEventKeys(
+              lineSupabaseUrl,
+              lineServiceRoleKey,
+              targetDateUsed,
+              eventQueryContext
+            ),
+          (eventKeys) => ({ rowCount: eventKeys.size })
+        );
+        const eventInsertContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "notice_distribution.notification_log_insert",
+          service: "supabase",
+        };
+        const distributionSupabase = createReminderSupabaseClient(
+          lineSupabaseUrl,
+          lineServiceRoleKey,
+          eventInsertContext
+        );
+        const distributionProcessContext: ReminderBoundaryContext = {
+          runId,
+          targetDate: targetDateUsed,
+          trigger,
+          boundary: "notice_distribution.process",
+          service: "application",
+        };
+
+        return runReminderBoundary(
+          distributionProcessContext,
+          () =>
+            processNoticeDistributionJobs({
+              jobs: distributionJobs,
+              targetDate: targetDateUsed,
+              dryRun,
+              sentEventKeys: sentDistributionEventKeys,
+              pushMessage: async ({ job, message, retryKey }) => {
+                const lineContext: ReminderBoundaryContext = {
+                  runId,
+                  targetDate: targetDateUsed,
+                  trigger,
+                  boundary: "notice_distribution.line_push",
+                  service: "line",
+                  jobId: job.id,
+                };
+                return runReminderBoundary(
+                  lineContext,
+                  () => pushLineMessage(lineToken, lineTargetId, message, retryKey),
+                  (result) => ({
+                    ok: result.ok,
+                    httpStatus: result.status,
+                    requestId: result.requestId,
+                    responseBody: result.ok ? undefined : sanitizeLogText(result.body),
+                  })
+                );
+              },
+              recordSentEvent: async ({ job, eventKey, targetDate, requestId }) => {
+                const insertContext = { ...eventInsertContext, jobId: job.id };
+                await runReminderBoundary(insertContext, async () => {
+                  const { error } = await distributionSupabase
+                    .from("line_notification_events")
+                    .insert({
+                      event_key: eventKey,
+                      event_type: NOTICE_DISTRIBUTION_EVENT_TYPE,
+                      job_id: job.id,
+                      business_date: targetDate,
+                      sent_at: new Date().toISOString(),
+                      line_request_id: requestId
+                    });
+
+                  // A concurrent invocation may have logged the same successful LINE
+                  // retry key first. The primary key makes that a safe success.
+                  if (error && error.code !== "23505") throw supabaseError(error);
+                });
+              }
+            }),
+          (result) => ({
+            ok: result.ok,
+            matched: result.matched,
+            sent: result.sent,
+            logged: result.logged,
+            lineSendFailures: result.lineSendFailures,
+          })
+        );
+      },
+      failedSummary: (error) => ({
+        ...createEmptyNoticeDistributionSummary(),
+        ok: false,
+        errors: [
+          { error: error instanceof Error ? error.message : "Unknown error" }
+        ]
+      })
+    },
+    lifecycle: {
+      started: (flow) => {
+        flowStartedAt.set(flow, Date.now());
+        console.log("daily-line-reminder-flow-started", {
+          runId,
+          flow,
+          targetDate: targetDateUsed,
+          trigger
+        });
+      },
+      completed: (flow, flowSummary) => {
+        const log = flowSummary.ok ? console.log : console.error;
+        log("daily-line-reminder-flow-completed", {
+          runId,
+          flow,
+          targetDate: targetDateUsed,
+          trigger,
+          ok: flowSummary.ok,
+          errors: flowSummary.ok ? [] : flowSummary.errors,
+          durationMs: Date.now() - (flowStartedAt.get(flow) ?? Date.now())
+        });
+      },
+      failed: (flow, error) => {
+        console.error("daily-line-reminder-flow-failed", {
+          runId,
+          flow,
+          targetDate: targetDateUsed,
+          trigger,
+          durationMs: Date.now() - (flowStartedAt.get(flow) ?? Date.now()),
+          error: safeErrorDetail(error)
+        });
+      }
+    }
+  });
+
+  const ok = flows.sameDayReminder.ok && flows.noticeDistribution.ok;
+  const summary: SameDayReminderRunSummary = {
+    ok,
+    runId,
+    nowUtc,
+    nowBangkok,
+    targetDateUsed,
+    dryRun,
+    trigger,
+    ...flows
+  };
+
+  console.log("same-day-reminder-run", summary);
+  return {
+    status: ok ? 200 : missingEnvironmentError ? 500 : 502,
+    summary
+  };
 }

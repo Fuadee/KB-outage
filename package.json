@@ -19,7 +19,7 @@
     "test:job-metadata": "node --test --experimental-strip-types src/lib/jobMetadata.test.ts src/lib/jobMetadataIntegration.test.ts",
     "test:calendar-summary": "node --test --experimental-strip-types src/lib/calendarSummary.test.ts src/lib/calendarPresentation.test.ts src/lib/calendarIntegration.test.ts",
     "test:notice-message": "node --test --experimental-strip-types src/lib/outageNoticeMessage.test.ts",
-    "test:daily-notice-notification": "node --test --experimental-strip-types src/lib/dailyNoticeDistribution.test.ts",
+    "test:daily-notice-notification": "node --test --experimental-strip-types src/lib/dailyNoticeDistribution.test.ts src/lib/reminderFlowOrchestrator.test.ts",
     "test:modal-lifecycle": "node --test --experimental-strip-types src/components/Modal.lifecycle.test.ts",
     "test:dashboard-api": "node --test --experimental-strip-types src/lib/dashboardSupabase.test.ts",
     "test:delivery-key": "node --test --experimental-strip-types src/lib/deliveryTrackingKey.test.ts",

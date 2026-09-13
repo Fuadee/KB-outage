@@ -108,30 +108,29 @@ Invoke-RestMethod -Method POST `
 
 Response includes ops-friendly fields:
 - `ok`
+- `runId` (shared by both flow boundaries for the request)
 - `nowUtc`
 - `nowBangkok`
 - `targetDateUsed`
 - `dryRun`
-- `totalRowsChecked`
-- `matched`
-- `sent`
-- `skipped`
-- `skipReasons`
-- `sampleRows`
-- `lineSendAttempts`
-- `lineSendFailures`
-- `updatedRows`
 - `trigger`
-- `errors`
-- `noticeDistribution` (nested counters, skip reasons, LINE failures, and
+- `sameDayReminder` (nested `ok`, counters, skip reasons, LINE failures,
+  sent-flag updates, and errors)
+- `noticeDistribution` (nested `ok`, counters, skip reasons, LINE failures, and
   successful idempotency-log writes for notice-distribution assignments)
+
+The two nested results are independent. A failure in either result does not
+prevent the other flow from being attempted. Any partial or complete failure
+returns a non-2xx status so the scheduler can retry; existing sent flags, event
+keys, and LINE retry keys prevent successful work from being sent twice.
 
 ## 7) Verify after run
 
 1. Check API response:
-   - `ok=true`
-   - `targetDateUsed` matches expected date
-   - counters (`matched`, `sent`, `skipped`, `skipReasons`) are reasonable
+    - `ok=true`
+    - `targetDateUsed` matches expected date
+    - `sameDayReminder.ok` and `noticeDistribution.ok` match each flow outcome
+    - nested counters (`matched`, `sent`, `skipped`, `skipReasons`) are reasonable
 2. Check Vercel logs for:
    - request timestamp
    - auth pass/fail

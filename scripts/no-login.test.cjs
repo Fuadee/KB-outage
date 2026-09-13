@@ -79,6 +79,7 @@ function harness(legacyFlag) {
     '@/lib/deliveryTracking': delivery,
     '@/lib/sameDayReminderService': {
       createEmptyNoticeDistributionSummary: () => ({}),
+      createEmptySameDayReminderSummary: () => ({}),
       runSameDayReminder() { throw new Error('Scheduler must reject bad credentials before running'); }
     }
   };

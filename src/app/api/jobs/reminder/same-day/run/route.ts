@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { computeBangkokTodayDateOnly, normalizeDateOnly } from "@/lib/reminder";
 import {
   createEmptyNoticeDistributionSummary,
+  createEmptySameDayReminderSummary,
   runSameDayReminder,
   type SameDayReminderRunSummary
 } from "@/lib/sameDayReminderService";
@@ -13,10 +14,15 @@ function parseFlag(value: string | null | undefined): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
-function buildFailedSummary(trigger: "external-get" | "external-post", error: string): SameDayReminderRunSummary {
+function buildFailedSummary(
+  runId: string,
+  trigger: "external-get" | "external-post",
+  error: string
+): SameDayReminderRunSummary {
   const now = new Date();
   return {
     ok: false,
+    runId,
     nowUtc: now.toISOString(),
     nowBangkok: new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Asia/Bangkok",
@@ -26,18 +32,17 @@ function buildFailedSummary(trigger: "external-get" | "external-post", error: st
     }).format(now),
     targetDateUsed: computeBangkokTodayDateOnly(now),
     dryRun: false,
-    totalRowsChecked: 0,
-    matched: 0,
-    sent: 0,
-    skipped: 0,
-    skipReasons: {},
-    sampleRows: [],
-    lineSendAttempts: 0,
-    lineSendFailures: 0,
-    updatedRows: 0,
     trigger,
-    errors: [{ error }],
-    noticeDistribution: createEmptyNoticeDistributionSummary()
+    sameDayReminder: {
+      ...createEmptySameDayReminderSummary(),
+      ok: false,
+      errors: [{ error }]
+    },
+    noticeDistribution: {
+      ...createEmptyNoticeDistributionSummary(),
+      ok: false,
+      errors: [{ error }]
+    }
   };
 }
 
@@ -75,7 +80,7 @@ async function handleRun(req: NextRequest, trigger: "external-get" | "external-p
 
   const auth = validateSecret(req);
   if (!auth.ok) {
-    const failedSummary = buildFailedSummary(trigger, auth.error);
+    const failedSummary = buildFailedSummary(runId, trigger, auth.error);
     console.warn("same-day-reminder-auth-failed", {
       runId,
       requestedAt,

@@ -292,6 +292,9 @@ test("manual preview and daily notification use the same builder", () => {
   assert.match(cronService, /same-day-reminder-boundary-started/);
   assert.match(cronService, /same-day-reminder-dependency-http-failed/);
   assert.match(cronService, /notice_distribution\.notification_log_insert/);
+  assert.match(cronService, /runIndependentReminderFlows\(/);
+  assert.match(cronService, /daily-line-reminder-flow-started/);
+  assert.match(cronService, /daily-line-reminder-flow-failed/);
   assert.ok(
     cronService.indexOf("same-day-reminder-original-flow-completed") <
       cronService.indexOf('boundary: "notice_distribution.query_jobs"'),
