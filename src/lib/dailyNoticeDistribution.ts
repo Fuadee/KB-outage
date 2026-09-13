@@ -13,8 +13,29 @@ export type NoticeDistributionJob = OutageNoticeMessageJob & {
   equipment_code?: string | null;
   notice_date?: string | null;
   notice_status?: string | null;
+  notice_scheduled_at?: string | null;
   notice_completed_at?: string | null;
+  document_received_at?: string | null;
+  document_delivered_at?: string | null;
+  social_status?: string | null;
+  social_posted_at?: string | null;
   is_closed?: boolean | null;
+};
+
+export type NoticeDistributionCompletionReason =
+  | "notice_completed_at"
+  | null;
+
+export type NoticeDistributionIgnoredCompletionEvidence =
+  | "legacy_sent_status"
+  | "completed_status_without_notice_completed_at"
+  | "legacy_migration_backfill"
+  | null;
+
+export type NoticeDistributionCompletionEvaluation = {
+  completed: boolean;
+  completionReason: NoticeDistributionCompletionReason;
+  ignoredEvidence: NoticeDistributionIgnoredCompletionEvidence;
 };
 
 export type NoticeDistributionPushResult = {
@@ -75,22 +96,88 @@ export function buildLineRetryKey(eventKey: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function instantMillis(value: string | null | undefined): number | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const valueMillis = Date.parse(trimmed);
+  return Number.isNaN(valueMillis) ? null : valueMillis;
+}
+
+/**
+ * The Jobs UI's "ยืนยันว่าแจกหนังสือแล้ว" action atomically writes COMPLETED
+ * and notice_completed_at. Migration 023 previously synthesized the same pair
+ * for SCHEDULED/SENT rows, so its exact timestamp signatures are excluded.
+ */
+export function evaluateNoticeDistributionCompletion(
+  job: NoticeDistributionJob
+): NoticeDistributionCompletionEvaluation {
+  const noticeStatus = job.notice_status?.trim().toUpperCase();
+  const completedAtMillis = instantMillis(job.notice_completed_at);
+
+  if (noticeStatus === "SENT") {
+    return {
+      completed: false,
+      completionReason: null,
+      ignoredEvidence: "legacy_sent_status"
+    };
+  }
+
+  if (noticeStatus !== "COMPLETED" || completedAtMillis === null) {
+    return {
+      completed: false,
+      completionReason: null,
+      ignoredEvidence:
+        noticeStatus === "COMPLETED"
+          ? "completed_status_without_notice_completed_at"
+          : null
+    };
+  }
+
+  const scheduledAtMillis = instantMillis(job.notice_scheduled_at);
+  const noticeDate = normalizeDateOnly(job.notice_date);
+  const plannedDateMillis = noticeDate
+    ? Date.parse(`${noticeDate}T00:00:00+07:00`)
+    : null;
+  const matchesLegacyBackfill =
+    (scheduledAtMillis !== null && completedAtMillis === scheduledAtMillis) ||
+    (scheduledAtMillis === null &&
+      plannedDateMillis !== null &&
+      completedAtMillis === plannedDateMillis);
+
+  if (matchesLegacyBackfill) {
+    return {
+      completed: false,
+      completionReason: null,
+      ignoredEvidence: "legacy_migration_backfill"
+    };
+  }
+
+  return {
+    completed: true,
+    completionReason: "notice_completed_at",
+    ignoredEvidence: null
+  };
+}
+
+export function getNoticeDistributionCompletionReason(
+  job: NoticeDistributionJob
+): NoticeDistributionCompletionReason {
+  return evaluateNoticeDistributionCompletion(job).completionReason;
+}
+
 export function getNoticeDistributionSkipReason(
   job: NoticeDistributionJob,
   targetDate: string
 ): string | null {
   if (job.is_closed) return "is_closed=true";
 
-  const noticeStatus = job.notice_status?.trim().toUpperCase();
-  if (
-    job.notice_completed_at ||
-    noticeStatus === "COMPLETED" ||
-    noticeStatus === "SENT"
-  ) {
+  if (getNoticeDistributionCompletionReason(job)) {
     return "notice_already_completed";
   }
 
-  if (!getDistributionWorkflow(job).reminderEligible) {
+  // Use the shared resolver only for the responsible-unit route. Its broader
+  // UI workflow completion state must not decide this daily reminder.
+  if (getDistributionWorkflow(job).route !== "OPERATIONS") {
     return "not_operations_distribution";
   }
 
@@ -100,6 +187,30 @@ export function getNoticeDistributionSkipReason(
   }
 
   return null;
+}
+
+export function buildNoticeDistributionDiagnostic(
+  job: NoticeDistributionJob,
+  targetDate: string
+) {
+  const completion = evaluateNoticeDistributionCompletion(job);
+  return {
+    jobId: job.id,
+    equipmentCode: job.equipment_code ?? null,
+    noticeDate: job.notice_date ?? null,
+    noticeCompletedAt: job.notice_completed_at ?? null,
+    noticeStatus: job.notice_status ?? null,
+    noticeScheduledAt: job.notice_scheduled_at ?? null,
+    documentReceivedAt: job.document_received_at ?? null,
+    documentDeliveredAt: job.document_delivered_at ?? null,
+    socialStatus: job.social_status ?? null,
+    socialPostedAt: job.social_posted_at ?? null,
+    responsibleUnit: job.responsible_unit ?? null,
+    isClosed: job.is_closed ?? null,
+    completionReason: completion.completionReason,
+    completionEvidenceIgnored: completion.ignoredEvidence,
+    eligibilityReason: getNoticeDistributionSkipReason(job, targetDate)
+  };
 }
 
 function errorMessage(error: unknown) {

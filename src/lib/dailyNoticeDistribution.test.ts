@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildLineRetryKey,
+  buildNoticeDistributionDiagnostic,
   buildNoticeDistributionEventKey,
+  getNoticeDistributionCompletionReason,
   getNoticeDistributionSkipReason,
   processNoticeDistributionJobs,
   type NoticeDistributionJob
@@ -153,21 +155,104 @@ test("a distribution without a notice date is not sent", async () => {
   assert.equal(summary.skipReasons.notice_date_not_match, 1);
 });
 
-test("an overdue completed distribution is not sent", async () => {
+test("receiving the physical document does not complete distribution", () => {
+  assert.equal(
+    getNoticeDistributionSkipReason(
+      makeJob("received", {
+        notice_date: "2026-09-10",
+        notice_status: "NONE",
+        document_received_at: "2026-09-09T02:00:00.000Z"
+      }),
+      targetDate
+    ),
+    null
+  );
+});
+
+test("sending the physical document to its distributor does not complete distribution", () => {
+  assert.equal(
+    getNoticeDistributionSkipReason(
+      makeJob("document-sent", {
+        notice_date: "2026-09-10",
+        notice_status: "NONE",
+        document_received_at: "2026-09-09T02:00:00.000Z",
+        document_delivered_at: "2026-09-09T03:00:00.000Z"
+      }),
+      targetDate
+    ),
+    null
+  );
+});
+
+test("the current distribution step is still pending", () => {
+  assert.equal(
+    getNoticeDistributionSkipReason(
+      makeJob("distribution-step", {
+        notice_date: "2026-09-10",
+        notice_status: "SCHEDULED",
+        document_delivered_at: "2026-09-09T03:00:00.000Z"
+      }),
+      targetDate
+    ),
+    null
+  );
+});
+
+test("legacy SENT is a workflow progress status, not distribution completion", () => {
+  const job = makeJob("legacy-sent", {
+    notice_date: "2026-09-10",
+    notice_status: "SENT"
+  });
+
+  assert.equal(getNoticeDistributionCompletionReason(job), null);
+  assert.equal(getNoticeDistributionSkipReason(job, targetDate), null);
+});
+
+test("COMPLETED status without the completion timestamp is not proof of distribution", () => {
+  const job = makeJob("status-only", {
+    notice_date: "2026-09-10",
+    notice_status: "COMPLETED",
+    notice_completed_at: null
+  });
+
+  assert.equal(getNoticeDistributionCompletionReason(job), null);
+  assert.equal(getNoticeDistributionSkipReason(job, targetDate), null);
+});
+
+test("timestamps synthesized by the legacy migration do not complete distribution", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
     jobs: [
-      makeJob("status-complete", {
+      makeJob("scheduled-backfill", {
         notice_date: "2026-09-10",
-        notice_status: "COMPLETED"
+        notice_status: "COMPLETED",
+        notice_scheduled_at: "2026-09-09T03:00:00.000Z",
+        notice_completed_at: "2026-09-09T03:00:00.000Z"
       }),
-      makeJob("timestamp-complete", {
+      makeJob("planned-date-backfill", {
         notice_date: "2026-09-10",
+        notice_status: "COMPLETED",
+        notice_scheduled_at: null,
+        notice_completed_at: "2026-09-09T17:00:00.000Z"
+      })
+    ],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.sent, 2);
+  assert.equal(summary.skipReasons.notice_already_completed, undefined);
+});
+
+test("an overdue actually completed distribution is not sent", async () => {
+  const harness = createHarness();
+  const summary = await processNoticeDistributionJobs({
+    jobs: [
+      makeJob("actual-completion", {
+        notice_date: "2026-09-10",
+        notice_status: "COMPLETED",
         notice_completed_at: "2026-09-12T02:00:00.000Z"
-      }),
-      makeJob("legacy-sent", {
-        notice_date: "2026-09-10",
-        notice_status: "SENT"
       })
     ],
     targetDate,
@@ -176,7 +261,29 @@ test("an overdue completed distribution is not sent", async () => {
   });
 
   assert.equal(summary.sent, 0);
-  assert.equal(summary.skipReasons.notice_already_completed, 3);
+  assert.equal(summary.skipReasons.notice_already_completed, 1);
+});
+
+test("safe diagnostic identifies the exact completion field without customer data", () => {
+  const diagnostic = buildNoticeDistributionDiagnostic(
+    makeJob("diagnostic", {
+      notice_date: "2026-09-10",
+      notice_status: "COMPLETED",
+      notice_completed_at: "2026-09-12T02:00:00.000Z",
+      document_received_at: "2026-09-09T02:00:00.000Z",
+      document_delivered_at: "2026-09-09T03:00:00.000Z"
+    }),
+    targetDate
+  );
+
+  assert.equal(diagnostic.completionReason, "notice_completed_at");
+  assert.equal(diagnostic.completionEvidenceIgnored, null);
+  assert.equal(diagnostic.eligibilityReason, "notice_already_completed");
+  assert.equal(diagnostic.jobId, "diagnostic");
+  assert.equal(diagnostic.equipmentCode, "KBB-diagnostic");
+  assert.equal("customer_count" in diagnostic, false);
+  assert.equal("doc_area_title" in diagnostic, false);
+  assert.equal("map_link" in diagnostic, false);
 });
 
 test("an overdue closed job is not sent", async () => {
@@ -369,13 +476,23 @@ test("manual preview and daily notification use the same builder", () => {
     new URL("./sameDayReminderService.ts", import.meta.url),
     "utf8"
   );
+  const completionRoute = readFileSync(
+    new URL("../app/api/jobs/[id]/notice-completion/route.ts", import.meta.url),
+    "utf8"
+  );
 
   assert.match(service, /buildOutageNoticeLineMessage\(job\)/);
+  assert.match(service, /completionReason: "notice_completed_at"/);
+  assert.match(service, /ignoredEvidence: "legacy_migration_backfill"/);
+  assert.match(service, /ignoredEvidence: "legacy_sent_status"/);
   assert.match(modal, /buildOutageNoticeLineMessage\(job\)/);
+  assert.match(completionRoute, /notice_status: "COMPLETED"/);
+  assert.match(completionRoute, /notice_completed_at: completedAt/);
   assert.match(migration, /event_key text primary key/);
   assert.match(migration, /line_notification_events/);
   assert.doesNotMatch(migration, /notice_completed_at\s*=/);
   assert.match(cronService, /processNoticeDistributionJobs\(/);
+  assert.match(cronService, /notice-distribution-job-diagnostic/);
   assert.match(cronService, /\.lte\("notice_date", targetDate\)/);
   assert.doesNotMatch(cronService, /\.eq\("notice_date", targetDate\)/);
   assert.match(cronService, /\.eq\("responsible_unit", "แผนกปฏิบัติการ"\)/);

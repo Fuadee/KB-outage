@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import {
   buildLineRetryKey,
+  buildNoticeDistributionDiagnostic,
   NOTICE_DISTRIBUTION_EVENT_TYPE,
   processNoticeDistributionJobs,
   type NoticeDistributionJob,
@@ -306,7 +307,7 @@ async function fetchNoticeDistributionJobs(
   const { data, error } = await supabase
     .from("outage_jobs")
     .select(
-      "id,equipment_code,outage_date,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_completed_at,is_closed"
+      "id,equipment_code,outage_date,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_scheduled_at,notice_completed_at,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
     )
     .lte("notice_date", targetDate)
     .eq("responsible_unit", "แผนกปฏิบัติการ")
@@ -618,6 +619,13 @@ export async function runSameDayReminder(
             ),
           (jobs) => ({ rowCount: jobs.length })
         );
+        for (const job of distributionJobs) {
+          console.info("notice-distribution-job-diagnostic", {
+            runId,
+            targetDate: targetDateUsed,
+            ...buildNoticeDistributionDiagnostic(job, targetDateUsed)
+          });
+        }
         const eventQueryContext: ReminderBoundaryContext = {
           runId,
           targetDate: targetDateUsed,
