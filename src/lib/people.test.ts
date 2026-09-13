@@ -4,10 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getNoticeDistributorDisplayName,
   getPersonReference,
-  getWorkSupervisorDisplayName
+  getWorkSupervisorDisplayName,
+  isWorkSupervisorDepartmentEligible,
+  type PersonReference
 } from "./people.ts";
 import {
   findActivePersonForDepartment,
+  findActiveWorkSupervisor,
   normalizePersonId
 } from "./peopleServer.ts";
 
@@ -65,7 +68,7 @@ test("person ids accept UUIDs and reject malformed values", () => {
   assert.equal(normalizePersonId(123), undefined);
 });
 
-function peopleClient(record: typeof person | null): SupabaseClient {
+function peopleClient(record: PersonReference | null): SupabaseClient {
   const query = {
     select() {
       return query;
@@ -80,8 +83,16 @@ function peopleClient(record: typeof person | null): SupabaseClient {
   return { from: () => query } as unknown as SupabaseClient;
 }
 
-test("server selection accepts only active people in the requested department", async () => {
+test("notice distributors must be active and strictly match every job department", async () => {
   const activePerson = { ...person, is_active: true };
+  const constructionPerson: PersonReference = {
+    ...activePerson,
+    department: "แผนกก่อสร้าง"
+  };
+  const aoNangPerson: PersonReference = {
+    ...activePerson,
+    department: "กฟส.อ่าวนาง"
+  };
   assert.equal(
     await findActivePersonForDepartment(
       peopleClient(activePerson),
@@ -100,9 +111,90 @@ test("server selection accepts only active people in the requested department", 
   );
   assert.equal(
     await findActivePersonForDepartment(
+      peopleClient(constructionPerson),
+      constructionPerson.id,
+      "แผนกก่อสร้าง"
+    ),
+    constructionPerson
+  );
+  assert.equal(
+    await findActivePersonForDepartment(
+      peopleClient(aoNangPerson),
+      aoNangPerson.id,
+      "กฟส.อ่าวนาง"
+    ),
+    aoNangPerson
+  );
+  assert.equal(
+    await findActivePersonForDepartment(
+      peopleClient(activePerson),
+      activePerson.id,
+      "กฟส.อ่าวนาง"
+    ),
+    null
+  );
+  assert.equal(
+    await findActivePersonForDepartment(
       peopleClient(person),
       person.id,
       "แผนกปฏิบัติการ"
+    ),
+    null
+  );
+});
+
+test("work-supervisor eligibility applies the Ao Nang all-departments exception", () => {
+  const operations = "แผนกปฏิบัติการ";
+  const construction = "แผนกก่อสร้าง";
+  const aoNang = "กฟส.อ่าวนาง";
+
+  assert.equal(isWorkSupervisorDepartmentEligible(operations, operations), true);
+  assert.equal(isWorkSupervisorDepartmentEligible(operations, construction), false);
+  assert.equal(isWorkSupervisorDepartmentEligible(operations, aoNang), false);
+  assert.equal(isWorkSupervisorDepartmentEligible(construction, construction), true);
+  assert.equal(isWorkSupervisorDepartmentEligible(construction, operations), false);
+  assert.equal(isWorkSupervisorDepartmentEligible(construction, aoNang), false);
+  assert.equal(isWorkSupervisorDepartmentEligible(aoNang, operations), true);
+  assert.equal(isWorkSupervisorDepartmentEligible(aoNang, construction), true);
+  assert.equal(isWorkSupervisorDepartmentEligible(aoNang, aoNang), true);
+});
+
+test("server accepts every active department for Ao Nang supervisors only", async () => {
+  const operationsPerson = { ...person, is_active: true };
+  const constructionPerson: PersonReference = {
+    ...operationsPerson,
+    department: "แผนกก่อสร้าง"
+  };
+
+  assert.equal(
+    await findActiveWorkSupervisor(
+      peopleClient(operationsPerson),
+      operationsPerson.id,
+      "กฟส.อ่าวนาง"
+    ),
+    operationsPerson
+  );
+  assert.equal(
+    await findActiveWorkSupervisor(
+      peopleClient(constructionPerson),
+      constructionPerson.id,
+      "กฟส.อ่าวนาง"
+    ),
+    constructionPerson
+  );
+  assert.equal(
+    await findActiveWorkSupervisor(
+      peopleClient(operationsPerson),
+      operationsPerson.id,
+      "แผนกก่อสร้าง"
+    ),
+    null
+  );
+  assert.equal(
+    await findActiveWorkSupervisor(
+      peopleClient(person),
+      person.id,
+      "กฟส.อ่าวนาง"
     ),
     null
   );

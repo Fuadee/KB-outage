@@ -5,9 +5,9 @@ import {
   getDistributionWorkflow,
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
-import { OPERATIONS_RESPONSIBLE_UNIT } from "@/lib/jobMetadata";
 import {
   findActivePersonForDepartment,
+  findPersonById,
   normalizePersonId
 } from "@/lib/peopleServer";
 
@@ -41,12 +41,9 @@ export async function PATCH(
     const jobId = params.id?.trim();
     const body = (await request.json()) as {
       completed_at?: unknown;
-      completed_by?: unknown;
       completed_by_person_id?: unknown;
     };
     const completedAt = normalizeDateTime(body.completed_at);
-    const completedBy =
-      typeof body.completed_by === "string" ? body.completed_by.trim() : "";
     const completedByPersonId = normalizePersonId(
       body.completed_by_person_id
     );
@@ -57,8 +54,7 @@ export async function PATCH(
         jobId
       ) ||
       !completedAt ||
-      completedByPersonId === undefined ||
-      completedBy.length > 200
+      completedByPersonId === undefined
     ) {
       return NextResponse.json(
         { ok: false, error: "กรุณาระบุวันเวลาและผู้แจกจริงให้ครบถ้วน" },
@@ -70,7 +66,7 @@ export async function PATCH(
     const { data: current, error: lookupError } = await admin
       .from("outage_jobs")
       .select(
-        "id, responsible_unit, is_closed, document_delivered_at, notice_status, notice_date, notice_scheduled_at, notice_completed_at"
+        "id, responsible_unit, is_closed, document_delivered_at, notice_status, notice_date, notice_by_person_id, notice_by, notice_scheduled_at, notice_completed_at"
       )
       .eq("id", jobId)
       .maybeSingle();
@@ -115,30 +111,46 @@ export async function PATCH(
       );
     }
 
-    let distributorName = completedBy;
-    let distributorPersonId: string | null = null;
-    if (distributionWorkflow.route === "OPERATIONS") {
-      const distributor = completedByPersonId
-        ? await findActivePersonForDepartment(
-            admin,
-            completedByPersonId,
-            OPERATIONS_RESPONSIBLE_UNIT
-          )
-        : null;
-      if (!distributor) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "ผู้แจกจริงต้องเป็นบุคลากร ผปบ. ที่เปิดใช้งานอยู่"
-          },
-          { status: 400 }
-        );
+    let distributorName: string | null = null;
+    let distributorPersonId = completedByPersonId;
+    const preservingExistingPerson =
+      Boolean(completedByPersonId) &&
+      completedByPersonId === current.notice_by_person_id;
+
+    if (preservingExistingPerson) {
+      const existingDistributor = await findPersonById(
+        admin,
+        completedByPersonId as string
+      );
+      if (
+        existingDistributor?.department === distributionWorkflow.responsibleUnit
+      ) {
+        distributorName = existingDistributor.full_name;
       }
-      distributorName = distributor.full_name;
-      distributorPersonId = distributor.id;
-    } else if (!distributorName) {
+    } else if (completedByPersonId && distributionWorkflow.responsibleUnit) {
+      const distributor = await findActivePersonForDepartment(
+        admin,
+        completedByPersonId,
+        distributionWorkflow.responsibleUnit
+      );
+      if (distributor) distributorName = distributor.full_name;
+    } else if (
+      !completedByPersonId &&
+      !current.notice_by_person_id &&
+      current.notice_by &&
+      distributionWorkflow.completed
+    ) {
+      distributorName = current.notice_by;
+      distributorPersonId = null;
+    }
+
+    if (!distributorName) {
       return NextResponse.json(
-        { ok: false, error: "กรุณาระบุวันเวลาและผู้แจกจริงให้ครบถ้วน" },
+        {
+          ok: false,
+          error:
+            "ผู้แจกจริงต้องเป็นบุคลากรที่เปิดใช้งานอยู่และสังกัดตรงกับหน่วยงานของงาน"
+        },
         { status: 400 }
       );
     }

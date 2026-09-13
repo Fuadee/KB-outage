@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeJobId } from "@/lib/closeJob";
 import { isResponsibleUnit, parseCustomerCount } from "@/lib/jobMetadata";
-import {
-  findActivePersonForDepartment,
-  normalizePersonId
-} from "@/lib/peopleServer";
+import { findActiveWorkSupervisor, normalizePersonId } from "@/lib/peopleServer";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
@@ -133,7 +130,7 @@ export async function PATCH(
             { status: 400 }
           );
         }
-        const workSupervisor = await findActivePersonForDepartment(
+        const workSupervisor = await findActiveWorkSupervisor(
           admin,
           requestedWorkSupervisorPersonId,
           responsibleUnit
@@ -143,7 +140,7 @@ export async function PATCH(
             {
               ok: false,
               error:
-                "ผู้ควบคุมงานต้องเป็นบุคลากรที่ใช้งานอยู่และสังกัดตรงกับหน่วยงาน"
+                "ผู้ควบคุมงานต้องเป็นบุคลากรที่ใช้งานอยู่และผ่านเงื่อนไขสังกัดของงาน"
             },
             { status: 400 }
           );

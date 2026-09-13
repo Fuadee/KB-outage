@@ -12,11 +12,15 @@ import PersonSelect from "@/components/people/PersonSelect";
 import { createJob } from "@/lib/jobsRepo";
 import {
   MAX_CUSTOMER_COUNT,
+  AONANG_RESPONSIBLE_UNIT,
   parseCustomerCount,
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
-import type { PersonReference } from "@/lib/people";
+import {
+  isWorkSupervisorDepartmentEligible,
+  type PersonReference
+} from "@/lib/people";
 import { cn } from "@/lib/utils";
 import { inputLight, labelText, subtitleText, titleText } from "@/lib/theme";
 
@@ -117,8 +121,18 @@ export default function NewJobPage() {
               <select
                 value={responsibleUnit}
                 onChange={(event) => {
-                  setResponsibleUnit(event.target.value as ResponsibleUnit | "");
-                  setWorkSupervisorPerson(null);
+                  const nextUnit = event.target.value as ResponsibleUnit | "";
+                  if (
+                    workSupervisorPerson &&
+                    (!nextUnit ||
+                      !isWorkSupervisorDepartmentEligible(
+                        nextUnit,
+                        workSupervisorPerson.department
+                      ))
+                  ) {
+                    setWorkSupervisorPerson(null);
+                  }
+                  setResponsibleUnit(nextUnit);
                 }}
                 className={inputLight}
                 required
@@ -141,6 +155,10 @@ export default function NewJobPage() {
                 selectedPerson={workSupervisorPerson}
                 onChange={setWorkSupervisorPerson}
                 required
+                includeAllDepartments={
+                  responsibleUnit === AONANG_RESPONSIBLE_UNIT
+                }
+                showDepartment={responsibleUnit === AONANG_RESPONSIBLE_UNIT}
               />
             </label>
             <SwitchingField

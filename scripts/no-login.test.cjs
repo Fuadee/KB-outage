@@ -10,6 +10,8 @@ const root = path.resolve(__dirname, '..');
 const id = '00000000-0000-4000-8000-000000000001';
 const targetId = '00000000-0000-4000-8000-000000000002';
 const personId = '00000000-0000-4000-8000-000000000003';
+const constructionPersonId = '00000000-0000-4000-8000-000000000004';
+const aoNangPersonId = '00000000-0000-4000-8000-000000000005';
 const cookies = ['', 'sb-access-token=expired; sb-refresh-token=expired', 'sb-access-token=%ZZ.not-a-jwt; sb-refresh-token=broken'];
 const jobInput = { outage_date: '2026-09-12', equipment_code: 'TEST', responsible_unit: 'แผนกปฏิบัติการ', work_supervisor_person_id: personId, has_switching: false, customer_count: 5 };
 
@@ -23,6 +25,16 @@ function harness(legacyFlag) {
       id: personId,
       full_name: 'บุคลากรทดสอบ',
       department: 'แผนกปฏิบัติการ',
+      is_active: true
+    }, {
+      id: constructionPersonId,
+      full_name: 'บุคลากรก่อสร้าง',
+      department: 'แผนกก่อสร้าง',
+      is_active: true
+    }, {
+      id: aoNangPersonId,
+      full_name: 'บุคลากรอ่าวนาง',
+      department: 'กฟส.อ่าวนาง',
       is_active: true
     }]
   };
@@ -188,6 +200,88 @@ test('invalid data, workflow states, and database errors still fail without logi
   assert.equal((await h.call('jobs/[id]/workflow-rollback', 'POST', { target_step: 'DOCUMENT_CREATED', reason: 'test' })).status, 409);
   h.setRpcError({ code: '42501', message: 'permission denied' });
   assert.equal((await h.call('jobs/[id]/workflow-rollback', 'POST', { target_step: 'DOCUMENT_CREATED', reason: 'test' })).status, 500);
+});
+
+test('actual notice distributor strictly follows each job department', async () => {
+  const scenarios = [
+    {
+      department: 'แผนกก่อสร้าง',
+      supervisorId: constructionPersonId,
+      validDistributorId: constructionPersonId,
+      invalidDistributorId: personId,
+      expectedName: 'บุคลากรก่อสร้าง'
+    },
+    {
+      department: 'กฟส.อ่าวนาง',
+      supervisorId: personId,
+      validDistributorId: aoNangPersonId,
+      invalidDistributorId: personId,
+      expectedName: 'บุคลากรอ่าวนาง'
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    const h = harness();
+    const createResponse = await h.call('jobs', 'POST', {
+      ...jobInput,
+      responsible_unit: scenario.department,
+      work_supervisor_person_id: scenario.supervisorId
+    });
+    assert.equal(createResponse.status, 201);
+    h.tables.outage_jobs[0].document_delivered_at = '2026-09-12T02:00:00Z';
+
+    const rejected = await h.call('jobs/[id]/notice-completion', 'PATCH', {
+      completed_at: '2026-09-12T03:00:00Z',
+      completed_by_person_id: scenario.invalidDistributorId
+    });
+    assert.equal(rejected.status, 400);
+
+    const accepted = await h.call('jobs/[id]/notice-completion', 'PATCH', {
+      completed_at: '2026-09-12T03:00:00Z',
+      completed_by_person_id: scenario.validDistributorId
+    });
+    assert.equal(accepted.status, 200);
+    assert.equal(h.tables.outage_jobs[0].notice_by, scenario.expectedName);
+  }
+});
+
+test('legacy and inactive notice distributors remain preservable', async () => {
+  const legacy = harness();
+  legacy.tables.outage_jobs.push({
+    id,
+    responsible_unit: 'แผนกก่อสร้าง',
+    is_closed: false,
+    document_delivered_at: '2026-09-12T02:00:00Z',
+    notice_status: 'COMPLETED',
+    notice_completed_at: '2026-09-12T03:00:00Z',
+    notice_by_person_id: null,
+    notice_by: 'ชื่อผู้แจกเดิม'
+  });
+  const legacyResponse = await legacy.call('jobs/[id]/notice-completion', 'PATCH', {
+    completed_at: '2026-09-12T04:00:00Z',
+    completed_by_person_id: null
+  });
+  assert.equal(legacyResponse.status, 200);
+  assert.equal(legacy.tables.outage_jobs[0].notice_by, 'ชื่อผู้แจกเดิม');
+
+  const inactive = harness();
+  inactive.tables.people[0].is_active = false;
+  inactive.tables.outage_jobs.push({
+    id,
+    responsible_unit: 'แผนกปฏิบัติการ',
+    is_closed: false,
+    document_delivered_at: '2026-09-12T02:00:00Z',
+    notice_status: 'COMPLETED',
+    notice_completed_at: '2026-09-12T03:00:00Z',
+    notice_by_person_id: personId,
+    notice_by: 'บุคลากรทดสอบ'
+  });
+  const inactiveResponse = await inactive.call('jobs/[id]/notice-completion', 'PATCH', {
+    completed_at: '2026-09-12T04:00:00Z',
+    completed_by_person_id: personId
+  });
+  assert.equal(inactiveResponse.status, 200);
+  assert.equal(inactive.tables.outage_jobs[0].notice_by, 'บุคลากรทดสอบ');
 });
 
 test('closing preserves historical attribution and remains idempotent', async () => {

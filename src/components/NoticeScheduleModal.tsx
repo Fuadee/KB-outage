@@ -13,9 +13,7 @@ import {
   getDistributionWorkflow,
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
-import { OPERATIONS_RESPONSIBLE_UNIT } from "@/lib/jobMetadata";
 import {
-  getNoticeDistributorDisplayName,
   getPersonReference,
   type PersonReference
 } from "@/lib/people";
@@ -55,9 +53,6 @@ export default function NoticeScheduleModal({
   const [noticeDate, setNoticeDate] = useState(() => job?.notice_date ?? "");
   const [completedAt, setCompletedAt] = useState(() =>
     toDateTimeLocal(job?.notice_completed_at)
-  );
-  const [completedBy, setCompletedBy] = useState(
-    () => (job ? getNoticeDistributorDisplayName(job) ?? "" : "")
   );
   const [completedByPerson, setCompletedByPerson] =
     useState<PersonReference | null>(() =>
@@ -107,6 +102,8 @@ export default function NoticeScheduleModal({
     ? isDirectDistributionRoute(distributionWorkflow.route)
     : false;
   const isCompleted = distributionWorkflow?.completed ?? false;
+  const legacyCompletedBy =
+    job?.notice_by_person_id || !job?.notice_by ? null : job.notice_by;
   const showMessagePreview =
     Boolean(job) && !isCompleted && distributionWorkflow?.route !== "UNASSIGNED";
   const showCompletion =
@@ -222,7 +219,7 @@ export default function NoticeScheduleModal({
     if (
       !completedAt ||
       Number.isNaN(completedDate.getTime()) ||
-      (isOperationsFlow ? !completedByPerson : !completedBy.trim())
+      (!completedByPerson && !legacyCompletedBy)
     ) {
       setErrors({ completion: "กรุณาระบุวันเวลาและผู้แจกจริง" });
       return;
@@ -236,10 +233,7 @@ export default function NoticeScheduleModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           completed_at: completedDate.toISOString(),
-          completed_by: isOperationsFlow ? undefined : completedBy.trim(),
-          completed_by_person_id: isOperationsFlow
-            ? completedByPerson?.id
-            : null
+          completed_by_person_id: completedByPerson?.id ?? null
         })
       });
       const result = await response.json().catch(() => null);
@@ -415,27 +409,16 @@ export default function NoticeScheduleModal({
               </label>
               <label className="grid gap-1.5 text-sm font-medium text-slate-700">
                 ผู้แจกจริง
-                {isOperationsFlow ? (
-                  <PersonSelect
-                    department={OPERATIONS_RESPONSIBLE_UNIT}
-                    value={completedByPerson?.id ?? null}
-                    selectedPerson={completedByPerson}
-                    legacyName={
-                      job?.notice_by_person_id ? null : job?.notice_by ?? null
-                    }
-                    onChange={setCompletedByPerson}
-                    required
-                    placeholder="ค้นหาและเลือกผู้แจกจริง"
-                  />
-                ) : (
-                  <Input
-                    type="text"
-                    value={completedBy}
-                    maxLength={200}
-                    onChange={(event) => setCompletedBy(event.target.value)}
-                    placeholder="ชื่อผู้ที่ดำเนินการจริง"
-                  />
-                )}
+                <PersonSelect
+                  department={distributionWorkflow?.responsibleUnit ?? ""}
+                  value={completedByPerson?.id ?? null}
+                  selectedPerson={completedByPerson}
+                  legacyName={legacyCompletedBy}
+                  onChange={setCompletedByPerson}
+                  required
+                  placeholder="ค้นหาและเลือกผู้แจกจริง"
+                  emptyMessage="ยังไม่มีรายชื่อบุคลากรในหน่วยงานนี้"
+                />
               </label>
             </div>
             {errors.completion ? (

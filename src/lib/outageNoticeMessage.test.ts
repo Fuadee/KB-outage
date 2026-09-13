@@ -146,11 +146,7 @@ test("preview and both copy actions share the same builder output", () => {
   assert.equal(modal.match(/buildOutageNoticeLineMessage\(/g)?.length, 1);
   assert.match(modal, /navigator\.clipboard\.writeText\(previewText\)/);
   assert.match(modal, /ผลการแจกหนังสือจริง/);
-  assert.match(
-    modal,
-    /completed_by: isOperationsFlow \? undefined : completedBy\.trim\(\)/
-  );
-  assert.match(modal, /completed_by_person_id: isOperationsFlow/);
+  assert.match(modal, /completed_by_person_id: completedByPerson\?\.id \?\? null/);
   assert.doesNotMatch(modal, /responsibleMissing/);
   assert.equal(modal.match(/if \(!validateSchedule\(\)\) return;/g)?.length, 1);
   assert.match(scheduleRoute, /distributionWorkflow\.route !== "OPERATIONS"/);
@@ -159,6 +155,7 @@ test("preview and both copy actions share the same builder output", () => {
   assert.match(completionRoute, /notice_status: "COMPLETED"/);
   assert.match(completionRoute, /notice_by: distributorName/);
   assert.match(completionRoute, /notice_by_person_id: distributorPersonId/);
+  assert.match(completionRoute, /findActivePersonForDepartment/);
   assert.match(completionRoute, /isDirectDistributionRoute/);
   assert.match(modal, /isOperationsFlow && !isCompleted/);
   assert.match(modal, /isDirectFlow/);

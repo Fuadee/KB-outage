@@ -29,13 +29,18 @@ import PersonSelect from "@/components/people/PersonSelect";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import {
   formatCustomerCount,
+  AONANG_RESPONSIBLE_UNIT,
   isResponsibleUnit,
   MAX_CUSTOMER_COUNT,
   parseCustomerCount,
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
-import { getPersonReference, type PersonReference } from "@/lib/people";
+import {
+  getPersonReference,
+  isWorkSupervisorDepartmentEligible,
+  type PersonReference
+} from "@/lib/people";
 import {
   closeOutageJob,
   normalizeJobId
@@ -451,7 +456,17 @@ export default function JobDetailPage() {
                   onChange={(event) => {
                     const nextUnit = event.target.value as ResponsibleUnit | "";
                     if (nextUnit !== responsibleUnit) {
-                      setWorkSupervisorPerson(null);
+                      if (
+                        workSupervisorPerson &&
+                        (!nextUnit ||
+                          !workSupervisorPerson.is_active ||
+                          !isWorkSupervisorDepartmentEligible(
+                            nextUnit,
+                            workSupervisorPerson.department
+                          ))
+                      ) {
+                        setWorkSupervisorPerson(null);
+                      }
                       setLegacyWorkSupervisorName(null);
                     }
                     setResponsibleUnit(nextUnit);
@@ -480,6 +495,10 @@ export default function JobDetailPage() {
                   }}
                   required={Boolean(responsibleUnit)}
                   disabled={isClosed}
+                  includeAllDepartments={
+                    responsibleUnit === AONANG_RESPONSIBLE_UNIT
+                  }
+                  showDepartment={responsibleUnit === AONANG_RESPONSIBLE_UNIT}
                 />
               </label>
               <SwitchingField

@@ -1,4 +1,7 @@
-import type { ResponsibleUnit } from "./jobMetadata";
+import {
+  AONANG_RESPONSIBLE_UNIT,
+  type ResponsibleUnit
+} from "./jobMetadata.ts";
 
 export type Person = {
   id: string;
@@ -19,6 +22,16 @@ export type PersonRelation =
   | PersonReference[]
   | null
   | undefined;
+
+export function isWorkSupervisorDepartmentEligible(
+  jobDepartment: ResponsibleUnit,
+  personDepartment: ResponsibleUnit
+): boolean {
+  return (
+    jobDepartment === AONANG_RESPONSIBLE_UNIT ||
+    jobDepartment === personDepartment
+  );
+}
 
 export function getPersonReference(
   relation: PersonRelation

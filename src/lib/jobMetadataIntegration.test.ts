@@ -123,7 +123,7 @@ test("legacy work-supervisor text remains while new selections use the people ma
   assert.match(newPage, /<PersonSelect/);
   assert.match(newPage, /if \(!workSupervisorPerson\)/);
   assert.match(newPage, /work_supervisor_person_id: workSupervisorPerson\?\.id \?\? null/);
-  assert.match(jobsRoute, /findActivePersonForDepartment/);
+  assert.match(jobsRoute, /findActiveWorkSupervisor/);
   assert.match(editPage, /setWorkSupervisorPerson\(null\)/);
   assert.match(editPage, /setLegacyWorkSupervisorName\(null\)/);
   assert.match(editPage, /legacyName=\{legacyWorkSupervisorName\}/);
@@ -146,12 +146,18 @@ test("people master supports search, department filters, and soft activation", (
   assert.doesNotMatch(peopleMigration, /role|roles|junction/i);
 });
 
-test("person selectors filter by department and shift 1 uses active operations people", () => {
+test("person selectors filter distributors strictly while Ao Nang supervisors see all departments", () => {
   assert.match(personSelect, /active: "true"/);
-  assert.match(personSelect, /department/);
+  assert.match(personSelect, /if \(!includeAllDepartments\) params\.set\("department", department\)/);
+  assert.match(newPage, /responsibleUnit === AONANG_RESPONSIBLE_UNIT/);
+  assert.match(newPage, /showDepartment=/);
+  assert.match(newPage, /isWorkSupervisorDepartmentEligible/);
+  assert.match(editPage, /isWorkSupervisorDepartmentEligible/);
   assert.match(newPage, /setWorkSupervisorPerson\(null\)/);
-  assert.match(noticeModal, /department=\{OPERATIONS_RESPONSIBLE_UNIT\}/);
+  assert.match(noticeModal, /department=\{distributionWorkflow\?\.responsibleUnit \?\? ""\}/);
+  assert.match(noticeModal, /ยังไม่มีรายชื่อบุคลากรในหน่วยงานนี้/);
   assert.match(noticeModal, /completed_by_person_id/);
   assert.match(noticeCompletionRoute, /findActivePersonForDepartment/);
-  assert.match(noticeCompletionRoute, /OPERATIONS_RESPONSIBLE_UNIT/);
+  assert.match(noticeCompletionRoute, /distributionWorkflow\.responsibleUnit/);
+  assert.doesNotMatch(noticeModal, /placeholder="ชื่อผู้ที่ดำเนินการจริง"/);
 });

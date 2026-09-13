@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ResponsibleUnit } from "./jobMetadata";
-import type { PersonReference } from "./people";
+import {
+  isWorkSupervisorDepartmentEligible,
+  type PersonReference
+} from "./people.ts";
 
 export const PERSON_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,4 +36,16 @@ export async function findActivePersonForDepartment(
 ): Promise<PersonReference | null> {
   const person = await findPersonById(client, personId);
   return person?.is_active && person.department === department ? person : null;
+}
+
+export async function findActiveWorkSupervisor(
+  client: SupabaseClient,
+  personId: string,
+  jobDepartment: ResponsibleUnit
+): Promise<PersonReference | null> {
+  const person = await findPersonById(client, personId);
+  return person?.is_active &&
+    isWorkSupervisorDepartmentEligible(jobDepartment, person.department)
+    ? person
+    : null;
 }

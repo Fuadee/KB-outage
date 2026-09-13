@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import type { ResponsibleUnit } from "@/lib/jobMetadata";
+import {
+  getResponsibleUnitShortLabel,
+  type ResponsibleUnit
+} from "@/lib/jobMetadata";
 import type { PersonReference } from "@/lib/people";
 import { inputLight } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -15,6 +18,9 @@ type PersonSelectProps = {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  emptyMessage?: string;
+  includeAllDepartments?: boolean;
+  showDepartment?: boolean;
 };
 
 export default function PersonSelect({
@@ -25,7 +31,10 @@ export default function PersonSelect({
   legacyName = null,
   disabled = false,
   required = false,
-  placeholder = "ค้นหาและเลือกบุคลากร"
+  placeholder = "ค้นหาและเลือกบุคลากร",
+  emptyMessage = "ไม่พบบุคลากรที่ใช้งานอยู่",
+  includeAllDepartments = false,
+  showDepartment = false
 }: PersonSelectProps) {
   const listboxId = useId();
   const [people, setPeople] = useState<PersonReference[]>([]);
@@ -44,10 +53,8 @@ export default function PersonSelect({
     const loadPeople = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({
-          active: "true",
-          department
-        });
+        const params = new URLSearchParams({ active: "true" });
+        if (!includeAllDepartments) params.set("department", department);
         const response = await fetch(`/api/people?${params.toString()}`, {
           signal: controller.signal
         });
@@ -65,7 +72,7 @@ export default function PersonSelect({
 
     void loadPeople();
     return () => controller.abort();
-  }, [department]);
+  }, [department, includeAllDepartments]);
 
   const selected = useMemo(
     () =>
@@ -132,11 +139,16 @@ export default function PersonSelect({
                 }}
               >
                 {person.full_name}
+                {showDepartment ? (
+                  <span className="ml-1 text-xs text-slate-500">
+                    — {getResponsibleUnitShortLabel(person.department)}
+                  </span>
+                ) : null}
               </button>
             ))
           ) : (
             <p className="px-3 py-2 text-sm text-slate-500">
-              ไม่พบบุคลากรที่ใช้งานอยู่
+              {normalizedQuery ? "ไม่พบรายชื่อที่ค้นหา" : emptyMessage}
             </p>
           )}
         </div>

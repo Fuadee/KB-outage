@@ -3,10 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
 import { isShiftOneDistributionPending } from "@/lib/distributionWorkflow";
 import { isResponsibleUnit, parseCustomerCount } from "@/lib/jobMetadata";
-import {
-  findActivePersonForDepartment,
-  normalizePersonId
-} from "@/lib/peopleServer";
+import { findActiveWorkSupervisor, normalizePersonId } from "@/lib/peopleServer";
 import { getWorkSupervisorDisplayName } from "@/lib/people";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
@@ -172,7 +169,7 @@ export async function POST(request: Request) {
 
     const note = typeof body.note === "string" ? body.note.trim() || null : null;
     const supabase = createSupabaseServerClient();
-    const workSupervisor = await findActivePersonForDepartment(
+    const workSupervisor = await findActiveWorkSupervisor(
       supabase,
       workSupervisorPersonId,
       body.responsible_unit
@@ -181,7 +178,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "ผู้ควบคุมงานต้องเป็นบุคลากรที่ใช้งานอยู่และสังกัดตรงกับหน่วยงาน"
+          error:
+            "ผู้ควบคุมงานต้องเป็นบุคลากรที่ใช้งานอยู่และผ่านเงื่อนไขสังกัดของงาน"
         },
         { status: 400 }
       );
