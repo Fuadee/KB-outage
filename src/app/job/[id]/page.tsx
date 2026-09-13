@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import SwitchingField from "@/components/job/SwitchingField";
+import PersonSelect from "@/components/people/PersonSelect";
 import { getJob, OutageJob, updateJob } from "@/lib/jobsRepo";
 import {
   formatCustomerCount,
@@ -34,6 +35,7 @@ import {
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
+import { getPersonReference, type PersonReference } from "@/lib/people";
 import {
   closeOutageJob,
   normalizeJobId
@@ -56,7 +58,10 @@ export default function JobDetailPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
-  const [workSupervisorName, setWorkSupervisorName] = useState("");
+  const [workSupervisorPerson, setWorkSupervisorPerson] =
+    useState<PersonReference | null>(null);
+  const [legacyWorkSupervisorName, setLegacyWorkSupervisorName] =
+    useState<string | null>(null);
   const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
@@ -101,7 +106,10 @@ export default function JobDetailPage() {
       setResponsibleUnit(
         isResponsibleUnit(data.responsible_unit) ? data.responsible_unit : ""
       );
-      setWorkSupervisorName(data.work_supervisor_name ?? "");
+      setWorkSupervisorPerson(getPersonReference(data.work_supervisor_person));
+      setLegacyWorkSupervisorName(
+        data.work_supervisor_person_id ? null : data.work_supervisor_name ?? null
+      );
       setHasSwitching(data.has_switching ?? null);
       setCustomerCount(
         data.customer_count === null ? "" : String(data.customer_count)
@@ -145,6 +153,11 @@ export default function JobDetailPage() {
       return;
     }
 
+    if (responsibleUnit && !workSupervisorPerson && !legacyWorkSupervisorName) {
+      setError("กรุณาเลือกผู้ควบคุมงานจากรายชื่อบุคลากร");
+      return;
+    }
+
     const parsedCustomerCount = parseCustomerCount(customerCount);
     if (!parsedCustomerCount.success) {
       setError(parsedCustomerCount.error);
@@ -156,7 +169,7 @@ export default function JobDetailPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit || null,
-      work_supervisor_name: workSupervisorName.trim() || null,
+      work_supervisor_person_id: workSupervisorPerson?.id ?? null,
       has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
@@ -435,9 +448,14 @@ export default function JobDetailPage() {
                 หน่วยงานผู้รับผิดชอบ
                 <select
                   value={responsibleUnit}
-                  onChange={(event) =>
-                    setResponsibleUnit(event.target.value as ResponsibleUnit | "")
-                  }
+                  onChange={(event) => {
+                    const nextUnit = event.target.value as ResponsibleUnit | "";
+                    if (nextUnit !== responsibleUnit) {
+                      setWorkSupervisorPerson(null);
+                      setLegacyWorkSupervisorName(null);
+                    }
+                    setResponsibleUnit(nextUnit);
+                  }}
                   disabled={isClosed}
                   className={inputLight}
                 >
@@ -451,11 +469,16 @@ export default function JobDetailPage() {
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                 ผู้ควบคุมงาน
-                <Input
-                  type="text"
-                  value={workSupervisorName}
-                  onChange={(event) => setWorkSupervisorName(event.target.value)}
-                  placeholder="ระบุชื่อผู้ควบคุมงาน"
+                <PersonSelect
+                  department={responsibleUnit}
+                  value={workSupervisorPerson?.id ?? null}
+                  selectedPerson={workSupervisorPerson}
+                  legacyName={legacyWorkSupervisorName}
+                  onChange={(person) => {
+                    setWorkSupervisorPerson(person);
+                    if (person) setLegacyWorkSupervisorName(null);
+                  }}
+                  required={Boolean(responsibleUnit)}
                   disabled={isClosed}
                 />
               </label>

@@ -19,6 +19,14 @@ const customerCountMigration = source(
 const workSupervisorMigration = source(
   "../../sql/027_outage_job_work_supervisor_name.sql"
 );
+const peopleMigration = source("../../sql/028_people_master.sql");
+const peoplePage = source("../app/(app)/people/page.tsx");
+const peopleRoute = source("../app/api/people/route.ts");
+const personSelect = source("../components/people/PersonSelect.tsx");
+const noticeModal = source("../components/NoticeScheduleModal.tsx");
+const noticeCompletionRoute = source(
+  "../app/api/jobs/[id]/notice-completion/route.ts"
+);
 
 test("new-job UI requires an explicit responsible-unit selection", () => {
   assert.match(newPage, /หน่วยงานผู้รับผิดชอบ/);
@@ -92,7 +100,7 @@ test("list, detail, and card expose the same customer count field", () => {
   assert.match(jobsRepo, /customer_count: number \| null/);
   assert.match(
     jobsRepo,
-    /equipment_code, responsible_unit, work_supervisor_name, has_switching, customer_count, note/
+    /equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:/
   );
   assert.match(editPage, /customerCountDisplay/);
   assert.match(editPage, /formatCustomerCount\(customerCountPreview\.value\)/);
@@ -102,7 +110,7 @@ test("list, detail, and card expose the same customer count field", () => {
   assert.match(jobCard, /formatCustomerCount\(job\.customer_count\)/);
 });
 
-test("work supervisor is optional and persists through create and edit", () => {
+test("legacy work-supervisor text remains while new selections use the people master", () => {
   assert.match(
     workSupervisorMigration,
     /ADD COLUMN IF NOT EXISTS work_supervisor_name text NULL/
@@ -112,20 +120,38 @@ test("work supervisor is optional and persists through create and edit", () => {
     /NOT NULL|DROP TABLE|TRUNCATE|DELETE FROM/i
   );
   assert.match(newPage, /ผู้ควบคุมงาน/);
-  assert.match(newPage, /placeholder="ระบุชื่อผู้ควบคุมงาน"/);
-  assert.match(newPage, /work_supervisor_name: workSupervisorName\.trim\(\) \|\| null/);
-  assert.match(jobsRoute, /work_supervisor_name: workSupervisorName/);
-  assert.match(editPage, /setWorkSupervisorName\(data\.work_supervisor_name \?\? ""\)/);
-  assert.match(editPage, /work_supervisor_name: workSupervisorName\.trim\(\) \|\| null/);
-  assert.match(editRoute, /work_supervisor_name: workSupervisorName/);
-  assert.match(editRoute, /data\.work_supervisor_name !== workSupervisorName/);
+  assert.match(newPage, /<PersonSelect/);
+  assert.match(newPage, /if \(!workSupervisorPerson\)/);
+  assert.match(newPage, /work_supervisor_person_id: workSupervisorPerson\?\.id \?\? null/);
+  assert.match(jobsRoute, /findActivePersonForDepartment/);
+  assert.match(editPage, /setWorkSupervisorPerson\(null\)/);
+  assert.match(editPage, /setLegacyWorkSupervisorName\(null\)/);
+  assert.match(editPage, /legacyName=\{legacyWorkSupervisorName\}/);
+  assert.match(editRoute, /preservingExistingSelection/);
+  assert.match(editRoute, /!requestedWorkSupervisorPersonId/);
   assert.match(jobsRepo, /work_supervisor_name: string \| null/);
-  assert.match(
-    jobsRepo,
-    /result\.data\?\.work_supervisor_name !== data\.work_supervisor_name/
-  );
-  assert.match(
-    jobsRepo,
-    /result\.data\?\.work_supervisor_name !== patch\.work_supervisor_name/
-  );
+  assert.match(jobsRepo, /work_supervisor_person_id: string \| null/);
+  assert.match(peopleMigration, /work_supervisor_person_id uuid null/);
+  assert.doesNotMatch(peopleMigration, /update public\.outage_jobs[\s\S]*work_supervisor_person_id/i);
+});
+
+test("people master supports search, department filters, and soft activation", () => {
+  assert.match(peoplePage, /เพิ่มบุคลากร/);
+  assert.match(peoplePage, /ค้นหาชื่อบุคลากร/);
+  assert.match(peoplePage, /departmentFilter/);
+  assert.match(peoplePage, /is_active: isActive/);
+  assert.match(peopleRoute, /\.ilike\("full_name"/);
+  assert.match(peopleRoute, /\.eq\("department", department\)/);
+  assert.doesNotMatch(peoplePage, /DELETE/);
+  assert.doesNotMatch(peopleMigration, /role|roles|junction/i);
+});
+
+test("person selectors filter by department and shift 1 uses active operations people", () => {
+  assert.match(personSelect, /active: "true"/);
+  assert.match(personSelect, /department/);
+  assert.match(newPage, /setWorkSupervisorPerson\(null\)/);
+  assert.match(noticeModal, /department=\{OPERATIONS_RESPONSIBLE_UNIT\}/);
+  assert.match(noticeModal, /completed_by_person_id/);
+  assert.match(noticeCompletionRoute, /findActivePersonForDepartment/);
+  assert.match(noticeCompletionRoute, /OPERATIONS_RESPONSIBLE_UNIT/);
 });

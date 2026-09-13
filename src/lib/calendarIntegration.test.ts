@@ -38,7 +38,7 @@ test("calendar exposes all unit filters and applies them to day details", () => 
   assert.match(jobsRoute, /has_switching: job\.has_switching \?\? null/);
   assert.match(jobsRoute, /requires_shift_one_distribution: isShiftOneDistributionPending\(job\)/);
   assert.match(jobsRoute, /responsible_unit: job\.responsible_unit \?\? null/);
-  assert.match(jobsRoute, /work_supervisor_name: job\.work_supervisor_name \?\? null/);
+  assert.match(jobsRoute, /work_supervisor_name: getWorkSupervisorDisplayName\(job\)/);
   assert.match(jobsRoute, /equipment_code: job\.equipment_code/);
   assert.match(jobsRoute, /area_title: job\.doc_area_title \?\? null/);
   assert.match(jobsRoute, /display_area: job\.doc_area_title \?\? job\.doc_purpose \?\? null/);
@@ -151,7 +151,7 @@ test("mobile selected-day detail renders actual compact jobs without drill-down"
   assert.match(mobileCard, /job\.requires_shift_one_distribution/);
   assert.match(mobileCard, /job\.equipment_code/);
   assert.match(mobileCard, /job\.display_area/);
-  assert.match(mobileCard, /job\.work_supervisor_name \|\| "ยังไม่ระบุ"/);
+  assert.match(mobileCard, /job\.work_supervisor_name \|\| "-"/);
   assert.match(mobileCard, /<UserRound/);
   assert.match(mobileCard, /break-words text-sm leading-5/);
   assert.doesNotMatch(mobileCard, /formatTimeRange|<Link|href=|onClick|chevron/i);

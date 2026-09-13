@@ -150,7 +150,7 @@ function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
       <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-5 text-slate-600">
         <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="truncate">
-          {job.work_supervisor_name || "ยังไม่ระบุ"}
+          {job.work_supervisor_name || "-"}
         </span>
       </p>
     </article>
@@ -778,7 +778,7 @@ export default function CalendarPage() {
                         <p className="flex min-w-0 items-center gap-1.5 text-sm text-slate-600">
                           <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="truncate">
-                            ผู้ควบคุมงาน: {job.work_supervisor_name || "ยังไม่ระบุ"}
+                            ผู้ควบคุมงาน: {job.work_supervisor_name || "-"}
                           </span>
                         </p>
                       </Link>

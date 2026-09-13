@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import PersonSelect from "@/components/people/PersonSelect";
 import type { OutageJob } from "@/lib/jobsRepo";
 import { normalizeGoogleMyMapsViewerUrl } from "@/lib/mapUrl";
 import { buildOutageNoticeLineMessage } from "@/lib/outageNoticeMessage";
@@ -12,6 +13,12 @@ import {
   getDistributionWorkflow,
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
+import { OPERATIONS_RESPONSIBLE_UNIT } from "@/lib/jobMetadata";
+import {
+  getNoticeDistributorDisplayName,
+  getPersonReference,
+  type PersonReference
+} from "@/lib/people";
 
 const TOAST_TIMEOUT_MS = 2000;
 
@@ -50,8 +57,12 @@ export default function NoticeScheduleModal({
     toDateTimeLocal(job?.notice_completed_at)
   );
   const [completedBy, setCompletedBy] = useState(
-    () => job?.notice_by ?? distributionWorkflow?.assignmentLabel ?? ""
+    () => (job ? getNoticeDistributorDisplayName(job) ?? "" : "")
   );
+  const [completedByPerson, setCompletedByPerson] =
+    useState<PersonReference | null>(() =>
+      getPersonReference(job?.notice_by_person)
+    );
   const [errors, setErrors] = useState<NoticeScheduleErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -211,7 +222,7 @@ export default function NoticeScheduleModal({
     if (
       !completedAt ||
       Number.isNaN(completedDate.getTime()) ||
-      !completedBy.trim()
+      (isOperationsFlow ? !completedByPerson : !completedBy.trim())
     ) {
       setErrors({ completion: "กรุณาระบุวันเวลาและผู้แจกจริง" });
       return;
@@ -225,7 +236,10 @@ export default function NoticeScheduleModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           completed_at: completedDate.toISOString(),
-          completed_by: completedBy.trim()
+          completed_by: isOperationsFlow ? undefined : completedBy.trim(),
+          completed_by_person_id: isOperationsFlow
+            ? completedByPerson?.id
+            : null
         })
       });
       const result = await response.json().catch(() => null);
@@ -401,13 +415,27 @@ export default function NoticeScheduleModal({
               </label>
               <label className="grid gap-1.5 text-sm font-medium text-slate-700">
                 ผู้แจกจริง
-                <Input
-                  type="text"
-                  value={completedBy}
-                  maxLength={200}
-                  onChange={(event) => setCompletedBy(event.target.value)}
-                  placeholder="ชื่อผู้ที่ดำเนินการจริง"
-                />
+                {isOperationsFlow ? (
+                  <PersonSelect
+                    department={OPERATIONS_RESPONSIBLE_UNIT}
+                    value={completedByPerson?.id ?? null}
+                    selectedPerson={completedByPerson}
+                    legacyName={
+                      job?.notice_by_person_id ? null : job?.notice_by ?? null
+                    }
+                    onChange={setCompletedByPerson}
+                    required
+                    placeholder="ค้นหาและเลือกผู้แจกจริง"
+                  />
+                ) : (
+                  <Input
+                    type="text"
+                    value={completedBy}
+                    maxLength={200}
+                    onChange={(event) => setCompletedBy(event.target.value)}
+                    placeholder="ชื่อผู้ที่ดำเนินการจริง"
+                  />
+                )}
               </label>
             </div>
             {errors.completion ? (

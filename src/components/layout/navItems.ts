@@ -32,5 +32,9 @@ export const appNavItems: NavItem[] = [
   {
     label: "กลุ่มเฝ้าระวังพิเศษ",
     href: "/special-watchlist"
+  },
+  {
+    label: "บุคลากร",
+    href: "/people"
   }
 ];

@@ -5,6 +5,11 @@ import {
   getDistributionWorkflow,
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
+import { OPERATIONS_RESPONSIBLE_UNIT } from "@/lib/jobMetadata";
+import {
+  findActivePersonForDepartment,
+  normalizePersonId
+} from "@/lib/peopleServer";
 
 export const runtime = "nodejs";
 
@@ -37,10 +42,14 @@ export async function PATCH(
     const body = (await request.json()) as {
       completed_at?: unknown;
       completed_by?: unknown;
+      completed_by_person_id?: unknown;
     };
     const completedAt = normalizeDateTime(body.completed_at);
     const completedBy =
       typeof body.completed_by === "string" ? body.completed_by.trim() : "";
+    const completedByPersonId = normalizePersonId(
+      body.completed_by_person_id
+    );
 
     if (
       !jobId ||
@@ -48,7 +57,7 @@ export async function PATCH(
         jobId
       ) ||
       !completedAt ||
-      !completedBy ||
+      completedByPersonId === undefined ||
       completedBy.length > 200
     ) {
       return NextResponse.json(
@@ -106,17 +115,46 @@ export async function PATCH(
       );
     }
 
+    let distributorName = completedBy;
+    let distributorPersonId: string | null = null;
+    if (distributionWorkflow.route === "OPERATIONS") {
+      const distributor = completedByPersonId
+        ? await findActivePersonForDepartment(
+            admin,
+            completedByPersonId,
+            OPERATIONS_RESPONSIBLE_UNIT
+          )
+        : null;
+      if (!distributor) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "ผู้แจกจริงต้องเป็นบุคลากร ผปบ. ที่เปิดใช้งานอยู่"
+          },
+          { status: 400 }
+        );
+      }
+      distributorName = distributor.full_name;
+      distributorPersonId = distributor.id;
+    } else if (!distributorName) {
+      return NextResponse.json(
+        { ok: false, error: "กรุณาระบุวันเวลาและผู้แจกจริงให้ครบถ้วน" },
+        { status: 400 }
+      );
+    }
+
     const { data: updated, error: updateError } = await admin
       .from("outage_jobs")
       .update({
         notice_status: "COMPLETED",
         notice_completed_at: completedAt,
-        notice_by: completedBy,
+        notice_by_person_id: distributorPersonId,
+        notice_by: distributorName,
         notice_completion_source: "USER"
       })
       .eq("id", jobId)
       .eq("is_closed", false)
-      .select("notice_status, notice_date, notice_by, notice_scheduled_at, notice_completed_at, notice_completion_source")
+      .select("notice_status, notice_date, notice_by_person_id, notice_by, notice_by_person:people!outage_jobs_notice_by_person_id_fkey(id, full_name, department, is_active), notice_scheduled_at, notice_completed_at, notice_completion_source")
       .single();
 
     if (updateError) throw updateError;

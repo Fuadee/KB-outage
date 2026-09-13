@@ -9,13 +9,23 @@ const { NextRequest, NextResponse } = require('next/server');
 const root = path.resolve(__dirname, '..');
 const id = '00000000-0000-4000-8000-000000000001';
 const targetId = '00000000-0000-4000-8000-000000000002';
+const personId = '00000000-0000-4000-8000-000000000003';
 const cookies = ['', 'sb-access-token=expired; sb-refresh-token=expired', 'sb-access-token=%ZZ.not-a-jwt; sb-refresh-token=broken'];
-const jobInput = { outage_date: '2026-09-12', equipment_code: 'TEST', responsible_unit: 'แผนกปฏิบัติการ', has_switching: false, customer_count: 5 };
+const jobInput = { outage_date: '2026-09-12', equipment_code: 'TEST', responsible_unit: 'แผนกปฏิบัติการ', work_supervisor_person_id: personId, has_switching: false, customer_count: 5 };
 
 // Run the actual TypeScript handlers. Substitute external I/O only; never load
 // local environment files or contact a real Supabase, storage, or LINE service.
 function harness(legacyFlag) {
-  const tables = { outage_jobs: [], outage_job_workflow_audit: [] };
+  const tables = {
+    outage_jobs: [],
+    outage_job_workflow_audit: [],
+    people: [{
+      id: personId,
+      full_name: 'บุคลากรทดสอบ',
+      department: 'แผนกปฏิบัติการ',
+      is_active: true
+    }]
+  };
   const writes = [];
   let rpcError = null;
   const client = {
@@ -137,8 +147,8 @@ for (const flag of [undefined, 'true', 'false']) {
       assert.equal(h.tables.outage_jobs[0].document_received_by, 'Receiver');
       assert.equal(h.tables.outage_jobs[0].document_delivered_by, 'Courier');
       await ok('jobs/notice-schedule', 'POST', { jobId: id, notice_date: '2026-09-12' });
-      await ok('jobs/[id]/notice-completion', 'PATCH', { completed_at: '2026-09-12T03:00:00Z', completed_by: 'Distributor' });
-      assert.equal(h.tables.outage_jobs[0].notice_by, 'Distributor');
+      await ok('jobs/[id]/notice-completion', 'PATCH', { completed_at: '2026-09-12T03:00:00Z', completed_by_person_id: personId });
+      assert.equal(h.tables.outage_jobs[0].notice_by, 'บุคลากรทดสอบ');
       await ok('jobs/[id]/workflow-rollback', 'GET');
       await ok('jobs/[id]/workflow-rollback', 'POST', { target_step: 'DOCUMENT_CREATED', reason: 'Correct entry' });
       const prefix = 'jobs/[id]/delivery-batch';
@@ -172,7 +182,7 @@ test('invalid data, workflow states, and database errors still fail without logi
   assert.equal((await h.call('jobs/[id]/close', 'POST')).status, 409);
   assert.equal((await h.call('jobs/[id]/document-workflow', 'PATCH', { action: 'receive', occurred_at: '2026-09-12', operator: 'Operator' })).status, 409);
   assert.equal((await h.call('jobs/notice-schedule', 'POST', { jobId: id, notice_date: '2026-09-12' })).status, 409);
-  assert.equal((await h.call('jobs/[id]/notice-completion', 'PATCH', { completed_at: '2026-09-12', completed_by: 'Operator' })).status, 409);
+  assert.equal((await h.call('jobs/[id]/notice-completion', 'PATCH', { completed_at: '2026-09-12', completed_by_person_id: personId })).status, 409);
   assert.equal((await h.call('jobs/[id]/workflow-rollback', 'POST', { target_step: 'BAD', reason: 'test' })).status, 400);
   h.setRpcError({ code: '22023', message: 'not before current workflow step' });
   assert.equal((await h.call('jobs/[id]/workflow-rollback', 'POST', { target_step: 'DOCUMENT_CREATED', reason: 'test' })).status, 409);

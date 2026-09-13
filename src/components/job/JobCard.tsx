@@ -11,6 +11,7 @@ import { getDistributionReminderStatus } from "@/lib/distributionReminder";
 import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
 import { formatCustomerCount, getResponsibleUnitLabel } from "@/lib/jobMetadata";
 import { formatThaiShortDate, getSocialPublicationStatus } from "@/lib/socialPublication";
+import { getNoticeDistributorDisplayName } from "@/lib/people";
 import { cn } from "@/lib/utils";
 
 export type JobAction = {
@@ -178,7 +179,7 @@ export default function JobCard({
   const distributionReminder = getDistributionReminderStatus({
     outageDate: job.outage_date,
     noticeDate: job.notice_date,
-    noticeBy: job.notice_by,
+    noticeBy: getNoticeDistributorDisplayName(job),
     noticeStatus: job.notice_status,
     noticeCompletedAt: job.notice_completed_at
   });

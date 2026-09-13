@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getAvailableWorkflowRollbackOptions } from "@/lib/workflowRollback";
 import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
+import { getNoticeDistributorDisplayName } from "@/lib/people";
 
 type Props = {
   job: OutageJob;
@@ -71,7 +72,7 @@ export default function DocumentWorkflowPanel({
       label: "แจกหนังสือ",
       done: noticeCompleted || isSocialPosted(job),
       detail: noticeCompleted
-        ? `${formatDate(job.notice_completed_at)} · ${job.notice_by ?? "ไม่ระบุผู้แจกจริง"}`
+        ? `${formatDate(job.notice_completed_at)} · ${getNoticeDistributorDisplayName(job) ?? "ไม่ระบุผู้แจกจริง"}`
         : isNoticeScheduled(job) && job.notice_date
           && distributionWorkflow.route === "OPERATIONS"
           ? `กำหนดแจก ${new Date(`${job.notice_date}T00:00:00`).toLocaleDateString("th-TH", { dateStyle: "medium" })} · รอแจก`

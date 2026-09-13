@@ -27,6 +27,7 @@ import {
   setNakhonNotified,
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
+import { getNoticeDistributorDisplayName } from "@/lib/people";
 import {
   closeOutageJob,
   normalizeJobId
@@ -1061,7 +1062,9 @@ export default function JobsPage() {
             }
             if (socialStatus === "POSTED") tertiaryItems.push("โพสต์ Social แล้ว");
             if (noticeCompleted) {
-              tertiaryItems.push(`แจกหนังสือแล้ว · ${job.notice_by ?? "-"}`);
+              tertiaryItems.push(
+                `แจกหนังสือแล้ว · ${getNoticeDistributorDisplayName(job) ?? "-"}`
+              );
             } else if (
               noticeScheduled &&
               distributionWorkflow.route === "OPERATIONS"

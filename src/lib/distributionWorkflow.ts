@@ -1,5 +1,11 @@
 import { isNoticeCompleted, isNoticeScheduled } from "./documentWorkflow.ts";
-import { isResponsibleUnit, type ResponsibleUnit } from "./jobMetadata.ts";
+import {
+  AONANG_RESPONSIBLE_UNIT,
+  CONSTRUCTION_RESPONSIBLE_UNIT,
+  isResponsibleUnit,
+  OPERATIONS_RESPONSIBLE_UNIT,
+  type ResponsibleUnit
+} from "./jobMetadata.ts";
 
 export const OPERATIONS_DISTRIBUTION_ASSIGNEE = "กะ 1";
 
@@ -48,19 +54,19 @@ export function getDistributionWorkflow(
   let actionLabel = "ระบุหน่วยงานก่อนแจกหนังสือ";
   let modalTitle = "ยังไม่สามารถมอบหมายการแจกหนังสือ";
 
-  if (responsibleUnit === "แผนกปฏิบัติการ") {
+  if (responsibleUnit === OPERATIONS_RESPONSIBLE_UNIT) {
     route = "OPERATIONS";
     assignmentLabel = OPERATIONS_DISTRIBUTION_ASSIGNEE;
     actionLabel = scheduled
       ? "ยืนยัน / แก้ไขการแจกหนังสือ"
       : "แจ้งหนังสือดับไฟ";
     modalTitle = "กำหนดการแจ้งหนังสือดับไฟ";
-  } else if (responsibleUnit === "แผนกก่อสร้าง") {
+  } else if (responsibleUnit === CONSTRUCTION_RESPONSIBLE_UNIT) {
     route = "DIRECT_CONSTRUCTION";
     assignmentLabel = "แผนกก่อสร้าง";
     actionLabel = "แจ้งก่อสร้างแจกหนังสือ";
     modalTitle = "แจ้งก่อสร้างแจกหนังสือ";
-  } else if (responsibleUnit === "กฟส.อ่าวนาง") {
+  } else if (responsibleUnit === AONANG_RESPONSIBLE_UNIT) {
     route = "DIRECT_AO_NANG";
     assignmentLabel = "อ่าวนาง";
     actionLabel = "แจ้งอ่าวนางแจกหนังสือ";

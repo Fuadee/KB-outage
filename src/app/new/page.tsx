@@ -8,6 +8,7 @@ import Button, { buttonStyles } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import SwitchingField from "@/components/job/SwitchingField";
+import PersonSelect from "@/components/people/PersonSelect";
 import { createJob } from "@/lib/jobsRepo";
 import {
   MAX_CUSTOMER_COUNT,
@@ -15,6 +16,7 @@ import {
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
+import type { PersonReference } from "@/lib/people";
 import { cn } from "@/lib/utils";
 import { inputLight, labelText, subtitleText, titleText } from "@/lib/theme";
 
@@ -25,7 +27,8 @@ export default function NewJobPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
-  const [workSupervisorName, setWorkSupervisorName] = useState("");
+  const [workSupervisorPerson, setWorkSupervisorPerson] =
+    useState<PersonReference | null>(null);
   const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
@@ -39,6 +42,11 @@ export default function NewJobPage() {
 
     if (!outageDate || !equipmentCode.trim() || !responsibleUnit) {
       setError("กรุณากรอกวันที่ รหัสอุปกรณ์ และเลือกหน่วยงานผู้รับผิดชอบ");
+      return;
+    }
+
+    if (!workSupervisorPerson) {
+      setError("กรุณาเลือกผู้ควบคุมงานจากรายชื่อบุคลากร");
       return;
     }
 
@@ -59,7 +67,7 @@ export default function NewJobPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit,
-      work_supervisor_name: workSupervisorName.trim() || null,
+      work_supervisor_person_id: workSupervisorPerson?.id ?? null,
       has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
@@ -108,9 +116,10 @@ export default function NewJobPage() {
               หน่วยงานผู้รับผิดชอบ
               <select
                 value={responsibleUnit}
-                onChange={(event) =>
-                  setResponsibleUnit(event.target.value as ResponsibleUnit | "")
-                }
+                onChange={(event) => {
+                  setResponsibleUnit(event.target.value as ResponsibleUnit | "");
+                  setWorkSupervisorPerson(null);
+                }}
                 className={inputLight}
                 required
               >
@@ -126,11 +135,12 @@ export default function NewJobPage() {
             </label>
             <label className={cn("flex flex-col gap-2", labelText)}>
               ผู้ควบคุมงาน
-              <Input
-                type="text"
-                value={workSupervisorName}
-                onChange={(event) => setWorkSupervisorName(event.target.value)}
-                placeholder="ระบุชื่อผู้ควบคุมงาน"
+              <PersonSelect
+                department={responsibleUnit}
+                value={workSupervisorPerson?.id ?? null}
+                selectedPerson={workSupervisorPerson}
+                onChange={setWorkSupervisorPerson}
+                required
               />
             </label>
             <SwitchingField

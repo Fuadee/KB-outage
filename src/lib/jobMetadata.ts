@@ -1,7 +1,11 @@
+export const OPERATIONS_RESPONSIBLE_UNIT = "แผนกปฏิบัติการ";
+export const CONSTRUCTION_RESPONSIBLE_UNIT = "แผนกก่อสร้าง";
+export const AONANG_RESPONSIBLE_UNIT = "กฟส.อ่าวนาง";
+
 export const RESPONSIBLE_UNITS = [
-  "แผนกปฏิบัติการ",
-  "แผนกก่อสร้าง",
-  "กฟส.อ่าวนาง"
+  OPERATIONS_RESPONSIBLE_UNIT,
+  CONSTRUCTION_RESPONSIBLE_UNIT,
+  AONANG_RESPONSIBLE_UNIT
 ] as const;
 
 export type ResponsibleUnit = (typeof RESPONSIBLE_UNITS)[number];

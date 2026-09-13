@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { getLegacyCalendarStatus } from "@/lib/documentWorkflow";
 import { isShiftOneDistributionPending } from "@/lib/distributionWorkflow";
 import { isResponsibleUnit, parseCustomerCount } from "@/lib/jobMetadata";
+import {
+  findActivePersonForDepartment,
+  normalizePersonId
+} from "@/lib/peopleServer";
+import { getWorkSupervisorDisplayName } from "@/lib/people";
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export const runtime = "nodejs";
@@ -75,7 +80,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, equipment_code, responsible_unit, work_supervisor_name, has_switching, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, notice_completed_at, is_closed, created_at"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:people!outage_jobs_work_supervisor_person_id_fkey(id, full_name, department, is_active), has_switching, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, notice_completed_at, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })
@@ -90,7 +95,7 @@ export async function GET(request: Request) {
       outage_date: job.outage_date,
       equipment_code: job.equipment_code,
       responsible_unit: job.responsible_unit ?? null,
-      work_supervisor_name: job.work_supervisor_name ?? null,
+      work_supervisor_name: getWorkSupervisorDisplayName(job),
       has_switching: job.has_switching ?? null,
       requires_shift_one_distribution: isShiftOneDistributionPending(job),
       time_start: job.doc_time_start ?? null,
@@ -120,7 +125,7 @@ export async function POST(request: Request) {
       outage_date?: unknown;
       equipment_code?: unknown;
       responsible_unit?: unknown;
-      work_supervisor_name?: unknown;
+      work_supervisor_person_id?: unknown;
       has_switching?: unknown;
       customer_count?: unknown;
       note?: unknown;
@@ -132,10 +137,9 @@ export async function POST(request: Request) {
         ? body.equipment_code.trim()
         : "";
     const customerCount = parseCustomerCount(body?.customer_count);
-    const workSupervisorName =
-      typeof body?.work_supervisor_name === "string"
-        ? body.work_supervisor_name.trim() || null
-        : null;
+    const workSupervisorPersonId = normalizePersonId(
+      body?.work_supervisor_person_id
+    );
 
     if (!customerCount.success) {
       return NextResponse.json(
@@ -155,9 +159,7 @@ export async function POST(request: Request) {
       !isValidDateString(outageDate) ||
       !equipmentCode ||
       !isResponsibleUnit(body?.responsible_unit) ||
-      (body?.work_supervisor_name !== undefined &&
-        body.work_supervisor_name !== null &&
-        typeof body.work_supervisor_name !== "string") ||
+      !workSupervisorPersonId ||
       (body?.note !== undefined &&
         body.note !== null &&
         typeof body.note !== "string")
@@ -170,19 +172,34 @@ export async function POST(request: Request) {
 
     const note = typeof body.note === "string" ? body.note.trim() || null : null;
     const supabase = createSupabaseServerClient();
+    const workSupervisor = await findActivePersonForDepartment(
+      supabase,
+      workSupervisorPersonId,
+      body.responsible_unit
+    );
+    if (!workSupervisor) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "ผู้ควบคุมงานต้องเป็นบุคลากรที่ใช้งานอยู่และสังกัดตรงกับหน่วยงาน"
+        },
+        { status: 400 }
+      );
+    }
     const { data, error } = await supabase
       .from("outage_jobs")
       .insert({
         outage_date: outageDate,
         equipment_code: equipmentCode,
         responsible_unit: body.responsible_unit,
-        work_supervisor_name: workSupervisorName,
+        work_supervisor_person_id: workSupervisor?.id ?? null,
+        work_supervisor_name: workSupervisor?.full_name ?? null,
         has_switching: body.has_switching,
         customer_count: customerCount.value,
         note
       })
       .select(
-        "id, outage_date, equipment_code, responsible_unit, work_supervisor_name, has_switching, customer_count, note"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, has_switching, customer_count, note"
       )
       .single();
 
