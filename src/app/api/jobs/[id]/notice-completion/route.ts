@@ -111,11 +111,12 @@ export async function PATCH(
       .update({
         notice_status: "COMPLETED",
         notice_completed_at: completedAt,
-        notice_by: completedBy
+        notice_by: completedBy,
+        notice_completion_source: "USER"
       })
       .eq("id", jobId)
       .eq("is_closed", false)
-      .select("notice_status, notice_date, notice_by, notice_scheduled_at, notice_completed_at")
+      .select("notice_status, notice_date, notice_by, notice_scheduled_at, notice_completed_at, notice_completion_source")
       .single();
 
     if (updateError) throw updateError;
@@ -126,7 +127,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         ok: false,
-        error: /notice_completed_at/i.test(message)
+        error: /notice_completed_at|notice_completion_source/i.test(message)
           ? "ฐานข้อมูลยังไม่ได้ติดตั้ง migration สำหรับสถานะแจกหนังสือ"
           : "บันทึกผลการแจกหนังสือไม่สำเร็จ กรุณาลองใหม่"
       },

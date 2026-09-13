@@ -157,6 +157,7 @@ keys, and LINE retry keys prevent successful work from being sent twice.
 - [ ] Confirm `SUPABASE_URL`
 - [ ] Confirm `SUPABASE_SERVICE_ROLE_KEY`
 - [ ] Apply `sql/024_notice_distribution_line_notifications.sql` before deploying the application change
+- [ ] Apply `sql/026_notice_completion_provenance.sql` before deploying the completion-predicate change
 - [ ] Run one manual dry-run
 - [ ] Validate response counters + `skipReasons` + `sampleRows`
 - [ ] Configure external scheduler only after dry-run passes

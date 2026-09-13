@@ -15,6 +15,7 @@ export type NoticeDistributionJob = OutageNoticeMessageJob & {
   notice_status?: string | null;
   notice_scheduled_at?: string | null;
   notice_completed_at?: string | null;
+  notice_completion_source?: string | null;
   document_received_at?: string | null;
   document_delivered_at?: string | null;
   social_status?: string | null;
@@ -23,13 +24,14 @@ export type NoticeDistributionJob = OutageNoticeMessageJob & {
 };
 
 export type NoticeDistributionCompletionReason =
-  | "notice_completed_at"
+  | "user_confirmed_notice_completion"
   | null;
 
 export type NoticeDistributionIgnoredCompletionEvidence =
   | "legacy_sent_status"
-  | "completed_status_without_notice_completed_at"
   | "legacy_migration_backfill"
+  | "missing_user_completion_provenance"
+  | "incomplete_user_completion_evidence"
   | null;
 
 export type NoticeDistributionCompletionEvaluation = {
@@ -96,23 +98,37 @@ export function buildLineRetryKey(eventKey: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function instantMillis(value: string | null | undefined): number | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  const valueMillis = Date.parse(trimmed);
-  return Number.isNaN(valueMillis) ? null : valueMillis;
-}
-
 /**
- * The Jobs UI's "ยืนยันว่าแจกหนังสือแล้ว" action atomically writes COMPLETED
- * and notice_completed_at. Migration 023 previously synthesized the same pair
- * for SCHEDULED/SENT rows, so its exact timestamp signatures are excluded.
+ * Only explicit provenance from the Jobs completion action is accepted.
+ * Migration 023 and real user completion can produce identical timestamps,
+ * so timestamp relationships must never be used to distinguish them.
  */
 export function evaluateNoticeDistributionCompletion(
   job: NoticeDistributionJob
 ): NoticeDistributionCompletionEvaluation {
   const noticeStatus = job.notice_status?.trim().toUpperCase();
-  const completedAtMillis = instantMillis(job.notice_completed_at);
+  const completionSource = job.notice_completion_source?.trim().toUpperCase();
+  const hasCompletedAt = Boolean(job.notice_completed_at?.trim());
+
+  if (
+    completionSource === "USER" &&
+    noticeStatus === "COMPLETED" &&
+    hasCompletedAt
+  ) {
+    return {
+      completed: true,
+      completionReason: "user_confirmed_notice_completion",
+      ignoredEvidence: null
+    };
+  }
+
+  if (completionSource === "LEGACY_BACKFILL") {
+    return {
+      completed: false,
+      completionReason: null,
+      ignoredEvidence: "legacy_migration_backfill"
+    };
+  }
 
   if (noticeStatus === "SENT") {
     return {
@@ -122,40 +138,16 @@ export function evaluateNoticeDistributionCompletion(
     };
   }
 
-  if (noticeStatus !== "COMPLETED" || completedAtMillis === null) {
-    return {
-      completed: false,
-      completionReason: null,
-      ignoredEvidence:
-        noticeStatus === "COMPLETED"
-          ? "completed_status_without_notice_completed_at"
-          : null
-    };
-  }
-
-  const scheduledAtMillis = instantMillis(job.notice_scheduled_at);
-  const noticeDate = normalizeDateOnly(job.notice_date);
-  const plannedDateMillis = noticeDate
-    ? Date.parse(`${noticeDate}T00:00:00+07:00`)
-    : null;
-  const matchesLegacyBackfill =
-    (scheduledAtMillis !== null && completedAtMillis === scheduledAtMillis) ||
-    (scheduledAtMillis === null &&
-      plannedDateMillis !== null &&
-      completedAtMillis === plannedDateMillis);
-
-  if (matchesLegacyBackfill) {
-    return {
-      completed: false,
-      completionReason: null,
-      ignoredEvidence: "legacy_migration_backfill"
-    };
-  }
-
+  const hasCompletionShapedData =
+    noticeStatus === "COMPLETED" || hasCompletedAt || completionSource === "USER";
   return {
-    completed: true,
-    completionReason: "notice_completed_at",
-    ignoredEvidence: null
+    completed: false,
+    completionReason: null,
+    ignoredEvidence: hasCompletionShapedData
+      ? completionSource === "USER"
+        ? "incomplete_user_completion_evidence"
+        : "missing_user_completion_provenance"
+      : null
   };
 }
 
@@ -199,6 +191,7 @@ export function buildNoticeDistributionDiagnostic(
     equipmentCode: job.equipment_code ?? null,
     noticeDate: job.notice_date ?? null,
     noticeCompletedAt: job.notice_completed_at ?? null,
+    noticeCompletionSource: job.notice_completion_source ?? null,
     noticeStatus: job.notice_status ?? null,
     noticeScheduledAt: job.notice_scheduled_at ?? null,
     documentReceivedAt: job.document_received_at ?? null,
@@ -208,7 +201,12 @@ export function buildNoticeDistributionDiagnostic(
     responsibleUnit: job.responsible_unit ?? null,
     isClosed: job.is_closed ?? null,
     completionReason: completion.completionReason,
-    completionEvidenceIgnored: completion.ignoredEvidence,
+    completionEvidence: {
+      noticeStatus: job.notice_status ?? null,
+      hasNoticeCompletedAt: Boolean(job.notice_completed_at?.trim()),
+      noticeCompletionSource: job.notice_completion_source ?? null
+    },
+    ignoredEvidence: completion.ignoredEvidence,
     eligibilityReason: getNoticeDistributionSkipReason(job, targetDate)
   };
 }

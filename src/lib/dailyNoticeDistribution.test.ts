@@ -32,6 +32,7 @@ function makeJob(
     notice_date: targetDate,
     notice_status: "SCHEDULED",
     notice_completed_at: null,
+    notice_completion_source: null,
     is_closed: false,
     ...patch
   };
@@ -212,28 +213,25 @@ test("COMPLETED status without the completion timestamp is not proof of distribu
   const job = makeJob("status-only", {
     notice_date: "2026-09-10",
     notice_status: "COMPLETED",
-    notice_completed_at: null
+    notice_completed_at: null,
+    notice_completion_source: "USER"
   });
 
   assert.equal(getNoticeDistributionCompletionReason(job), null);
   assert.equal(getNoticeDistributionSkipReason(job, targetDate), null);
 });
 
-test("timestamps synthesized by the legacy migration do not complete distribution", async () => {
+test("a legacy migration-only completed row is not actual completion", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
     jobs: [
-      makeJob("scheduled-backfill", {
-        notice_date: "2026-09-10",
+      makeJob("legacy-backfill", {
+        equipment_code: "KBB05WF-LEGACY",
+        notice_date: "2026-09-09",
         notice_status: "COMPLETED",
-        notice_scheduled_at: "2026-09-09T03:00:00.000Z",
-        notice_completed_at: "2026-09-09T03:00:00.000Z"
-      }),
-      makeJob("planned-date-backfill", {
-        notice_date: "2026-09-10",
-        notice_status: "COMPLETED",
-        notice_scheduled_at: null,
-        notice_completed_at: "2026-09-09T17:00:00.000Z"
+        notice_scheduled_at: "2026-09-09T10:02:36.944+07:00",
+        notice_completed_at: "2026-09-09T10:02:36.944+07:00",
+        notice_completion_source: "LEGACY_BACKFILL"
       })
     ],
     targetDate,
@@ -241,7 +239,7 @@ test("timestamps synthesized by the legacy migration do not complete distributio
     ...harness
   });
 
-  assert.equal(summary.sent, 2);
+  assert.equal(summary.sent, 1);
   assert.equal(summary.skipReasons.notice_already_completed, undefined);
 });
 
@@ -252,7 +250,8 @@ test("an overdue actually completed distribution is not sent", async () => {
       makeJob("actual-completion", {
         notice_date: "2026-09-10",
         notice_status: "COMPLETED",
-        notice_completed_at: "2026-09-12T02:00:00.000Z"
+        notice_completed_at: "2026-09-12T02:00:00.000Z",
+        notice_completion_source: "USER"
       })
     ],
     targetDate,
@@ -264,20 +263,54 @@ test("an overdue actually completed distribution is not sent", async () => {
   assert.equal(summary.skipReasons.notice_already_completed, 1);
 });
 
+test("KBB05WF-104 actual completion is skipped even when completion and schedule timestamps match", async () => {
+  const harness = createHarness();
+  const job = makeJob("198af120-342e-41ec-9bfd-45c7c3e9edfc", {
+    equipment_code: "KBB05WF-104",
+    notice_date: "2026-09-09",
+    notice_status: "COMPLETED",
+    notice_scheduled_at: "2026-09-09T10:02:36.944+07:00",
+    notice_completed_at: "2026-09-09T10:02:36.944+07:00",
+    notice_completion_source: "USER",
+    document_received_at: "2026-09-02T13:42:00+07:00",
+    document_delivered_at: "2026-09-07T14:01:00+07:00",
+    social_status: "POSTED",
+    social_posted_at: "2026-09-11T10:37:57.385+07:00"
+  });
+  const summary = await processNoticeDistributionJobs({
+    jobs: [job],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(getNoticeDistributionCompletionReason(job), "user_confirmed_notice_completion");
+  assert.equal(getNoticeDistributionSkipReason(job, targetDate), "notice_already_completed");
+  assert.equal(summary.sent, 0);
+  assert.equal(summary.skipReasons.notice_already_completed, 1);
+  assert.equal(harness.messages.length, 0);
+});
+
 test("safe diagnostic identifies the exact completion field without customer data", () => {
   const diagnostic = buildNoticeDistributionDiagnostic(
     makeJob("diagnostic", {
       notice_date: "2026-09-10",
       notice_status: "COMPLETED",
       notice_completed_at: "2026-09-12T02:00:00.000Z",
+      notice_completion_source: "USER",
       document_received_at: "2026-09-09T02:00:00.000Z",
       document_delivered_at: "2026-09-09T03:00:00.000Z"
     }),
     targetDate
   );
 
-  assert.equal(diagnostic.completionReason, "notice_completed_at");
-  assert.equal(diagnostic.completionEvidenceIgnored, null);
+  assert.equal(diagnostic.completionReason, "user_confirmed_notice_completion");
+  assert.deepEqual(diagnostic.completionEvidence, {
+    noticeStatus: "COMPLETED",
+    hasNoticeCompletedAt: true,
+    noticeCompletionSource: "USER"
+  });
+  assert.equal(diagnostic.ignoredEvidence, null);
   assert.equal(diagnostic.eligibilityReason, "notice_already_completed");
   assert.equal(diagnostic.jobId, "diagnostic");
   assert.equal(diagnostic.equipmentCode, "KBB-diagnostic");
@@ -476,21 +509,29 @@ test("manual preview and daily notification use the same builder", () => {
     new URL("./sameDayReminderService.ts", import.meta.url),
     "utf8"
   );
+  const provenanceMigration = readFileSync(
+    new URL("../../sql/026_notice_completion_provenance.sql", import.meta.url),
+    "utf8"
+  );
   const completionRoute = readFileSync(
     new URL("../app/api/jobs/[id]/notice-completion/route.ts", import.meta.url),
     "utf8"
   );
 
   assert.match(service, /buildOutageNoticeLineMessage\(job\)/);
-  assert.match(service, /completionReason: "notice_completed_at"/);
+  assert.match(service, /completionReason: "user_confirmed_notice_completion"/);
   assert.match(service, /ignoredEvidence: "legacy_migration_backfill"/);
   assert.match(service, /ignoredEvidence: "legacy_sent_status"/);
   assert.match(modal, /buildOutageNoticeLineMessage\(job\)/);
   assert.match(completionRoute, /notice_status: "COMPLETED"/);
   assert.match(completionRoute, /notice_completed_at: completedAt/);
+  assert.match(completionRoute, /notice_completion_source: "USER"/);
   assert.match(migration, /event_key text primary key/);
   assert.match(migration, /line_notification_events/);
   assert.doesNotMatch(migration, /notice_completed_at\s*=/);
+  assert.match(provenanceMigration, /notice_completion_source = 'LEGACY_BACKFILL'/);
+  assert.match(provenanceMigration, /equipment_code = 'KBB05WF-104'/);
+  assert.match(provenanceMigration, /notice_completion_source = 'USER'/);
   assert.match(cronService, /processNoticeDistributionJobs\(/);
   assert.match(cronService, /notice-distribution-job-diagnostic/);
   assert.match(cronService, /\.lte\("notice_date", targetDate\)/);
