@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { UserRound } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import Segmented from "@/components/ui/Segmented";
@@ -99,6 +100,7 @@ type DayJob = {
   display_area: string | null;
   status: string;
   responsible_unit: ResponsibleUnit | null;
+  work_supervisor_name: string | null;
   has_switching: boolean | null;
 };
 
@@ -135,6 +137,12 @@ function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
       </p>
       <p className="mt-0.5 break-words text-sm leading-5 text-slate-600">
         {job.display_area || "ไม่ระบุพื้นที่"}
+      </p>
+      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-5 text-slate-600">
+        <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">
+          {job.work_supervisor_name || "ยังไม่ระบุ"}
+        </span>
       </p>
     </article>
   );
@@ -720,10 +728,7 @@ export default function CalendarPage() {
                         className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-900">
-                            {formatTimeRange(job.time_start, job.time_end)}
-                          </p>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
                             <span
                               className={`inline-flex h-5 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none ${getResponsibleUnitChipStyle(job.responsible_unit)}`}
                             >
@@ -741,9 +746,21 @@ export default function CalendarPage() {
                               <SwitchingBadge compact />
                             ) : null}
                           </div>
+                          <p className="shrink-0 text-xs font-medium text-slate-500">
+                            {formatTimeRange(job.time_start, job.time_end)}
+                          </p>
                         </div>
+                        <p className="break-words text-sm font-semibold text-slate-900">
+                          {job.equipment_code || "ไม่ระบุรหัสอุปกรณ์"}
+                        </p>
                         <p className="text-sm text-slate-600">
-                          {job.area_title ?? "ไม่ระบุพื้นที่"}
+                          {job.display_area || "ไม่ระบุพื้นที่"}
+                        </p>
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm text-slate-600">
+                          <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">
+                            ผู้ควบคุมงาน: {job.work_supervisor_name || "ยังไม่ระบุ"}
+                          </span>
                         </p>
                       </Link>
                     );

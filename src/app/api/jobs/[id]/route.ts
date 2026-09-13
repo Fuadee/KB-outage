@@ -51,6 +51,7 @@ export async function PATCH(
       outage_date?: unknown;
       equipment_code?: unknown;
       responsible_unit?: unknown;
+      work_supervisor_name?: unknown;
       has_switching?: unknown;
       customer_count?: unknown;
       note?: unknown;
@@ -62,6 +63,10 @@ export async function PATCH(
         ? body.equipment_code.trim()
         : "";
     const responsibleUnit = body?.responsible_unit;
+    const workSupervisorName =
+      typeof body?.work_supervisor_name === "string"
+        ? body.work_supervisor_name.trim() || null
+        : null;
     const hasSwitching = body?.has_switching;
     const validResponsibleUnit =
       responsibleUnit === null || isResponsibleUnit(responsibleUnit);
@@ -78,6 +83,9 @@ export async function PATCH(
       !isValidDateString(outageDate) ||
       !equipmentCode ||
       !validResponsibleUnit ||
+      (body?.work_supervisor_name !== undefined &&
+        body.work_supervisor_name !== null &&
+        typeof body.work_supervisor_name !== "string") ||
       !(hasSwitching === null || typeof hasSwitching === "boolean") ||
       (body?.note !== undefined &&
         body.note !== null &&
@@ -98,6 +106,7 @@ export async function PATCH(
         outage_date: outageDate,
         equipment_code: equipmentCode,
         responsible_unit: responsibleUnit,
+        work_supervisor_name: workSupervisorName,
         has_switching: hasSwitching,
         customer_count: customerCount.value,
         note
@@ -105,7 +114,7 @@ export async function PATCH(
       .eq("id", jobId)
       .eq("is_closed", false)
       .select(
-        "id, outage_date, equipment_code, responsible_unit, has_switching, customer_count, note"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_name, has_switching, customer_count, note"
       )
       .maybeSingle();
 
@@ -118,6 +127,9 @@ export async function PATCH(
     }
     if (data.responsible_unit !== responsibleUnit) {
       throw new Error("Responsible unit was not persisted by the database.");
+    }
+    if (data.work_supervisor_name !== workSupervisorName) {
+      throw new Error("Work supervisor name was not persisted by the database.");
     }
     if (data.customer_count !== customerCount.value) {
       throw new Error("Customer count was not persisted by the database.");

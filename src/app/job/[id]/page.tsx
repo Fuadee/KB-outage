@@ -56,6 +56,7 @@ export default function JobDetailPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
+  const [workSupervisorName, setWorkSupervisorName] = useState("");
   const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
@@ -100,6 +101,7 @@ export default function JobDetailPage() {
       setResponsibleUnit(
         isResponsibleUnit(data.responsible_unit) ? data.responsible_unit : ""
       );
+      setWorkSupervisorName(data.work_supervisor_name ?? "");
       setHasSwitching(data.has_switching ?? null);
       setCustomerCount(
         data.customer_count === null ? "" : String(data.customer_count)
@@ -154,6 +156,7 @@ export default function JobDetailPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit || null,
+      work_supervisor_name: workSupervisorName.trim() || null,
       has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
@@ -445,6 +448,16 @@ export default function JobDetailPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                ผู้ควบคุมงาน
+                <Input
+                  type="text"
+                  value={workSupervisorName}
+                  onChange={(event) => setWorkSupervisorName(event.target.value)}
+                  placeholder="ระบุชื่อผู้ควบคุมงาน"
+                  disabled={isClosed}
+                />
               </label>
               <SwitchingField
                 value={hasSwitching}

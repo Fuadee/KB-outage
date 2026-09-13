@@ -16,6 +16,9 @@ const migration = source("../../sql/021_outage_job_responsible_unit.sql");
 const customerCountMigration = source(
   "../../sql/022_outage_job_customer_count.sql"
 );
+const workSupervisorMigration = source(
+  "../../sql/027_outage_job_work_supervisor_name.sql"
+);
 
 test("new-job UI requires an explicit responsible-unit selection", () => {
   assert.match(newPage, /หน่วยงานผู้รับผิดชอบ/);
@@ -89,7 +92,7 @@ test("list, detail, and card expose the same customer count field", () => {
   assert.match(jobsRepo, /customer_count: number \| null/);
   assert.match(
     jobsRepo,
-    /equipment_code, responsible_unit, has_switching, customer_count, note/
+    /equipment_code, responsible_unit, work_supervisor_name, has_switching, customer_count, note/
   );
   assert.match(editPage, /customerCountDisplay/);
   assert.match(editPage, /formatCustomerCount\(customerCountPreview\.value\)/);
@@ -97,4 +100,32 @@ test("list, detail, and card expose the same customer count field", () => {
   assert.match(jobCard, /typeof job\.customer_count === "number"/);
   assert.match(jobCard, /<Users /);
   assert.match(jobCard, /formatCustomerCount\(job\.customer_count\)/);
+});
+
+test("work supervisor is optional and persists through create and edit", () => {
+  assert.match(
+    workSupervisorMigration,
+    /ADD COLUMN IF NOT EXISTS work_supervisor_name text NULL/
+  );
+  assert.doesNotMatch(
+    workSupervisorMigration,
+    /NOT NULL|DROP TABLE|TRUNCATE|DELETE FROM/i
+  );
+  assert.match(newPage, /ผู้ควบคุมงาน/);
+  assert.match(newPage, /placeholder="ระบุชื่อผู้ควบคุมงาน"/);
+  assert.match(newPage, /work_supervisor_name: workSupervisorName\.trim\(\) \|\| null/);
+  assert.match(jobsRoute, /work_supervisor_name: workSupervisorName/);
+  assert.match(editPage, /setWorkSupervisorName\(data\.work_supervisor_name \?\? ""\)/);
+  assert.match(editPage, /work_supervisor_name: workSupervisorName\.trim\(\) \|\| null/);
+  assert.match(editRoute, /work_supervisor_name: workSupervisorName/);
+  assert.match(editRoute, /data\.work_supervisor_name !== workSupervisorName/);
+  assert.match(jobsRepo, /work_supervisor_name: string \| null/);
+  assert.match(
+    jobsRepo,
+    /result\.data\?\.work_supervisor_name !== data\.work_supervisor_name/
+  );
+  assert.match(
+    jobsRepo,
+    /result\.data\?\.work_supervisor_name !== patch\.work_supervisor_name/
+  );
 });

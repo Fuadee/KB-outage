@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, equipment_code, responsible_unit, has_switching, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_name, has_switching, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })
@@ -89,6 +89,7 @@ export async function GET(request: Request) {
       outage_date: job.outage_date,
       equipment_code: job.equipment_code,
       responsible_unit: job.responsible_unit ?? null,
+      work_supervisor_name: job.work_supervisor_name ?? null,
       has_switching: job.has_switching ?? null,
       time_start: job.doc_time_start ?? null,
       time_end: job.doc_time_end ?? null,
@@ -117,6 +118,7 @@ export async function POST(request: Request) {
       outage_date?: unknown;
       equipment_code?: unknown;
       responsible_unit?: unknown;
+      work_supervisor_name?: unknown;
       has_switching?: unknown;
       customer_count?: unknown;
       note?: unknown;
@@ -128,6 +130,10 @@ export async function POST(request: Request) {
         ? body.equipment_code.trim()
         : "";
     const customerCount = parseCustomerCount(body?.customer_count);
+    const workSupervisorName =
+      typeof body?.work_supervisor_name === "string"
+        ? body.work_supervisor_name.trim() || null
+        : null;
 
     if (!customerCount.success) {
       return NextResponse.json(
@@ -147,6 +153,9 @@ export async function POST(request: Request) {
       !isValidDateString(outageDate) ||
       !equipmentCode ||
       !isResponsibleUnit(body?.responsible_unit) ||
+      (body?.work_supervisor_name !== undefined &&
+        body.work_supervisor_name !== null &&
+        typeof body.work_supervisor_name !== "string") ||
       (body?.note !== undefined &&
         body.note !== null &&
         typeof body.note !== "string")
@@ -165,12 +174,13 @@ export async function POST(request: Request) {
         outage_date: outageDate,
         equipment_code: equipmentCode,
         responsible_unit: body.responsible_unit,
+        work_supervisor_name: workSupervisorName,
         has_switching: body.has_switching,
         customer_count: customerCount.value,
         note
       })
       .select(
-        "id, outage_date, equipment_code, responsible_unit, has_switching, customer_count, note"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_name, has_switching, customer_count, note"
       )
       .single();
 

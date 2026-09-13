@@ -36,6 +36,7 @@ test("calendar exposes all unit filters and applies them to day details", () => 
   assert.match(jobsRoute, /id, outage_date, equipment_code, responsible_unit,/);
   assert.match(jobsRoute, /has_switching: job\.has_switching \?\? null/);
   assert.match(jobsRoute, /responsible_unit: job\.responsible_unit \?\? null/);
+  assert.match(jobsRoute, /work_supervisor_name: job\.work_supervisor_name \?\? null/);
   assert.match(jobsRoute, /equipment_code: job\.equipment_code/);
   assert.match(jobsRoute, /area_title: job\.doc_area_title \?\? null/);
   assert.match(jobsRoute, /display_area: job\.doc_area_title \?\? job\.doc_purpose \?\? null/);
@@ -139,6 +140,8 @@ test("mobile selected-day detail renders actual compact jobs without drill-down"
   assert.match(mobileCard, /getCalendarStatusLabel\(job\.status\)/);
   assert.match(mobileCard, /job\.equipment_code/);
   assert.match(mobileCard, /job\.display_area/);
+  assert.match(mobileCard, /job\.work_supervisor_name \|\| "ยังไม่ระบุ"/);
+  assert.match(mobileCard, /<UserRound/);
   assert.match(mobileCard, /break-words text-sm leading-5/);
   assert.doesNotMatch(mobileCard, /formatTimeRange|<Link|href=|onClick|chevron/i);
   assert.match(calendarPage, /visibleDayJobs\.map\(\(job\) =>/);

@@ -25,6 +25,7 @@ export default function NewJobPage() {
   const [outageDate, setOutageDate] = useState("");
   const [equipmentCode, setEquipmentCode] = useState("");
   const [responsibleUnit, setResponsibleUnit] = useState<ResponsibleUnit | "">("");
+  const [workSupervisorName, setWorkSupervisorName] = useState("");
   const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
   const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
@@ -58,6 +59,7 @@ export default function NewJobPage() {
       outage_date: outageDate,
       equipment_code: equipmentCode.trim(),
       responsible_unit: responsibleUnit,
+      work_supervisor_name: workSupervisorName.trim() || null,
       has_switching: hasSwitching,
       customer_count: parsedCustomerCount.value,
       note: note.trim() ? note.trim() : null
@@ -121,6 +123,15 @@ export default function NewJobPage() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className={cn("flex flex-col gap-2", labelText)}>
+              ผู้ควบคุมงาน
+              <Input
+                type="text"
+                value={workSupervisorName}
+                onChange={(event) => setWorkSupervisorName(event.target.value)}
+                placeholder="ระบุชื่อผู้ควบคุมงาน"
+              />
             </label>
             <SwitchingField
               value={hasSwitching}
