@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   buildLineRetryKey,
   buildNoticeDistributionDiagnostic,
+  matchesNoticeDistributionQuery,
   NOTICE_DISTRIBUTION_EVENT_TYPE,
   processNoticeDistributionJobs,
   type NoticeDistributionJob,
@@ -309,12 +310,15 @@ async function fetchNoticeDistributionJobs(
     .select(
       "id,equipment_code,outage_date,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_scheduled_at,notice_completed_at,notice_completion_source,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
     )
-    .lte("notice_date", targetDate)
+    .or(`notice_date.lte.${targetDate},notice_date.is.null`)
     .eq("responsible_unit", "แผนกปฏิบัติการ")
+    .eq("is_closed", false)
     .order("outage_date", { ascending: true });
 
   if (error) throw supabaseError(error);
-  return (data ?? []) as NoticeDistributionJob[];
+  return ((data ?? []) as NoticeDistributionJob[]).filter((job) =>
+    matchesNoticeDistributionQuery(job, targetDate)
+  );
 }
 
 async function fetchNoticeDistributionSentEventKeys(

@@ -5,6 +5,7 @@ import {
 } from "./outageNoticeMessage.ts";
 import { normalizeDateOnly } from "./reminder.ts";
 import { getDistributionWorkflow } from "./distributionWorkflow.ts";
+import { getDistributionDueDate } from "./distributionReminder.ts";
 
 export const NOTICE_DISTRIBUTION_EVENT_TYPE = "NOTICE_DISTRIBUTION";
 
@@ -39,6 +40,11 @@ export type NoticeDistributionCompletionEvaluation = {
   completionReason: NoticeDistributionCompletionReason;
   ignoredEvidence: NoticeDistributionIgnoredCompletionEvidence;
 };
+
+export type NoticeDistributionDueDateSource =
+  | "notice_date"
+  | "outage_date_fallback"
+  | null;
 
 export type NoticeDistributionPushResult = {
   ok: boolean;
@@ -157,6 +163,44 @@ export function getNoticeDistributionCompletionReason(
   return evaluateNoticeDistributionCompletion(job).completionReason;
 }
 
+/**
+ * The Jobs card uses the explicitly scheduled notice date when present and
+ * otherwise derives the operational deadline from the outage date. Daily LINE
+ * must use the same rule so an unscheduled job does not disappear at the DB
+ * boundary merely because notice_date is null.
+ */
+export function resolveNoticeDistributionDueDate(
+  job: NoticeDistributionJob
+): { dueDate: string | null; source: NoticeDistributionDueDateSource } {
+  const noticeDate = normalizeDateOnly(job.notice_date);
+  if (noticeDate) {
+    return { dueDate: noticeDate, source: "notice_date" };
+  }
+
+  const fallbackDate = getDistributionDueDate(job.outage_date);
+  return {
+    dueDate: fallbackDate,
+    source: fallbackDate ? "outage_date_fallback" : null
+  };
+}
+
+/**
+ * Mirrors every effective query condition, including the exact-date fallback
+ * that cannot be represented reliably as a simple PostgREST date comparison.
+ * Completion is intentionally not a query filter so completed jobs still emit
+ * a diagnostic explaining why they were skipped.
+ */
+export function matchesNoticeDistributionQuery(
+  job: NoticeDistributionJob,
+  targetDate: string
+): boolean {
+  if (job.is_closed) return false;
+  if (getDistributionWorkflow(job).route !== "OPERATIONS") return false;
+
+  const { dueDate } = resolveNoticeDistributionDueDate(job);
+  return Boolean(dueDate && dueDate <= targetDate);
+}
+
 export function getNoticeDistributionSkipReason(
   job: NoticeDistributionJob,
   targetDate: string
@@ -173,8 +217,8 @@ export function getNoticeDistributionSkipReason(
     return "not_operations_distribution";
   }
 
-  const noticeDate = normalizeDateOnly(job.notice_date);
-  if (!noticeDate || noticeDate > targetDate) {
+  const { dueDate } = resolveNoticeDistributionDueDate(job);
+  if (!dueDate || dueDate > targetDate) {
     return "notice_date_not_match";
   }
 
@@ -186,10 +230,13 @@ export function buildNoticeDistributionDiagnostic(
   targetDate: string
 ) {
   const completion = evaluateNoticeDistributionCompletion(job);
+  const dueDate = resolveNoticeDistributionDueDate(job);
   return {
     jobId: job.id,
     equipmentCode: job.equipment_code ?? null,
     noticeDate: job.notice_date ?? null,
+    effectiveNoticeDate: dueDate.dueDate,
+    noticeDateSource: dueDate.source,
     noticeCompletedAt: job.notice_completed_at ?? null,
     noticeCompletionSource: job.notice_completion_source ?? null,
     noticeStatus: job.notice_status ?? null,

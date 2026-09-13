@@ -7,7 +7,9 @@ import {
   buildNoticeDistributionEventKey,
   getNoticeDistributionCompletionReason,
   getNoticeDistributionSkipReason,
+  matchesNoticeDistributionQuery,
   processNoticeDistributionJobs,
+  resolveNoticeDistributionDueDate,
   type NoticeDistributionJob
 } from "./dailyNoticeDistribution.ts";
 import { computeBangkokTodayDateOnly } from "./reminder.ts";
@@ -143,10 +145,10 @@ test("a future distribution is not sent", async () => {
   assert.equal(summary.skipReasons.notice_date_not_match, 1);
 });
 
-test("a distribution without a notice date is not sent", async () => {
+test("a distribution without either a notice date or outage date is not sent", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
-    jobs: [makeJob("missing-date", { notice_date: null })],
+    jobs: [makeJob("missing-date", { notice_date: null, outage_date: "" })],
     targetDate,
     dryRun: false,
     ...harness
@@ -154,6 +156,76 @@ test("a distribution without a notice date is not sent", async () => {
 
   assert.equal(summary.sent, 0);
   assert.equal(summary.skipReasons.notice_date_not_match, 1);
+});
+
+test("TEST-like pending distribution is returned by the query rule and sent", async () => {
+  const job = makeJob("b32a52cc-eee1-45d5-b496-b6418fa04584", {
+    equipment_code: "TEST",
+    outage_date: "2026-09-17",
+    responsible_unit: "แผนกปฏิบัติการ",
+    notice_date: null,
+    notice_status: "NONE",
+    notice_scheduled_at: null,
+    notice_completed_at: null,
+    notice_completion_source: null,
+    document_received_at: "2026-09-13T12:22:00+07:00",
+    document_delivered_at: "2026-09-13T12:22:00+07:00",
+    is_closed: false
+  });
+  const testTargetDate = "2026-09-13";
+  const harness = createHarness();
+
+  assert.deepEqual(resolveNoticeDistributionDueDate(job), {
+    dueDate: "2026-09-10",
+    source: "outage_date_fallback"
+  });
+  assert.equal(matchesNoticeDistributionQuery(job, testTargetDate), true);
+  assert.equal(
+    buildNoticeDistributionDiagnostic(job, testTargetDate).eligibilityReason,
+    null
+  );
+
+  const summary = await processNoticeDistributionJobs({
+    jobs: [job],
+    targetDate: testTargetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(summary.matched, 1);
+  assert.equal(summary.lineSendAttempts, 1);
+  assert.equal(summary.sent, 1);
+  assert.equal(harness.messages.length, 1);
+});
+
+test("query rule excludes future, non-operation, and closed jobs", () => {
+  assert.equal(
+    matchesNoticeDistributionQuery(
+      makeJob("future-query", { notice_date: "2026-09-13" }),
+      targetDate
+    ),
+    false
+  );
+  assert.equal(
+    matchesNoticeDistributionQuery(
+      makeJob("other-unit-query", {
+        notice_date: "2026-09-10",
+        responsible_unit: "แผนกก่อสร้าง"
+      }),
+      targetDate
+    ),
+    false
+  );
+  assert.equal(
+    matchesNoticeDistributionQuery(
+      makeJob("closed-query", {
+        notice_date: "2026-09-10",
+        is_closed: true
+      }),
+      targetDate
+    ),
+    false
+  );
 });
 
 test("receiving the physical document does not complete distribution", () => {
@@ -284,8 +356,13 @@ test("KBB05WF-104 actual completion is skipped even when completion and schedule
     ...harness
   });
 
+  assert.equal(matchesNoticeDistributionQuery(job, targetDate), true);
   assert.equal(getNoticeDistributionCompletionReason(job), "user_confirmed_notice_completion");
   assert.equal(getNoticeDistributionSkipReason(job, targetDate), "notice_already_completed");
+  assert.equal(
+    buildNoticeDistributionDiagnostic(job, targetDate).eligibilityReason,
+    "notice_already_completed"
+  );
   assert.equal(summary.sent, 0);
   assert.equal(summary.skipReasons.notice_already_completed, 1);
   assert.equal(harness.messages.length, 0);
@@ -314,6 +391,8 @@ test("safe diagnostic identifies the exact completion field without customer dat
   assert.equal(diagnostic.eligibilityReason, "notice_already_completed");
   assert.equal(diagnostic.jobId, "diagnostic");
   assert.equal(diagnostic.equipmentCode, "KBB-diagnostic");
+  assert.equal(diagnostic.effectiveNoticeDate, "2026-09-10");
+  assert.equal(diagnostic.noticeDateSource, "notice_date");
   assert.equal("customer_count" in diagnostic, false);
   assert.equal("doc_area_title" in diagnostic, false);
   assert.equal("map_link" in diagnostic, false);
@@ -534,9 +613,11 @@ test("manual preview and daily notification use the same builder", () => {
   assert.match(provenanceMigration, /notice_completion_source = 'USER'/);
   assert.match(cronService, /processNoticeDistributionJobs\(/);
   assert.match(cronService, /notice-distribution-job-diagnostic/);
-  assert.match(cronService, /\.lte\("notice_date", targetDate\)/);
+  assert.match(cronService, /notice_date\.lte\.\$\{targetDate\},notice_date\.is\.null/);
   assert.doesNotMatch(cronService, /\.eq\("notice_date", targetDate\)/);
   assert.match(cronService, /\.eq\("responsible_unit", "แผนกปฏิบัติการ"\)/);
+  assert.match(cronService, /\.eq\("is_closed", false\)/);
+  assert.doesNotMatch(cronService, /\.eq\("notice_status"/);
   assert.match(cronService, /X-Line-Retry-Key/);
   assert.match(cronService, /error\.code !== "23505"/);
   assert.match(cronService, /same-day-reminder-boundary-started/);
@@ -553,7 +634,7 @@ test("manual preview and daily notification use the same builder", () => {
   assert.doesNotMatch(cronService, /AbortSignal\.timeout|AbortController|5_000|5000/);
 });
 
-test("eligibility uses the planned date, never the outage date", () => {
+test("an explicit planned date takes precedence over the outage-date fallback", () => {
   assert.equal(
     getNoticeDistributionSkipReason(
       makeJob("different-outage", { outage_date: "2026-09-30" }),
