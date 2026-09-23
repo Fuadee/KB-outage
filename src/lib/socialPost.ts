@@ -54,7 +54,5 @@ export function buildSocialPostText(job: SocialPostJob) {
 }
 
 export function getSocialPostPreview(job: SocialPostJob) {
-  return job.social_post_text?.trim()
-    ? job.social_post_text
-    : buildSocialPostText(job);
+  return buildSocialPostText(job);
 }
