@@ -1,21 +1,5 @@
--- Image history is server-managed; existing no-login application access is unchanged.
-create table public.social_announcement_images (
-  id uuid primary key default gen_random_uuid(),
-  job_id uuid not null references public.outage_jobs(id) on delete cascade,
-  source_path text not null,
-  generated_path text not null,
-  generated_at timestamptz not null default now(),
-  snapshot jsonb not null
-);
-create index on public.social_announcement_images(job_id, generated_at desc);
-alter table public.social_announcement_images enable row level security;
-revoke all on public.social_announcement_images from anon, authenticated;
-grant all on public.social_announcement_images to service_role;
-insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
-values ('social-announcements', 'social-announcements', false, 20971520, array['image/png'])
-on conflict (id) do nothing;
-
--- Atomic publication: lock the job so edits cannot race the image validation.
+-- The existing snapshot JSONB stores the chosen map framing with each generated image.
+-- Publication still compares every job-sourced field; map_view is image metadata.
 create or replace function public.complete_social_announcement(p_job_id uuid, p_image_id uuid, p_text text, p_confirmed boolean)
 returns public.outage_jobs language plpgsql security definer set search_path = public as $$
 declare j public.outage_jobs; a public.social_announcement_images; current_snapshot jsonb;

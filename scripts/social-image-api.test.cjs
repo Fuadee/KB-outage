@@ -54,7 +54,7 @@ function harness() {
   return { job, assets, stored, imageRoute, postRoute, failSave() { failInsert = true; }, get rpcCalls() { return rpcCalls; } };
 }
 const ctx = { params: { id } };
-function upload(file) { const form = new FormData(); if (file) form.set('map', file); return new Request('http://localhost/image', { method: 'POST', body: form }); }
+function upload(file, view) { const form = new FormData(); if (file) form.set('map', file); if (view) form.set('map_view', JSON.stringify(view)); return new Request('http://localhost/image', { method: 'POST', body: form }); }
 function publish(imageId, confirmed) { return new Request('http://localhost/social-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: id, imageId, confirmed }) }); }
 test('real handlers reject missing/unsupported maps and enforce confirmation and stale images server-side', async () => {
   const h = harness();
@@ -64,6 +64,7 @@ test('real handlers reject missing/unsupported maps and enforce confirmation and
   assert.equal((await h.imageRoute.POST(upload(new File([png], '../../map.png', { type: 'image/png' })), ctx)).status, 200);
   assert.equal(h.stored.size, 2);
   assert.equal(h.assets[0].snapshot.outage_date, '2026-09-20');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.assets[0].snapshot.map_view)), { mode: 'fit', zoom: 1, x: 0.5, y: 0.5 });
   assert.match(h.assets[0].source_path, /\/source\/[a-f0-9-]+\.png$/);
   assert.equal((await h.postRoute.POST(publish('1', false))).status, 400);
   assert.equal((await h.postRoute.POST(publish('other', true))).status, 409);
@@ -74,18 +75,66 @@ test('real handlers reject missing/unsupported maps and enforce confirmation and
   h.job.outage_date = '2026-09-21';
   assert.equal((await h.postRoute.POST(publish('1', true))).status, 409);
   assert.equal((await h.imageRoute.GET(new Request('http://localhost/image?download=1'), ctx)).status, 409);
-  assert.equal((await h.imageRoute.POST(upload(), ctx)).status, 200);
+  assert.equal((await h.imageRoute.POST(upload(undefined, { mode: 'fill', zoom: 1.5, x: 0.2, y: 0.8 }), ctx)).status, 200);
   assert.equal(h.assets.length, 2);
   assert.equal(h.assets[1].source_path, h.assets[0].source_path);
   assert.notEqual(h.assets[1].generated_path, h.assets[0].generated_path);
   assert.equal(h.assets[1].snapshot.outage_date, '2026-09-21');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.assets[1].snapshot.map_view)), { mode: 'fill', zoom: 1.5, x: 0.2, y: 0.8 });
+  assert.equal((await h.imageRoute.POST(upload(undefined, { mode: 'fill', zoom: 9, x: 0.5, y: 0.5 }), ctx)).status, 400);
+  assert.equal((await h.imageRoute.POST(upload(), ctx)).status, 200);
+  assert.equal(h.assets[2].snapshot.map_view.zoom, 1.5);
   assert.equal((await h.imageRoute.GET(new Request('http://localhost/image?download=1'), ctx)).headers.get('Content-Type'), 'image/png');
   h.job.doc_time_end = '16:00';
-  assert.equal((await h.postRoute.POST(publish('2', true))).status, 409);
+  assert.equal((await h.postRoute.POST(publish('3', true))).status, 409);
 });
 test('storage assets are cleaned up when metadata persistence fails', async () => {
   const h = harness(); h.failSave();
   const png = await sharp({ create: { width: 30, height: 30, channels: 3, background: '#ddd' } }).png().toBuffer();
   assert.equal((await h.imageRoute.POST(upload(new File([png], 'map.png', { type: 'image/png' })), ctx)).status, 400);
   assert.equal(h.stored.size, 0);
+});
+
+test('preview is byte-identical to generated/downloaded output and never persists assets', async () => {
+  const cases = {
+    fontSample: 'ซอยนครธรรม',
+    watKhok: 'หน้าวัดโคก ถึง เอคอมพิวเตอร์',
+    threeLines: 'หาดอ่าวนาง\nชุมชนใกล้เคียง\nโรงเรียนบ้านอ่าวนาง',
+    short: 'หาดอ่าวนาง',
+    medium: 'อ่าวนางซอย 1 และพื้นที่ใกล้เคียง',
+    long: 'หาดอ่าวนางและพื้นที่ใกล้เคียง ตั้งแต่สามแยกโรงเรียนบ้านอ่าวนางถึงบริเวณชุมชนมัสยิดและถนนเลียบชายหาด',
+    mixed: 'ตั้งแต่บริษัทเมืองคอนสตรัคชั่น จำกัด ถึงโรงเรียน A-Chuan'
+  };
+  const map = await sharp(Buffer.from('<svg width="1400" height="600"><rect width="1400" height="600" fill="#dce6cf"/><path d="M0 400 L1400 150" stroke="white" stroke-width="40"/><circle cx="300" cy="250" r="100" fill="#f9d942"/></svg>')).png().toBuffer();
+  fs.mkdirSync(path.join(root, '.tmp/social-parity'), { recursive: true });
+  for (const [name, area] of Object.entries(cases)) {
+    for (const view of [{ mode: 'fit', zoom: 1, x: 0.5, y: 0.5 }, { mode: 'fill', zoom: 1.5, x: 0.2, y: 0.8 }]) {
+      const h = harness(); h.job.doc_area_title = area;
+      if (name === 'fontSample') {
+        h.job.outage_date = '2026-09-25';
+        h.job.doc_time_start = '09:00';
+        h.job.doc_time_end = '11:00';
+      }
+      const file = new File([map], 'map.png', { type: 'image/png' });
+      const previewRequest = upload(file, view);
+      const preview = await h.imageRoute.POST(new Request('http://localhost/image?preview=1', previewRequest), ctx);
+      assert.equal(preview.status, 200);
+      assert.equal(preview.headers.get('Content-Type'), 'image/png');
+      assert.equal(preview.headers.get('Cache-Control'), 'no-store');
+      const previewBytes = Buffer.from(await preview.arrayBuffer());
+      assert.equal(h.assets.length, 0);
+      assert.equal(h.stored.size, 0);
+      assert.equal((await h.imageRoute.POST(upload(file, view), ctx)).status, 200);
+      const download = await h.imageRoute.GET(new Request('http://localhost/image?download=1'), ctx);
+      const output = Buffer.from(await download.arrayBuffer());
+      assert.deepEqual(previewBytes, output, `${name}/${view.mode}: all pixels, wrapping and spacing must match`);
+      const savedPreview = await h.imageRoute.POST(new Request('http://localhost/image?preview=1', upload(undefined, view)), ctx);
+      assert.deepEqual(Buffer.from(await savedPreview.arrayBuffer()), output);
+      assert.equal(h.assets.length, 1);
+      assert.equal(h.stored.size, 2);
+      await sharp({ create: { width: 2160, height: 1350, channels: 4, background: 'white' } })
+        .composite([{ input: previewBytes, left: 0, top: 0 }, { input: output, left: 1080, top: 0 }])
+        .toFile(path.join(root, `.tmp/social-parity/${name}-${view.mode}.png`));
+    }
+  }
 });

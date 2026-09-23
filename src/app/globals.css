@@ -203,3 +203,4 @@ body {
     animation-iteration-count: 1 !important;
   }
 }
+@font-face { font-family: SocialNotoThai; src: url('/fonts/NotoSansThai.ttf') format('truetype'); font-display: swap; }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { latestSocialImage, socialServerClient, SOCIAL_BUCKET } from "@/lib/socialImageServer";
-import { isSocialImageStale, socialImageSnapshot, MAX_SOCIAL_IMAGE_BYTES } from "@/lib/socialImage";
+import { isSocialImageStale, socialImageSnapshot, MAX_SOCIAL_IMAGE_BYTES, parseSocialMapView } from "@/lib/socialImage";
 import { normalizeSocialMap, renderSocialImage } from "@/lib/socialImageRenderer";
 
 export const runtime = "nodejs";
@@ -55,6 +55,10 @@ export async function POST(request: Request, { params }: Context) {
     if (Number(request.headers.get("content-length")) > MAX_SOCIAL_IMAGE_BYTES + 65536) return NextResponse.json({ error: "ขนาดไฟล์สูงสุด 3 MB" }, { status: 413 });
     const { client, job, asset } = await load(params.id);
     const form = await readUpload(request);
+    let viewInput: unknown;
+    try { viewInput = form.has("map_view") ? JSON.parse(String(form.get("map_view"))) : asset?.snapshot.map_view; }
+    catch { throw new Error("ตำแหน่งภาพแผนที่ไม่ถูกต้อง"); }
+    const mapView = parseSocialMapView(viewInput);
     const file = form.get("map");
     const bucket = client.storage.from(SOCIAL_BUCKET);
     let map: Buffer;
@@ -68,7 +72,11 @@ export async function POST(request: Request, { params }: Context) {
       if (error || !data) throw new Error("โหลดภาพพื้นที่ไม่สำเร็จ");
       map = Buffer.from(await data.arrayBuffer());
     }
-    const output = await renderSocialImage(map, job);
+    const output = await renderSocialImage(map, job, mapView);
+    // Preview runs the exact export pipeline, without writing storage or metadata.
+    if (new URL(request.url).searchParams.has("preview")) {
+      return new Response(new Uint8Array(output), { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
+    }
     const generatedPath = `${params.id}/generated/${randomUUID()}.png`;
     const uploaded: string[] = [];
     try {
@@ -80,7 +88,7 @@ export async function POST(request: Request, { params }: Context) {
       const { error } = await bucket.upload(generatedPath, output, { contentType: "image/png", upsert: false });
       if (error) throw error;
       uploaded.push(generatedPath);
-      const { error: saveError } = await client.from("social_announcement_images").insert({ job_id: params.id, source_path: sourcePath, generated_path: generatedPath, snapshot: socialImageSnapshot(job) });
+      const { error: saveError } = await client.from("social_announcement_images").insert({ job_id: params.id, source_path: sourcePath, generated_path: generatedPath, snapshot: { ...socialImageSnapshot(job), map_view: mapView } });
       if (saveError) throw saveError;
     } catch (error) { if (uploaded.length) await bucket.remove(uploaded); throw error; }
     return NextResponse.json({ ok: true });

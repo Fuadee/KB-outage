@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./Modal";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import Button from "@/components/ui/Button";
+import SocialImageLivePreview from "./SocialImageLivePreview";
 import type { OutageJob } from "@/lib/jobsRepo";
 import { getSocialPostPreview, formatThaiFullDate } from "@/lib/socialPost";
-import { isSocialImageStale, socialImageSnapshot, MAX_SOCIAL_IMAGE_BYTES, SOCIAL_IMAGE_MIMES, type SocialImageAsset } from "@/lib/socialImage";
+import { DEFAULT_SOCIAL_MAP_VIEW, isSocialImageStale, parseSocialMapView, socialImageSnapshot, MAX_SOCIAL_IMAGE_BYTES, SOCIAL_IMAGE_MIMES, type SocialImageAsset, type SocialMapView } from "@/lib/socialImage";
 
 type Props = { job: OutageJob | null; isOpen: boolean; onClose: () => void; onJobUpdate: (id: string, patch: Partial<OutageJob>) => void };
 export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpdate }: Props) {
@@ -14,6 +15,8 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
   const [asset, setAsset] = useState<SocialImageAsset | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [localUrl, setLocalUrl] = useState("");
+  const [mapView, setMapView] = useState<SocialMapView>(DEFAULT_SOCIAL_MAP_VIEW);
+  const initializedAsset = useRef<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -28,10 +31,14 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
     if (token !== session.current || sequence !== refreshSequence.current) return;
     if (!response.ok) { setLoaded(false); setConfirmed(false); throw new Error(result.error); }
     setCurrent(result.job); setAsset(result.asset); setLoaded(true);
+    if (result.asset?.id && result.asset.id !== initializedAsset.current) {
+      initializedAsset.current = result.asset.id;
+      setMapView(parseSocialMapView(result.asset.snapshot?.map_view));
+    }
   }, [endpoint]);
   useEffect(() => {
     const token = ++session.current;
-    setCurrent(null); setAsset(null); setFile(null); setConfirmed(false); setLoaded(false); setMessage(""); setBusy(false);
+    setCurrent(null); setAsset(null); setFile(null); setMapView(DEFAULT_SOCIAL_MAP_VIEW); initializedAsset.current = null; setConfirmed(false); setLoaded(false); setMessage(""); setBusy(false);
     if (!isOpen || !job?.id) return;
     const reload = () => void refresh(token).catch(error => { if (token === session.current) { setLoaded(false); setConfirmed(false); setMessage(error.message); } });
     reload();
@@ -45,12 +52,14 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
     return () => URL.revokeObjectURL(url);
   }, [file]);
   const snapshotKey = current ? JSON.stringify(socialImageSnapshot(current)) : "";
-  useEffect(() => { setConfirmed(false); }, [snapshotKey, asset?.id, file]);
+  useEffect(() => { setConfirmed(false); }, [snapshotKey, asset?.id, file, mapView]);
   // Parent edits invalidate the review immediately; polling also detects edits in other sessions.
   const parentKey = job ? JSON.stringify(socialImageSnapshot(job)) : "";
   useEffect(() => { setConfirmed(false); if (isOpen) { setLoaded(false); void refresh(session.current).catch(error => setMessage(error.message)); } }, [parentKey, isOpen, refresh]);
   const stale = !!current && !!asset && isSocialImageStale(current, asset);
-  const valid = loaded && !!asset?.generated_url && !stale && !file;
+  const savedView = asset ? parseSocialMapView(asset.snapshot?.map_view) : DEFAULT_SOCIAL_MAP_VIEW;
+  const framingChanged = !!asset && JSON.stringify(mapView) !== JSON.stringify(savedView);
+  const valid = loaded && !!asset?.generated_url && !stale && !file && !framingChanged;
   const text = current ? getSocialPostPreview(current) : "";
   async function run(action: () => Promise<void>) {
     const token = session.current;
@@ -61,7 +70,7 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
   async function generate() {
     const token = session.current;
     setConfirmed(false);
-    const form = new FormData(); if (file) form.set("map", file);
+    const form = new FormData(); if (file) form.set("map", file); form.set("map_view", JSON.stringify(mapView));
     const response = await fetch(endpoint, { method: "POST", body: form });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
@@ -96,13 +105,14 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
           setConfirmed(false); const selected = event.target.files?.[0];
           if (!selected) return;
           if (!SOCIAL_IMAGE_MIMES.includes(selected.type) || selected.size > MAX_SOCIAL_IMAGE_BYTES || !selected.size) { setMessage("ใช้ไฟล์ PNG, JPG หรือ WEBP ขนาดไม่เกิน 3 MB"); event.target.value = ""; return; }
-          setFile(selected); setMessage("");
+          setFile(selected); setMapView(DEFAULT_SOCIAL_MAP_VIEW); setMessage("");
         }} /></label>
         <p className="text-sm">อัปโหลดเฉพาะภาพแผนที่หรือพื้นที่ดับไฟ (PNG / JPG / WEBP ไม่เกิน 3 MB) ระบบจะใส่วันที่และเวลาให้อัตโนมัติ</p>
-        {(localUrl || asset?.source_url) && <img src={localUrl || asset?.source_url} alt="ภาพพื้นที่ดับไฟต้นฉบับ" className="max-h-64 w-full rounded-xl border object-contain" />}
+        {(localUrl || asset?.source_url) && current && <SocialImageLivePreview endpoint={endpoint} file={file} source={localUrl || asset?.source_url || ""} job={current} view={mapView} onViewChange={setMapView} />}
       </section>
       <section className="space-y-3"><h3 className="font-bold">3. สร้างภาพประชาสัมพันธ์</h3>
         {stale && <div role="alert" className="rounded-xl border-2 border-red-600 bg-red-50 p-4 font-bold text-red-800">ข้อมูลดับไฟมีการแก้ไขหลังจากสร้างภาพนี้<br />กรุณาสร้างภาพประชาสัมพันธ์ใหม่</div>}
+        {framingChanged && !file && <p className="text-sm font-semibold text-orange-800">ตำแหน่งภาพแผนที่เปลี่ยนแล้ว กรุณาสร้างภาพใหม่</p>}
         {!file && !asset && <p>กรุณาอัปโหลดภาพพื้นที่ดับไฟก่อนสร้างภาพ</p>}
         <Button disabled={busy || !loaded || (!file && !asset)} onClick={() => void run(generate)}>{stale ? "สร้างภาพใหม่จากข้อมูลล่าสุด" : asset ? "สร้างภาพใหม่" : "สร้างภาพประชาสัมพันธ์"}</Button>
         {asset?.generated_url && <><img src={asset.generated_url} alt="ภาพประชาสัมพันธ์ที่สร้างจากข้อมูลงาน" className="max-h-[60vh] w-full rounded-xl border object-contain" /><p className="text-sm">สร้างเมื่อ {new Date(asset.generated_at).toLocaleString("th-TH")}{file && " · มีภาพพื้นที่ใหม่ กรุณาสร้างภาพใหม่"}</p>
