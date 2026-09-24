@@ -23,6 +23,7 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
   const [message, setMessage] = useState("");
   const session = useRef(0);
   const refreshSequence = useRef(0);
+  const actionInFlight = useRef(false);
   const endpoint = `/api/jobs/${job?.id}/social-image`;
   const refresh = useCallback(async (token: number) => {
     const sequence = ++refreshSequence.current;
@@ -62,10 +63,18 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
   const valid = loaded && !!asset?.generated_url && !stale && !file && !framingChanged;
   const text = current ? getSocialPostPreview(current) : "";
   async function run(action: () => Promise<void>) {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     const token = session.current;
     setBusy(true); setMessage("");
-    try { await action(); } catch (error) { if (token === session.current) setMessage(error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่"); }
-    finally { if (token === session.current) setBusy(false); }
+    try { await action(); }
+    catch (error) {
+      console.error("Social modal action failed", error);
+      if (token === session.current) setMessage(error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      actionInFlight.current = false;
+      if (token === session.current) setBusy(false);
+    }
   }
   async function generate() {
     const token = session.current;
@@ -83,7 +92,14 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
     const response = await fetch("/api/jobs/social-post", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: current.id, imageId: asset?.id, confirmed }) });
     const result = await response.json();
     if (token !== session.current) return;
-    if (!response.ok) { setConfirmed(false); await refresh(token); throw new Error(result.error); }
+    if (!response.ok || result?.ok !== true) {
+      setConfirmed(false);
+      try { await refresh(token); } catch (error) { console.error("Social refresh after failed post", error); }
+      throw new Error(result?.error ?? "ไม่สามารถบันทึก Social ได้ กรุณาลองใหม่");
+    }
+    if (result.job?.id !== current.id || result.job.social_status !== "POSTED" || !result.job.social_posted_at) {
+      throw new Error("ระบบไม่ยืนยันว่าบันทึกสถานะ Social สำเร็จ กรุณาตรวจสอบข้อมูลงานล่าสุด");
+    }
     onJobUpdate(current.id, result.job); onClose();
   }
   const facts = current && <dl className="grid gap-3 rounded-xl bg-purple-50 p-4 sm:grid-cols-2">

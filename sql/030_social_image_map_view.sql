@@ -6,6 +6,9 @@ declare j public.outage_jobs; a public.social_announcement_images; current_snaps
 begin
   if p_confirmed is distinct from true then raise exception 'กรุณาตรวจสอบข้อมูลและภาพประชาสัมพันธ์'; end if;
   select * into strict j from public.outage_jobs where id = p_job_id for update;
+  if j.social_status = 'POSTED' or j.social_posted_at is not null then
+    raise exception 'งานนี้บันทึกว่าโพสต์ Social แล้ว';
+  end if;
   if not (j.doc_status = 'GENERATED' or j.doc_generated_at is not null)
     or not (j.notice_status in ('COMPLETED', 'SENT') or j.notice_completed_at is not null)
     or j.document_delivered_at is null then

@@ -4,12 +4,16 @@ import { readFile } from "node:fs/promises";
 import { DEFAULT_SOCIAL_MAP_VIEW, socialImageSnapshot, type SocialImageAsset, type SocialMapView } from "../../src/lib/socialImage";
 
 test("existing Social modal: upload, review, stale edits, regeneration, mobile bounds", async ({ page }, testInfo) => {
-  let job = { id: "11111111-1111-4111-8111-111111111111", outage_date: "2026-09-20", equipment_code: "KBA01", doc_time_start: "09:00", doc_time_end: "15:00", doc_area_title: "หาดอ่าวนาง", doc_area_detail: "หาดอ่าวนาง", doc_purpose: "ปรับปรุงระบบจำหน่ายแรงสูง", map_link: "https://maps.google.com/", doc_status: "GENERATED", document_received_at: "2026-09-10T00:00:00Z", document_delivered_at: "2026-09-11T00:00:00Z", notice_status: "COMPLETED", social_status: "DRAFT", responsible_unit: "OPERATIONS", is_closed: false };
+  test.setTimeout(60000);
+  let job = { id: "11111111-1111-4111-8111-111111111111", outage_date: "2026-09-20", equipment_code: "KBA01", doc_time_start: "09:00", doc_time_end: "15:00", doc_area_title: "หาดอ่าวนาง", doc_area_detail: "หาดอ่าวนาง", doc_purpose: "ปรับปรุงระบบจำหน่ายแรงสูง", map_link: "https://www.google.com/maps?q=Krabi", doc_status: "GENERATED", document_received_at: "2026-09-10T00:00:00Z", document_delivered_at: "2026-09-11T00:00:00Z", notice_status: "COMPLETED", social_status: "DRAFT", responsible_unit: "OPERATIONS", is_closed: false };
   let asset: SocialImageAsset | null = null;
   let generations = 0;
   let savedView: SocialMapView = DEFAULT_SOCIAL_MAP_VIEW;
   const png = await readFile(".tmp/social-image/20-sep.png");
   let generatedPng: Buffer = png;
+  let failPost = true;
+  let postAttempts = 0;
+  let postUpdates = 0;
   // All backend requests are fixtures; this suite never writes to a live project.
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -18,6 +22,7 @@ test("existing Social modal: upload, review, stale edits, regeneration, mobile b
     if (url.pathname === "/generated-image.png") return route.fulfill({ contentType: "image/png", body: generatedPng });
     if (url.pathname === "/test-image.png") return route.fulfill({ contentType: "image/png", body: png });
     if (url.pathname.endsWith("/social-image")) {
+      if (url.searchParams.has("download")) return route.fulfill({ contentType: "image/png", headers: { "Content-Disposition": "attachment; filename=outage.png" }, body: generatedPng });
       if (route.request().method() === "POST") {
         const encoded = (route.request().postData() ?? "").match(/\{"mode":"(?:fit|fill)","zoom":[^}]+\}/);
         expect(encoded).not.toBeNull();
@@ -31,8 +36,12 @@ test("existing Social modal: upload, review, stale edits, regeneration, mobile b
       return route.fulfill({ json: { job, asset } });
     }
     if (url.pathname === "/api/jobs/social-post") {
+      postAttempts++;
       expect(route.request().postDataJSON()).toMatchObject({ confirmed: true, imageId: asset?.id });
-      return route.fulfill({ json: { ok: true, job: { ...job, social_status: "POSTED" } } });
+      if (failPost) return route.fulfill({ status: 409, json: { ok: false, error: "database update failed" } });
+      postUpdates++;
+      job = { ...job, social_status: "POSTED", social_posted_at: "2026-09-21T08:00:00Z" } as typeof job;
+      return route.fulfill({ json: { ok: true, job } });
     }
     if (url.pathname.startsWith("/api/")) return route.fulfill({ json: { ok: true, data: [], counts: {} } });
     return route.continue();
@@ -91,7 +100,24 @@ test("existing Social modal: upload, review, stale edits, regeneration, mobile b
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   await expect(final).toBeInViewport();
+  await expect(modal.getByRole("link", { name: "เปิดแผนที่" })).toHaveAttribute("href", "https://www.google.com/maps?q=Krabi");
+  await modal.getByRole("button", { name: "คัดลอกข้อความ" }).click();
+  await expect(modal.getByText("คัดลอกข้อความแล้ว", { exact: false })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await modal.getByRole("button", { name: "ดาวน์โหลดภาพ" }).click();
+  expect((await downloadPromise).suggestedFilename()).toContain("outage-");
   await page.screenshot({ path: `.tmp/social-browser/${testInfo.project.name}.png` });
   await final.click();
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole("alert")).toContainText("database update failed");
+  expect(postAttempts).toBe(1); expect(postUpdates).toBe(0);
+  await expect(final).not.toContainText("กำลังดำเนินการ");
+  failPost = false;
+  await confirmation.check();
+  await final.evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
   await expect(modal).toBeHidden();
+  expect(postAttempts).toBe(2); expect(postUpdates).toBe(1);
+  await expect(page.getByRole("button", { name: "Posted แล้วสื่อ Social" }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Posted แล้วสื่อ Social" }).first()).toBeVisible();
 });

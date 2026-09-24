@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     const supabase = socialServerClient();
     const { data: job, error } = await supabase.from("outage_jobs").select("*").eq("id", jobId).single();
     if (error || !job) return NextResponse.json({ ok: false, error: "ไม่พบข้อมูลงาน" }, { status: 404 });
+    if (job.social_status === "POSTED" || job.social_posted_at) return NextResponse.json({ ok: false, error: "งานนี้บันทึกว่าโพสต์ Social แล้ว" }, { status: 409 });
     const asset = await latestSocialImage(supabase, jobId);
     if (!asset || asset.id !== imageId || isSocialImageStale(job, asset)) return NextResponse.json({ ok: false, error: "ข้อมูลดับไฟมีการแก้ไขหลังจากสร้างภาพนี้ กรุณาสร้างภาพประชาสัมพันธ์ใหม่" }, { status: 409 });
     if (!isDocumentReady(job)) return NextResponse.json({ ok: false, error: "ต้องสร้างเอกสารให้พร้อมก่อนโพสต์ Social" }, { status: 409 });
@@ -19,7 +20,10 @@ export async function POST(request: Request) {
     if (!job.document_delivered_at) return NextResponse.json({ ok: false, code: "DOCUMENT_NOT_DELIVERED", error: "ขั้นตอนส่งเอกสารยังไม่ครบ" }, { status: 409 });
     const postText = buildSocialPostText(job);
     const { data: updatedJob, error: updateError } = await supabase.rpc("complete_social_announcement", { p_job_id: jobId, p_image_id: imageId, p_text: postText, p_confirmed: confirmed });
-    if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 409 });
+    if (updateError) {
+      console.error("Social completion RPC failed", { jobId, imageId, code: updateError.code, message: updateError.message, details: updateError.details, hint: updateError.hint });
+      return NextResponse.json({ ok: false, error: updateError.message }, { status: 409 });
+    }
     const completedJob = Array.isArray(updatedJob) ? updatedJob[0] : updatedJob;
     if (!completedJob?.id) throw new Error("Social completion returned no job");
     return NextResponse.json({ ok: true, preview_text: postText, social_post_text: postText, social_status: "POSTED", social_posted_at: completedJob.social_posted_at, job: completedJob });

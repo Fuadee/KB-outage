@@ -4,7 +4,7 @@ The existing Social modal now uploads an area/map image and produces an announce
 
 ## Deployment
 
-1. Apply `sql/029_social_announcement_images.sql` to the intended Supabase project after the existing migrations (through 028). This creates an image-history table, a private storage bucket, and the service-only atomic completion function. The migration has not been applied by this implementation.
+1. Apply `sql/029_social_announcement_images.sql` to the intended Supabase project after the existing migrations (through 028), then apply `sql/030_social_image_map_view.sql`. The latter is required for images whose snapshot includes `map_view`: the earlier database function rejects those images during Social completion even when all job fields match. It preserves the atomic job update and ignores only map framing metadata during its freshness check.
 2. Deploy with the updated lockfile (`npm ci`, `npm run build`). Keep `assets/fonts/NotoSansThai.ttf` and its OFL license in the deployment. Next's output tracing includes them in the image endpoint's server bundle.
 3. Retain the existing server-only `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` (or `NEXT_PUBLIC_SUPABASE_URL`). No additional environment variables or login are needed.
 4. In a test job, upload a map, generate, download, and confirm the announcement. Change the date, reopen Social, verify the stale warning and disabled completion/download, then regenerate. Repeat for time and area before enabling staff use.

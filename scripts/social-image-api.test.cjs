@@ -11,7 +11,7 @@ const id = '11111111-1111-4111-8111-111111111111';
 function harness() {
   const job = { id, outage_date: '2026-09-20', doc_time_start: '09:00', doc_time_end: '15:00', doc_area_title: 'หาดอ่าวนาง', doc_area_detail: null, doc_purpose: null, map_link: null, equipment_code: 'KBA01', doc_status: 'GENERATED', notice_status: 'COMPLETED', document_delivered_at: '2026-09-01' };
   const assets = [], stored = new Map();
-  let rpcCalls = 0, failInsert = false;
+  let rpcCalls = 0, failInsert = false, failRpc = false;
   const bucket = {
     async upload(key, value) { assert.equal(stored.has(key), false); stored.set(key, value); return { error: null }; },
     async download(key) { return stored.has(key) ? { data: new Blob([stored.get(key)]), error: null } : { error: new Error('missing') }; },
@@ -27,7 +27,14 @@ function harness() {
         async insert(value) { if (failInsert) return { error: new Error('save failed') }; assert.equal(table, 'social_announcement_images'); assets.push({ ...value, id: String(assets.length + 1) }); return { error: null }; }
       }; return query;
     },
-    async rpc(name, args) { rpcCalls++; assert.equal(name, 'complete_social_announcement'); assert.equal(args.p_confirmed, true); return { data: [{ ...job, social_status: 'POSTED' }], error: null }; }
+    async rpc(name, args) {
+      rpcCalls++; assert.equal(name, 'complete_social_announcement'); assert.equal(args.p_confirmed, true);
+      if (failRpc) return { data: null, error: { code: 'P0001', message: 'database update failed', details: 'simulated RPC failure' } };
+      const snapshot = { ...assets.at(-1).snapshot }; delete snapshot.map_view;
+      for (const [key, value] of Object.entries(snapshot)) assert.deepEqual(job[key], value);
+      Object.assign(job, { social_status: 'POSTED', social_post_text: args.p_text, social_posted_at: '2026-09-20T08:00:00Z' });
+      return { data: { ...job }, error: null };
+    }
   };
   const cache = new Map();
   function load(file) {
@@ -51,7 +58,7 @@ function harness() {
   }
   const imageRoute = load('src/app/api/jobs/[id]/social-image/route.ts');
   const postRoute = load('src/app/api/jobs/social-post/route.ts');
-  return { job, assets, stored, imageRoute, postRoute, failSave() { failInsert = true; }, get rpcCalls() { return rpcCalls; } };
+  return { job, assets, stored, imageRoute, postRoute, failSave() { failInsert = true; }, failPost() { failRpc = true; }, get rpcCalls() { return rpcCalls; } };
 }
 const ctx = { params: { id } };
 function upload(file, view) { const form = new FormData(); if (file) form.set('map', file); if (view) form.set('map_view', JSON.stringify(view)); return new Request('http://localhost/image', { method: 'POST', body: form }); }
@@ -72,6 +79,11 @@ test('real handlers reject missing/unsupported maps and enforce confirmation and
   const completed = await h.postRoute.POST(publish('1', true));
   assert.equal(completed.status, 200);
   assert.equal((await completed.json()).job.social_status, 'POSTED');
+  assert.equal(h.job.social_status, 'POSTED');
+  assert.equal(h.job.social_posted_at, '2026-09-20T08:00:00Z');
+  assert.equal((await h.postRoute.POST(publish('1', true))).status, 409);
+  assert.equal(h.rpcCalls, 1, 'a second submission must not update the database');
+  h.job.social_status = 'PENDING_APPROVAL'; h.job.social_posted_at = null;
   h.job.outage_date = '2026-09-21';
   assert.equal((await h.postRoute.POST(publish('1', true))).status, 409);
   assert.equal((await h.imageRoute.GET(new Request('http://localhost/image?download=1'), ctx)).status, 409);
@@ -87,6 +99,17 @@ test('real handlers reject missing/unsupported maps and enforce confirmation and
   assert.equal((await h.imageRoute.GET(new Request('http://localhost/image?download=1'), ctx)).headers.get('Content-Type'), 'image/png');
   h.job.doc_time_end = '16:00';
   assert.equal((await h.postRoute.POST(publish('3', true))).status, 409);
+});
+
+test('failed database update leaves Social unposted and returns a visible error', async () => {
+  const h = harness(); h.failPost();
+  const png = await sharp({ create: { width: 30, height: 30, channels: 3, background: '#ddd' } }).png().toBuffer();
+  assert.equal((await h.imageRoute.POST(upload(new File([png], 'map.png', { type: 'image/png' })), ctx)).status, 200);
+  const response = await h.postRoute.POST(publish('1', true));
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /database update failed/);
+  assert.equal(h.job.social_status, undefined);
+  assert.equal(h.rpcCalls, 1);
 });
 test('storage assets are cleaned up when metadata persistence fails', async () => {
   const h = harness(); h.failSave();
