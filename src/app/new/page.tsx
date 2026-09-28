@@ -11,9 +11,7 @@ import SwitchingField from "@/components/job/SwitchingField";
 import PersonSelect from "@/components/people/PersonSelect";
 import { createJob } from "@/lib/jobsRepo";
 import {
-  MAX_CUSTOMER_COUNT,
   AONANG_RESPONSIBLE_UNIT,
-  parseCustomerCount,
   RESPONSIBLE_UNITS,
   type ResponsibleUnit
 } from "@/lib/jobMetadata";
@@ -34,7 +32,6 @@ export default function NewJobPage() {
   const [workSupervisorPerson, setWorkSupervisorPerson] =
     useState<PersonReference | null>(null);
   const [hasSwitching, setHasSwitching] = useState<boolean | null>(null);
-  const [customerCount, setCustomerCount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,12 +57,6 @@ export default function NewJobPage() {
       return;
     }
 
-    const parsedCustomerCount = parseCustomerCount(customerCount);
-    if (!parsedCustomerCount.success) {
-      setError(parsedCustomerCount.error);
-      return;
-    }
-
     setLoading(true);
     const { error: insertError } = await createJob({
       outage_date: outageDate,
@@ -73,7 +64,7 @@ export default function NewJobPage() {
       responsible_unit: responsibleUnit,
       work_supervisor_person_id: workSupervisorPerson?.id ?? null,
       has_switching: hasSwitching,
-      customer_count: parsedCustomerCount.value,
+      customer_count: null,
       note: note.trim() ? note.trim() : null
     });
 
@@ -171,32 +162,6 @@ export default function NewJobPage() {
               invalid={error?.includes("Switching") ?? false}
               firstOptionRef={switchingFirstOptionRef}
             />
-            <label className={cn("flex flex-col gap-2", labelText)}>
-              จำนวนผู้ใช้ไฟฟ้า
-              <div className="relative">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={MAX_CUSTOMER_COUNT}
-                  step={1}
-                  value={customerCount}
-                  onChange={(event) => setCustomerCount(event.target.value)}
-                  placeholder="350"
-                  className="pr-12"
-                  aria-describedby="new-job-customer-count-helper"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">
-                  ราย
-                </span>
-              </div>
-              <span
-                id="new-job-customer-count-helper"
-                className="text-xs font-normal text-slate-500"
-              >
-                ไม่บังคับ ระบุเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป
-              </span>
-            </label>
             <label className={cn("flex flex-col gap-2", labelText)}>
               หมายเหตุเพิ่มเติม
               <textarea

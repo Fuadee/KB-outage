@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   type FormEvent,
   type RefObject,
@@ -39,9 +39,11 @@ import {
   isDocumentReady,
   isNoticeCompleted,
   isNoticeScheduled,
+  isReadyForExecution,
   isSocialPosted
 } from "@/lib/documentWorkflow";
 import { normalizeGoogleMapsUrl } from "@/lib/mapUrl";
+import { MAX_CUSTOMER_COUNT, parseCustomerCount } from "@/lib/jobMetadata";
 import {
   getDistributionWorkflow,
   isDirectDistributionRoute
@@ -64,6 +66,7 @@ type DocForm = {
   doc_area_title: string;
   doc_time_start: string;
   doc_time_end: string;
+  customer_count: string;
   doc_area_detail: string;
   map_link: string;
 };
@@ -215,6 +218,7 @@ const textareaStyles = `${inputLight} min-h-[96px]`;
 
 export default function JobsPage() {
   const router = useRouter();
+  const readyView = usePathname() === "/jobs/ready";
   const [jobs, setJobs] = useState<OutageJob[]>([]);
   const [gisIssueCounts, setGisIssueCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -247,6 +251,7 @@ export default function JobsPage() {
     doc_area_title: "",
     doc_time_start: "",
     doc_time_end: "",
+    customer_count: "",
     doc_area_detail: "",
     map_link: ""
   });
@@ -274,6 +279,7 @@ export default function JobsPage() {
   const docAreaTitleRef = useRef<HTMLInputElement>(null);
   const docTimeStartRef = useRef<HTMLInputElement>(null);
   const docTimeEndRef = useRef<HTMLInputElement>(null);
+  const customerCountRef = useRef<HTMLInputElement>(null);
   const docAreaDetailRef = useRef<HTMLTextAreaElement>(null);
   const mapLinkRef = useRef<HTMLInputElement>(null);
 
@@ -343,6 +349,7 @@ export default function JobsPage() {
       doc_area_title: "",
       doc_time_start: "",
       doc_time_end: "",
+      customer_count: "",
       doc_area_detail: "",
       map_link: ""
     });
@@ -378,6 +385,7 @@ export default function JobsPage() {
       doc_area_title: job.doc_area_title ?? "",
       doc_time_start: job.doc_time_start ?? "",
       doc_time_end: job.doc_time_end ?? "",
+      customer_count: job.customer_count === null ? "" : String(job.customer_count),
       doc_area_detail: job.doc_area_detail ?? "",
       map_link: job.map_link ?? ""
     });
@@ -604,6 +612,10 @@ export default function JobsPage() {
     if (!docForm.doc_time_end.trim()) {
       nextErrors.doc_time_end = "กรุณาระบุเวลาจ่ายไฟ";
     }
+    const customerCount = parseCustomerCount(docForm.customer_count);
+    if (!customerCount.success) {
+      nextErrors.customer_count = customerCount.error;
+    }
     if (!docForm.doc_area_detail.trim()) {
       nextErrors.doc_area_detail = "กรุณาระบุรายละเอียดพื้นที่ดับไฟ";
     }
@@ -622,6 +634,7 @@ export default function JobsPage() {
           "doc_area_title",
           "doc_time_start",
           "doc_time_end",
+          "customer_count",
           "doc_area_detail",
           "map_link"
         ] as const
@@ -635,6 +648,7 @@ export default function JobsPage() {
         doc_area_title: docAreaTitleRef,
         doc_time_start: docTimeStartRef,
         doc_time_end: docTimeEndRef,
+        customer_count: customerCountRef,
         doc_area_detail: docAreaDetailRef,
         map_link: mapLinkRef
       };
@@ -652,6 +666,7 @@ export default function JobsPage() {
       doc_area_title: docForm.doc_area_title.trim(),
       doc_time_start: docForm.doc_time_start.trim(),
       doc_time_end: docForm.doc_time_end.trim(),
+      customer_count: customerCount.success ? customerCount.value : null,
       doc_area_detail: docForm.doc_area_detail.trim(),
       map_link: docForm.map_link.trim()
     };
@@ -750,7 +765,11 @@ export default function JobsPage() {
     const normalizedQuery = query.trim().toLowerCase();
     return jobs
       .filter((job) =>
-        tab === "closed" ? job.is_closed : !job.is_closed
+        readyView
+          ? isReadyForExecution(job)
+          : tab === "closed"
+            ? job.is_closed
+            : !job.is_closed && !isReadyForExecution(job)
       )
       .filter((job) => {
         if (!normalizedQuery) return true;
@@ -767,7 +786,7 @@ export default function JobsPage() {
           parseLocalDate(b.outage_date).getTime()
         );
       });
-  }, [jobs, query, tab]);
+  }, [jobs, query, tab, readyView]);
 
   const handleSocialJobUpdate = (
     jobId: string,
@@ -831,9 +850,11 @@ export default function JobsPage() {
     <div className="space-y-6">
       <header className="space-y-1 pb-1">
         <p className="page-eyebrow">Outage operations</p>
-        <h1 className="page-title">Jobs</h1>
+        <h1 className="page-title">{readyView ? "พร้อมดำเนินการ" : "Jobs"}</h1>
         <p className="page-description">
-          ศูนย์ควบคุมติดตามงานดับไฟ แสดงสถานะงานและขั้นตอนถัดไปของแต่ละใบงาน
+          {readyView
+            ? "งานที่เตรียมเอกสารและประชาสัมพันธ์ครบแล้ว รอดำเนินงานตามวันดับไฟ"
+            : "ศูนย์ควบคุมติดตามงานดับไฟ แสดงสถานะงานและขั้นตอนถัดไปของแต่ละใบงาน"}
         </p>
       </header>
 
@@ -850,14 +871,16 @@ export default function JobsPage() {
                 className="h-10"
               />
             </div>
-            <Segmented
-              options={[
-                { id: "active", label: "ดำเนินการ" },
-                { id: "closed", label: "ปิดแล้ว" }
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
+            {!readyView ? (
+              <Segmented
+                options={[
+                  { id: "active", label: "ดำเนินการ" },
+                  { id: "closed", label: "ปิดแล้ว" }
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+            ) : null}
           </div>
       </section>
 
@@ -1076,6 +1099,7 @@ export default function JobsPage() {
               <JobCard
                 key={job.id}
                 job={job}
+                readyForExecution={readyView}
                 countdown={countdown}
                 stepper={workflowSteps}
                 primaryAction={isClosed ? undefined : primaryAction}
@@ -1218,27 +1242,6 @@ export default function JobsPage() {
             ) : null}
           </label>
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            บริเวณที่ดับ
-            <Input
-              ref={docAreaTitleRef}
-              type="text"
-              value={docForm.doc_area_title}
-              onChange={(event) =>
-                setDocForm((prev) => ({
-                  ...prev,
-                  doc_area_title: event.target.value
-                }))
-              }
-              className="h-10"
-              required
-            />
-            {docErrors.doc_area_title ? (
-              <span className="text-xs text-red-600">
-                {docErrors.doc_area_title}
-              </span>
-            ) : null}
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             เวลาเริ่มดับไฟ
             <Input
               ref={docTimeStartRef}
@@ -1278,6 +1281,51 @@ export default function JobsPage() {
               <span className="text-xs text-red-600">
                 {docErrors.doc_time_end}
               </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
+            บริเวณที่ดับ
+            <Input
+              ref={docAreaTitleRef}
+              type="text"
+              value={docForm.doc_area_title}
+              onChange={(event) =>
+                setDocForm((prev) => ({
+                  ...prev,
+                  doc_area_title: event.target.value
+                }))
+              }
+              className="h-10"
+              required
+            />
+            {docErrors.doc_area_title ? (
+              <span className="text-xs text-red-600">
+                {docErrors.doc_area_title}
+              </span>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
+            จำนวนผู้ใช้ไฟฟ้า
+            <div className="relative">
+              <Input
+                ref={customerCountRef}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={MAX_CUSTOMER_COUNT}
+                step={1}
+                value={docForm.customer_count}
+                onChange={(event) =>
+                  setDocForm((prev) => ({ ...prev, customer_count: event.target.value }))
+                }
+                className="h-10 pr-12"
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-normal text-slate-500">
+                ราย
+              </span>
+            </div>
+            {docErrors.customer_count ? (
+              <span className="text-xs text-red-600">{docErrors.customer_count}</span>
             ) : null}
           </label>
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700 md:col-span-2">

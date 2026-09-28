@@ -6,6 +6,7 @@ import {
   OUTAGE_TEMPLATE_PATH
 } from "@/lib/docs/outage-docx-template";
 import { runVulnerablePatientsCheck } from "@/lib/vulnerablePatientsCheck";
+import { parseCustomerCount } from "@/lib/jobMetadata";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,7 @@ type DocPayload = {
   doc_area_title: string;
   doc_time_start: string;
   doc_time_end: string;
+  customer_count?: number | null;
   doc_area_detail: string;
   map_link: string;
 };
@@ -89,6 +91,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const hasCustomerCount = Object.prototype.hasOwnProperty.call(body.payload, "customer_count");
+    const customerCount = parseCustomerCount(body.payload.customer_count);
+    if (!customerCount.success) {
+      return NextResponse.json(
+        { ok: false, error: customerCount.error },
+        { status: 400 }
+      );
+    }
+
     if (!SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
         { ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY env var." },
@@ -125,6 +136,7 @@ export async function POST(request: Request) {
         doc_area_title: payload.doc_area_title,
         doc_time_start: payload.doc_time_start,
         doc_time_end: payload.doc_time_end,
+        ...(hasCustomerCount ? { customer_count: customerCount.value } : {}),
         doc_area_detail: payload.doc_area_detail,
         map_link: payload.map_link,
         doc_status: "GENERATING",

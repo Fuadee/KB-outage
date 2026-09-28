@@ -14,8 +14,11 @@ export const appNavItems: NavItem[] = [
     href: "/jobs",
     match: (pathname) =>
       pathname === "/jobs" ||
-      pathname.startsWith("/jobs/") ||
       pathname.startsWith("/job/")
+  },
+  {
+    label: "พร้อมดำเนินการ",
+    href: "/jobs/ready"
   },
   {
     label: "Calendar",

@@ -12,6 +12,8 @@ const jobsRoute = source("../app/api/jobs/route.ts");
 const editRoute = source("../app/api/jobs/[id]/route.ts");
 const jobsRepo = source("./jobsRepo.ts");
 const jobCard = source("../components/job/JobCard.tsx");
+const jobsPage = source("../app/(app)/jobs/page.tsx");
+const createDocumentRoute = source("../app/api/docs/create/route.ts");
 const migration = source("../../sql/021_outage_job_responsible_unit.sql");
 const customerCountMigration = source(
   "../../sql/022_outage_job_customer_count.sql"
@@ -76,14 +78,19 @@ test("customer count migration is nullable, integer, and non-negative", () => {
   assert.doesNotMatch(customerCountMigration, /DROP TABLE|TRUNCATE|DELETE FROM/i);
 });
 
-test("create validates and persists a normalized customer count", () => {
-  assert.match(newPage, /จำนวนผู้ใช้ไฟฟ้า/);
-  assert.match(newPage, /type="number"/);
-  assert.match(newPage, /min=\{0\}/);
-  assert.match(newPage, /parseCustomerCount\(customerCount\)/);
-  assert.match(newPage, /customer_count: parsedCustomerCount\.value/);
+test("new jobs start without customer count, and document creation updates the job field", () => {
+  assert.doesNotMatch(newPage, /จำนวนผู้ใช้ไฟฟ้า/);
+  assert.match(newPage, /customer_count: null/);
   assert.match(jobsRoute, /parseCustomerCount\(body\?\.customer_count\)/);
   assert.match(jobsRoute, /customer_count: customerCount\.value/);
+  assert.match(jobsPage, /customer_count: job\.customer_count === null \? "" : String\(job\.customer_count\)/);
+  assert.match(jobsPage, /จำนวนผู้ใช้ไฟฟ้า[\s\S]*type="number"[\s\S]*min=\{0\}/);
+  assert.match(jobsPage, /parseCustomerCount\(docForm\.customer_count\)/);
+  assert.match(jobsPage, /customer_count: customerCount\.success \? customerCount\.value : null/);
+  assert.match(jobsPage, /setJobs\(\(prev\) =>[\s\S]*\.\.\.payload,[\s\S]*doc_status: "GENERATED"/);
+  assert.match(createDocumentRoute, /parseCustomerCount\(body\.payload\.customer_count\)/);
+  assert.match(createDocumentRoute, /hasCustomerCount \? \{ customer_count: customerCount\.value \} : \{\}/);
+  assert.match(createDocumentRoute, /\.from\("outage_jobs"\)[\s\S]*\.update\(\{/);
 });
 
 test("edit loads, validates, updates, and can clear customer count", () => {

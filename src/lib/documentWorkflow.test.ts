@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getDocumentWorkflowAction,
-  getDocumentWorkflowStage
+  getDocumentWorkflowStage,
+  isReadyForExecution
 } from "./documentWorkflow.ts";
 
 const documentReady = { doc_status: "GENERATED" };
@@ -109,4 +110,22 @@ test("a planned delivery date does not mark distribution as completed", () => {
 
   assert.equal(getDocumentWorkflowStage(job), "NOTICE_SCHEDULED");
   assert.equal(getDocumentWorkflowAction(job), "COMPLETE_NOTICE");
+});
+
+test("ready for execution starts only after Social is completed and ends on close or rollback", () => {
+  const awaitingSocial = {
+    ...documentReady,
+    notice_status: "COMPLETED",
+    notice_completed_at: "2026-08-20T05:00:00.000Z",
+    social_status: "PENDING_APPROVAL",
+    is_closed: false
+  };
+
+  assert.equal(isReadyForExecution({ is_closed: false }), false);
+  assert.equal(isReadyForExecution(awaitingSocial), false);
+  assert.equal(isReadyForExecution({ ...awaitingSocial, social_status: "POSTED" }), true);
+  assert.equal(isReadyForExecution({ ...awaitingSocial, social_posted_at: "2026-08-20T06:00:00.000Z" }), true);
+  assert.equal(isReadyForExecution({ ...awaitingSocial, social_status: "POSTED", is_closed: true }), false);
+  assert.equal(isReadyForExecution({ ...awaitingSocial, social_status: "DRAFT", social_posted_at: null }), false);
+  assert.equal(isReadyForExecution({ social_status: "POSTED", is_closed: false }), true);
 });

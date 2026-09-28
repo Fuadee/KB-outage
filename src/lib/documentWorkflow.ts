@@ -102,6 +102,11 @@ export function getDocumentWorkflowStage(
   return "DRAFT";
 }
 
+/** Reuse the persisted workflow stage, including its legacy Social fallback. */
+export function isReadyForExecution(job: DocumentWorkflowSource): boolean {
+  return getDocumentWorkflowStage(job) === "SOCIAL_POSTED";
+}
+
 export function getDocumentWorkflowAction(
   job: DocumentWorkflowSource
 ): DocumentWorkflowAction {

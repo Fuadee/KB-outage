@@ -23,6 +23,7 @@ export type JobAction = {
 
 type JobCardProps = {
   job: OutageJob;
+  readyForExecution?: boolean;
   countdown: { label: string; daysLeft: number };
   stepper: JobStep[];
   primaryAction?: JobAction;
@@ -50,6 +51,7 @@ type JobCardProps = {
 
 export default function JobCard({
   job,
+  readyForExecution = false,
   countdown,
   stepper,
   primaryAction,
@@ -246,6 +248,11 @@ export default function JobCard({
           <p className="text-xl font-semibold tracking-tight text-slate-900 [overflow-wrap:anywhere]">
             {job.equipment_code}
           </p>
+          {readyForExecution ? (
+            <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+              พร้อมดำเนินการ
+            </span>
+          ) : null}
           <p
             className={cn(
               "text-sm leading-5",

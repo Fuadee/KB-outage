@@ -49,6 +49,8 @@ test("normalizes optional customer counts to a nullable non-negative integer", (
   assert.deepEqual(parseCustomerCount(null), { success: true, value: null });
   assert.deepEqual(parseCustomerCount(0), { success: true, value: 0 });
   assert.deepEqual(parseCustomerCount("350"), { success: true, value: 350 });
+  assert.deepEqual(parseCustomerCount("1500"), { success: true, value: 1500 });
+  assert.deepEqual(parseCustomerCount("1620"), { success: true, value: 1620 });
   assert.equal(parseCustomerCount(-1).success, false);
   assert.equal(parseCustomerCount(1.5).success, false);
   assert.equal(parseCustomerCount("1e2").success, false);
@@ -60,6 +62,8 @@ test("formats customer counts with thousands separators", () => {
   assert.equal(formatCustomerCount(0), "0");
   assert.equal(formatCustomerCount(350), "350");
   assert.equal(formatCustomerCount(1250), "1,250");
+  assert.equal(formatCustomerCount(1500), "1,500");
+  assert.equal(formatCustomerCount(1620), "1,620");
 });
 
 test("formats explicit and legacy Switching values", () => {
