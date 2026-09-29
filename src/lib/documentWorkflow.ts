@@ -1,3 +1,6 @@
+import { getDistributionReminderStatus } from "./distributionReminder.ts";
+import { formatThaiShortDate, getSocialPublicationStatus } from "./socialPublication.ts";
+
 export type DocumentWorkflowStage =
   | "DRAFT"
   | "WAITING_DOCUMENT"
@@ -19,6 +22,7 @@ export type DocumentWorkflowAction =
   | "COMPLETE";
 
 export type DocumentWorkflowSource = {
+  outage_date?: string | null;
   doc_status?: string | null;
   doc_generated_at?: string | null;
   document_received_at?: string | null;
@@ -105,6 +109,62 @@ export function getDocumentWorkflowStage(
 /** Reuse the persisted workflow stage, including its legacy Social fallback. */
 export function isReadyForExecution(job: DocumentWorkflowSource): boolean {
   return getDocumentWorkflowStage(job) === "SOCIAL_POSTED";
+}
+
+export type JobQueueState =
+  | { kind: "ACTIONABLE_NOW" }
+  | { kind: "WAITING_FOR_TIME"; reason: "NOTICE" | "SOCIAL"; nextActionDate: string }
+  | { kind: "READY_FOR_OPERATION" }
+  | { kind: "CLOSED" };
+
+/** Single source of truth for Jobs placement and the next time-based action. */
+export function getJobQueueState(
+  job: DocumentWorkflowSource,
+  now = new Date()
+): JobQueueState {
+  const stage = getDocumentWorkflowStage(job);
+  if (stage === "CLOSED") return { kind: "CLOSED" };
+  if (stage === "SOCIAL_POSTED") return { kind: "READY_FOR_OPERATION" };
+
+  if (stage === "NOTICE_SCHEDULED" && job.notice_date) {
+    const notice = getDistributionReminderStatus({
+      outageDate: job.outage_date,
+      noticeDate: job.notice_date,
+      noticeStatus: job.notice_status,
+      noticeCompletedAt: job.notice_completed_at,
+      now
+    });
+    if (notice.state === "UPCOMING" && notice.plannedDate) {
+      return { kind: "WAITING_FOR_TIME", reason: "NOTICE", nextActionDate: notice.plannedDate };
+    }
+  }
+
+  if (stage === "READY_FOR_SOCIAL") {
+    const social = getSocialPublicationStatus({
+      outageDate: job.outage_date,
+      socialStatus: job.social_status,
+      socialPostedAt: job.social_posted_at,
+      now
+    });
+    if (social.state === "NOT_YET" && social.recommendedSocialDate) {
+      return { kind: "WAITING_FOR_TIME", reason: "SOCIAL", nextActionDate: social.recommendedSocialDate };
+    }
+  }
+
+  return { kind: "ACTIONABLE_NOW" };
+}
+
+/** Whether the next preparation step needs attention on the Bangkok calendar day. */
+export function isJobActionableNow(
+  job: DocumentWorkflowSource,
+  now = new Date()
+): boolean {
+  return getJobQueueState(job, now).kind === "ACTIONABLE_NOW";
+}
+
+export function getWaitingForTimeLabel(state: Extract<JobQueueState, { kind: "WAITING_FOR_TIME" }>): string {
+  const action = state.reason === "NOTICE" ? "รอแจกหนังสือ" : "รอโพสต์ Social";
+  return `${action} · ${formatThaiShortDate(state.nextActionDate)}`;
 }
 
 export function getDocumentWorkflowAction(

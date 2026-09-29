@@ -24,6 +24,7 @@ export type JobAction = {
 type JobCardProps = {
   job: OutageJob;
   readyForExecution?: boolean;
+  waitingStatus?: string;
   countdown: { label: string; daysLeft: number };
   stepper: JobStep[];
   primaryAction?: JobAction;
@@ -52,6 +53,7 @@ type JobCardProps = {
 export default function JobCard({
   job,
   readyForExecution = false,
+  waitingStatus,
   countdown,
   stepper,
   primaryAction,
@@ -251,6 +253,11 @@ export default function JobCard({
           {readyForExecution ? (
             <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
               พร้อมดำเนินการ
+            </span>
+          ) : null}
+          {waitingStatus ? (
+            <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
+              {waitingStatus}
             </span>
           ) : null}
           <p

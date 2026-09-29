@@ -36,6 +36,8 @@ import { inputLight } from "@/lib/theme";
 import { getJobCountdown, parseLocalDate } from "@/lib/dateUtils";
 import {
   getDocumentWorkflowAction,
+  getJobQueueState,
+  getWaitingForTimeLabel,
   isDocumentReady,
   isNoticeCompleted,
   isNoticeScheduled,
@@ -49,7 +51,7 @@ import {
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
 
-type TabOption = "active" | "closed";
+type TabOption = "active" | "waiting" | "closed";
 type ActionKey =
   | "notify_nakhon"
   | "create_doc"
@@ -219,6 +221,7 @@ const textareaStyles = `${inputLight} min-h-[96px]`;
 export default function JobsPage() {
   const router = useRouter();
   const readyView = usePathname() === "/jobs/ready";
+  const [queueNow, setQueueNow] = useState(() => new Date());
   const [jobs, setJobs] = useState<OutageJob[]>([]);
   const [gisIssueCounts, setGisIssueCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -313,6 +316,18 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    const refreshClock = () => setQueueNow(new Date());
+    const timer = window.setInterval(refreshClock, 60_000);
+    window.addEventListener("focus", refreshClock);
+    document.addEventListener("visibilitychange", refreshClock);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshClock);
+      document.removeEventListener("visibilitychange", refreshClock);
+    };
   }, []);
 
   useEffect(() => {
@@ -764,13 +779,13 @@ export default function JobsPage() {
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return jobs
-      .filter((job) =>
-        readyView
-          ? isReadyForExecution(job)
-          : tab === "closed"
-            ? job.is_closed
-            : !job.is_closed && !isReadyForExecution(job)
-      )
+      .filter((job) => {
+        if (readyView) return isReadyForExecution(job);
+        const queue = getJobQueueState(job, queueNow);
+        if (tab === "closed") return queue.kind === "CLOSED";
+        if (tab === "waiting") return queue.kind === "WAITING_FOR_TIME";
+        return queue.kind === "ACTIONABLE_NOW";
+      })
       .filter((job) => {
         if (!normalizedQuery) return true;
         return job.equipment_code.toLowerCase().includes(normalizedQuery);
@@ -781,12 +796,20 @@ export default function JobsPage() {
           const bClosed = b.closed_at ? new Date(b.closed_at).getTime() : 0;
           return bClosed - aClosed;
         }
+        if (!readyView && tab === "waiting") {
+          const aQueue = getJobQueueState(a, queueNow);
+          const bQueue = getJobQueueState(b, queueNow);
+          if (aQueue.kind === "WAITING_FOR_TIME" && bQueue.kind === "WAITING_FOR_TIME") {
+            const dueOrder = aQueue.nextActionDate.localeCompare(bQueue.nextActionDate);
+            if (dueOrder !== 0) return dueOrder;
+          }
+        }
         return (
           parseLocalDate(a.outage_date).getTime() -
           parseLocalDate(b.outage_date).getTime()
         );
       });
-  }, [jobs, query, tab, readyView]);
+  }, [jobs, query, tab, readyView, queueNow]);
 
   const handleSocialJobUpdate = (
     jobId: string,
@@ -875,6 +898,7 @@ export default function JobsPage() {
               <Segmented
                 options={[
                   { id: "active", label: "ดำเนินการ" },
+                  { id: "waiting", label: "รอเวลา" },
                   { id: "closed", label: "ปิดแล้ว" }
                 ]}
                 value={tab}
@@ -933,6 +957,10 @@ export default function JobsPage() {
           </Card>
         ) : (
           filteredJobs.map((job) => {
+            const queue = getJobQueueState(job, queueNow);
+            const waitingStatus = queue.kind === "WAITING_FOR_TIME"
+              ? getWaitingForTimeLabel(queue)
+              : undefined;
             const countdown = getJobCountdown(job.outage_date);
             const nakhonStatus = job.nakhon_status ?? "PENDING";
             const isPending = nakhonStatus === "PENDING";
@@ -998,7 +1026,9 @@ export default function JobsPage() {
                 label:
                   socialPosted
                     ? "Posted แล้วสื่อ Social"
-                    : "Post ลงสื่อ Social",
+                    : waitingStatus && queue.kind === "WAITING_FOR_TIME" && queue.reason === "SOCIAL"
+                      ? "ดู / แก้ไข Social"
+                      : "Post ลงสื่อ Social",
                 onClick: () => setSocialJob(job)
               });
             }
@@ -1022,8 +1052,9 @@ export default function JobsPage() {
             if (showNoticeButton) {
               secondaryActions.push({
                 id: "notify_outage_letter",
-                label:
-                  distributionWorkflow.actionLabel,
+                label: waitingStatus && queue.kind === "WAITING_FOR_TIME" && queue.reason === "NOTICE"
+                  ? "ดู / แก้ไขกำหนดแจกหนังสือ"
+                  : distributionWorkflow.actionLabel,
                 onClick: () => setNoticeJob(job)
               });
             }
@@ -1068,7 +1099,7 @@ export default function JobsPage() {
             };
 
             const displaySecondaryActions = secondaryActions.filter(
-              (item) => item.id !== nextAction
+              (item) => waitingStatus || item.id !== nextAction
             );
 
             if (isNotified) {
@@ -1100,9 +1131,10 @@ export default function JobsPage() {
                 key={job.id}
                 job={job}
                 readyForExecution={readyView}
+                waitingStatus={waitingStatus}
                 countdown={countdown}
                 stepper={workflowSteps}
-                primaryAction={isClosed ? undefined : primaryAction}
+                primaryAction={isClosed || waitingStatus ? undefined : primaryAction}
                 secondaryActions={displaySecondaryActions}
                 tertiaryItems={tertiaryItems}
                 vulnerableCheckStatus={vulnerableStatus}

@@ -24,9 +24,17 @@ test("jobs page no longer exposes legacy traffic-light filters", () => {
   assert.doesNotMatch(jobsPage, /getJobUrgency|FilterOption/);
 });
 
-test("active and closed workflow filters remain available", () => {
+test("active, waiting and closed workflow filters remain available", () => {
   assert.match(jobsPage, /label: "ดำเนินการ"/);
+  assert.match(jobsPage, /label: "รอเวลา"/);
   assert.match(jobsPage, /label: "ปิดแล้ว"/);
+  assert.match(jobsPage, /useState<TabOption>\("active"\)/);
+  assert.match(jobsPage, /tab === "waiting"/);
+  assert.match(jobsPage, /queue\.kind === "WAITING_FOR_TIME"/);
+  assert.match(jobsPage, /nextActionDate\.localeCompare\(bQueue\.nextActionDate\)/);
+  assert.match(jobsPage, /job\.equipment_code\.toLowerCase\(\)\.includes\(normalizedQuery\)/);
+  assert.match(jobsPage, /waitingStatus=\{waitingStatus\}/);
+  assert.match(jobsPage, /primaryAction=\{isClosed \|\| waitingStatus \? undefined : primaryAction\}/);
 });
 
 test("job card is neutral while countdown and workflow remain visible", () => {
@@ -45,8 +53,8 @@ test("social and distribution reminder semantics remain on the card", () => {
 
 test("ready route reuses the jobs board and card with the shared ready resolver", () => {
   assert.match(readyPage, /import JobsPage from "\.\.\/page"/);
-  assert.match(jobsPage, /readyView\s*\? isReadyForExecution\(job\)/);
-  assert.match(jobsPage, /!job\.is_closed && !isReadyForExecution\(job\)/);
+  assert.match(jobsPage, /if \(readyView\) return isReadyForExecution\(job\)/);
+  assert.match(jobsPage, /getJobQueueState\(job, queueNow\)/);
   assert.match(jobsPage, /readyForExecution=\{readyView\}/);
   assert.match(jobCard, /readyForExecution \? \(/);
   assert.match(navItems, /href: "\/jobs\/ready"/);
