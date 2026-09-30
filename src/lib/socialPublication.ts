@@ -2,9 +2,9 @@ const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type SocialPublicationState = "NOT_YET" | "DUE_TODAY" | "NEXT_ROUND" | "OVERDUE" | "POSTED_VALID" | "POSTED_EARLY" | "POSTED_AFTER_OUTAGE" | "POSTED_DATE_UNKNOWN" | "OUTAGE_DATE_UNKNOWN";
-export type SocialPublicationStatus = { state: SocialPublicationState; socialDate: string | null; outageDate: string | null; recommendedSocialDate: string | null; nextPostingDate: string | null; daysUntilOutage: number | null };
+export type SocialPublicationStatus = { state: SocialPublicationState; socialDate: string | null; outageDate: string | null; recommendedSocialDate: string | null; nextPostingDate: string | null; nextActionDate: string | null; daysUntilOutage: number | null };
 
-function calendarDateInBangkok(date: Date) {
+export function calendarDateInBangkok(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: BANGKOK_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}`;
@@ -55,21 +55,28 @@ export function getSocialPublicationStatus({ socialPostedAt, socialStatus, outag
   const today = calendarDateInBangkok(now);
   const normalizedOutageDate = outageDate ? dateOnly(outageDate) : null;
   const postedAt = socialPostedAt?.trim();
-  if (!normalizedOutageDate) return { state: postedAt || socialStatus === "POSTED" ? "POSTED_DATE_UNKNOWN" : "OUTAGE_DATE_UNKNOWN", socialDate: null, outageDate: null, recommendedSocialDate: null, nextPostingDate: null, daysUntilOutage: null };
+  if (!normalizedOutageDate) return { state: postedAt || socialStatus === "POSTED" ? "POSTED_DATE_UNKNOWN" : "OUTAGE_DATE_UNKNOWN", socialDate: null, outageDate: null, recommendedSocialDate: null, nextPostingDate: null, nextActionDate: null, daysUntilOutage: null };
 
   const recommendedSocialDate = getRecommendedSocialDate(normalizedOutageDate);
   const daysUntilOutage = calendarDayDifference(today, normalizedOutageDate);
   const socialDate = postedAt ? dateOnly(postedAt) : null;
   if (postedAt || socialStatus === "POSTED") {
-    if (!socialDate) return { state: "POSTED_DATE_UNKNOWN", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, daysUntilOutage };
+    if (!socialDate) return { state: "POSTED_DATE_UNKNOWN", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, nextActionDate: null, daysUntilOutage };
     const daysBetweenSocialAndOutage = calendarDayDifference(socialDate, normalizedOutageDate);
-    return { state: daysBetweenSocialAndOutage < 0 ? "POSTED_AFTER_OUTAGE" : daysBetweenSocialAndOutage > 7 ? "POSTED_EARLY" : "POSTED_VALID", socialDate, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, daysUntilOutage };
+    return { state: daysBetweenSocialAndOutage < 0 ? "POSTED_AFTER_OUTAGE" : daysBetweenSocialAndOutage > 7 ? "POSTED_EARLY" : "POSTED_VALID", socialDate, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, nextActionDate: null, daysUntilOutage };
   }
-  if (!recommendedSocialDate || daysUntilOutage < 0) return { state: "OVERDUE", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, daysUntilOutage };
-  if (today < recommendedSocialDate) return { state: "NOT_YET", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, daysUntilOutage };
-  if (today === recommendedSocialDate) return { state: "DUE_TODAY", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: today, daysUntilOutage };
-  const nextPostingDate = getNextEligiblePostingDate(today, normalizedOutageDate);
-  return { state: nextPostingDate ? "NEXT_ROUND" : "OVERDUE", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate, daysUntilOutage };
+  if (!recommendedSocialDate) return { state: "OVERDUE", socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, nextPostingDate: null, nextActionDate: null, daysUntilOutage };
+  const base = { socialDate: null, outageDate: normalizedOutageDate, recommendedSocialDate, daysUntilOutage };
+  if (today < recommendedSocialDate) return { ...base, state: "NOT_YET", nextPostingDate: null, nextActionDate: recommendedSocialDate };
+  if (today === recommendedSocialDate) return { ...base, state: "DUE_TODAY", nextPostingDate: today, nextActionDate: today };
+
+  // Anchor the catch-up round to the recommendation, not today. Once that
+  // round is missed, its action stays overdue instead of rolling into Waiting.
+  const nextPostingDate = getNextEligiblePostingDate(addCalendarDays(recommendedSocialDate, 1), normalizedOutageDate);
+  const nextActionDate = nextPostingDate ?? recommendedSocialDate;
+  const state = nextPostingDate && today < nextPostingDate ? "NEXT_ROUND"
+    : nextPostingDate && today === nextPostingDate ? "DUE_TODAY" : "OVERDUE";
+  return { ...base, state, nextPostingDate, nextActionDate };
 }
 
 export function formatThaiShortDate(date: string) {

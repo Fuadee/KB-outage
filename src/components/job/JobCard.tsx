@@ -25,6 +25,7 @@ type JobCardProps = {
   job: OutageJob;
   readyForExecution?: boolean;
   waitingStatus?: string;
+  now?: Date;
   countdown: { label: string; daysLeft: number };
   stepper: JobStep[];
   primaryAction?: JobAction;
@@ -54,6 +55,7 @@ export default function JobCard({
   job,
   readyForExecution = false,
   waitingStatus,
+  now,
   countdown,
   stepper,
   primaryAction,
@@ -160,7 +162,8 @@ export default function JobCard({
   const socialPublication = getSocialPublicationStatus({
     socialPostedAt: job.social_posted_at,
     socialStatus: job.social_status,
-    outageDate: job.outage_date
+    outageDate: job.outage_date,
+    now
   });
   const socialStateUi =
     socialPublication.state === "DUE_TODAY"
@@ -321,10 +324,10 @@ export default function JobCard({
                 </>
               ) : null}
               <span className={cn("rounded-md border px-2 py-1 font-semibold", socialStateUi.className)}>{socialStateUi.label}</span>
-              {socialPublication.state === "NOT_YET" && socialPublication.recommendedSocialDate ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />ควรโพสต์ {formatThaiShortDate(socialPublication.recommendedSocialDate)}</span>
+              {socialPublication.state === "NOT_YET" && socialPublication.nextActionDate ? (
+                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />ควรโพสต์ {formatThaiShortDate(socialPublication.nextActionDate)}</span>
               ) : null}
-              {socialPublication.state === "NEXT_ROUND" && socialPublication.nextPostingDate ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />รอบถัดไป {formatThaiShortDate(socialPublication.nextPostingDate)}</span> : null}
+              {socialPublication.state === "NEXT_ROUND" && socialPublication.nextActionDate ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="h-3 w-3" aria-hidden="true" />รอบถัดไป {formatThaiShortDate(socialPublication.nextActionDate)}</span> : null}
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-slate-200/80 px-3 py-2">
               <span className="mr-1 inline-flex items-center gap-1.5 font-semibold text-slate-700">
@@ -409,7 +412,7 @@ export default function JobCard({
         </section>
 
         <section className="flex flex-col gap-2">
-          {primaryAction && !isClosed ? (
+          {primaryAction && !isClosed && !waitingStatus ? (
             <JobPrimaryAction id={primaryAction.id} label={primaryAction.label} onClick={primaryAction.onClick} disabled={primaryAction.disabled} />
           ) : null}
 

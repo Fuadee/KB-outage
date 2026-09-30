@@ -14,8 +14,10 @@ test("does not recommend posting until the eligible window begins", () => {
 });
 test("identifies the recommended day, a remaining round, and a missed final round", () => {
   assert.equal(getSocialPublicationStatus({ outageDate: "2026-09-18", now: new Date("2026-09-11T12:00:00Z") }).state, "DUE_TODAY");
-  const nextRound = getSocialPublicationStatus({ outageDate: "2026-09-25", now: new Date("2026-09-22T12:00:00Z") });
-  assert.equal(nextRound.state, "NEXT_ROUND"); assert.equal(nextRound.nextPostingDate, "2026-09-25");
+  const nextRound = getSocialPublicationStatus({ outageDate: "2026-09-25", now: new Date("2026-09-20T12:00:00Z") });
+  assert.equal(nextRound.state, "NEXT_ROUND"); assert.equal(nextRound.nextPostingDate, "2026-09-21");
+  const missedRound = getSocialPublicationStatus({ outageDate: "2026-09-25", now: new Date("2026-09-22T12:00:00Z") });
+  assert.equal(missedRound.state, "OVERDUE"); assert.equal(missedRound.nextActionDate, "2026-09-21");
   assert.equal(getSocialPublicationStatus({ outageDate: "2026-09-18", now: new Date("2026-09-19T12:00:00Z") }).state, "OVERDUE");
 });
 test("validates posted dates against the outage date using Bangkok calendar dates", () => {

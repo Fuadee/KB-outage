@@ -1132,6 +1132,7 @@ export default function JobsPage() {
                 job={job}
                 readyForExecution={readyView}
                 waitingStatus={waitingStatus}
+                now={queueNow}
                 countdown={countdown}
                 stepper={workflowSteps}
                 primaryAction={isClosed || waitingStatus ? undefined : primaryAction}

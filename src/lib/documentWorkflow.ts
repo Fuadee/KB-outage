@@ -1,5 +1,5 @@
 import { getDistributionReminderStatus } from "./distributionReminder.ts";
-import { formatThaiShortDate, getSocialPublicationStatus } from "./socialPublication.ts";
+import { calendarDateInBangkok, formatThaiShortDate, getSocialPublicationStatus } from "./socialPublication.ts";
 
 export type DocumentWorkflowStage =
   | "DRAFT"
@@ -146,8 +146,8 @@ export function getJobQueueState(
       socialPostedAt: job.social_posted_at,
       now
     });
-    if (social.state === "NOT_YET" && social.recommendedSocialDate) {
-      return { kind: "WAITING_FOR_TIME", reason: "SOCIAL", nextActionDate: social.recommendedSocialDate };
+    if (social.nextActionDate && calendarDateInBangkok(now) < social.nextActionDate) {
+      return { kind: "WAITING_FOR_TIME", reason: "SOCIAL", nextActionDate: social.nextActionDate };
     }
   }
 

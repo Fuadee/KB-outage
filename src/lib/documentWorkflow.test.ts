@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { getSocialPublicationStatus } from "./socialPublication.ts";
+import { getDistributionReminderStatus } from "./distributionReminder.ts";
 import {
   getDocumentWorkflowAction,
   getDocumentWorkflowStage,
@@ -10,6 +12,57 @@ import {
 } from "./documentWorkflow.ts";
 
 const documentReady = { doc_status: "GENERATED" };
+
+const octoberSocialJob = {
+  equipment_code: "KBB01WF-106",
+  outage_date: "2026-10-05",
+  notice_status: "COMPLETED",
+  social_status: "DRAFT"
+};
+
+test("Social next round shares the card date and waits on September 30", () => {
+  const now = new Date("2026-09-30T12:00:00+07:00");
+  const social = getSocialPublicationStatus({ outageDate: octoberSocialJob.outage_date, now });
+  assert.equal(social.state, "NEXT_ROUND");
+  assert.equal(social.nextPostingDate, "2026-10-02");
+  const queue = getJobQueueState(octoberSocialJob, now);
+  assert.deepEqual(queue, { kind: "WAITING_FOR_TIME", reason: "SOCIAL", nextActionDate: social.nextActionDate });
+  assert.equal(isJobActionableNow(octoberSocialJob, now), false);
+  if (queue.kind === "WAITING_FOR_TIME") assert.match(getWaitingForTimeLabel(queue), /รอโพสต์ Social.*02 ต\.ค\. 69/);
+});
+
+for (const date of ["2026-10-02", "2026-10-03"]) {
+  test(`incomplete Social is actionable on ${date} without moving its October 2 due date`, () => {
+    const now = new Date(`${date}T12:00:00+07:00`);
+    assert.equal(getSocialPublicationStatus({ outageDate: octoberSocialJob.outage_date, now }).nextActionDate, "2026-10-02");
+    assert.equal(getJobQueueState(octoberSocialJob, now).kind, "ACTIONABLE_NOW");
+  });
+}
+
+test("Social becomes actionable at Bangkok midnight and stays overdue through later rounds", () => {
+  assert.equal(getJobQueueState(octoberSocialJob, new Date("2026-10-01T16:59:59Z")).kind, "WAITING_FOR_TIME");
+  for (const instant of ["2026-10-01T17:00:00Z", "2026-10-04T12:00:00Z", "2026-10-05T12:00:00Z", "2026-10-06T12:00:00Z"]) {
+    assert.equal(getJobQueueState(octoberSocialJob, new Date(instant)).kind, "ACTIONABLE_NOW");
+  }
+});
+
+test("completed Social leaves both preparation queues and continues to close", () => {
+  const now = new Date("2026-09-30T12:00:00+07:00");
+  for (const completion of [{ social_status: "POSTED" }, { social_posted_at: "2026-09-30T04:00:00Z" }]) {
+    const job = { ...octoberSocialJob, ...completion };
+    assert.equal(getJobQueueState(job, now).kind, "READY_FOR_OPERATION");
+    assert.equal(getDocumentWorkflowAction(job), "CLOSE_JOB");
+    assert.equal(getSocialPublicationStatus({ outageDate: job.outage_date, socialStatus: job.social_status, ...("social_posted_at" in job ? { socialPostedAt: job.social_posted_at } : {}), now }).nextActionDate, null);
+  }
+});
+
+test("notice overdue by two days remains actionable on September 30", () => {
+  const now = new Date("2026-09-30T12:00:00+07:00");
+  const job = { equipment_code: "KBB09WF-110", outage_date: "2026-10-05", notice_status: "SCHEDULED", notice_date: "2026-09-28" };
+  const notice = getDistributionReminderStatus({ outageDate: job.outage_date, noticeDate: job.notice_date, noticeStatus: job.notice_status, now });
+  assert.equal(notice.daysOverdue, 2);
+  assert.equal(getJobQueueState(job, now).kind, "ACTIONABLE_NOW");
+});
 
 test("case A follows every persisted document workflow stage", () => {
   assert.equal(getDocumentWorkflowStage({}), "DRAFT");
@@ -151,7 +204,7 @@ test("scheduled notice enters the action queue on its Bangkok due date and stays
   assert.equal(isJobActionableNow({ ...job, notice_date: null }, new Date("2026-09-29T12:00:00Z")), true);
 });
 
-test("completed notice waits for the existing Social recommendation, then remains actionable", () => {
+test("completed notice follows the recommendation and the next Social round", () => {
   const job = {
     ...documentReady,
     outage_date: "2026-10-12",
@@ -164,7 +217,9 @@ test("completed notice waits for the existing Social recommendation, then remain
   assert.equal(isJobActionableNow(job, new Date("2026-10-02T12:00:00Z")), false);
   assert.equal(isJobActionableNow(job, new Date("2026-10-04T16:59:59Z")), false);
   assert.equal(isJobActionableNow(job, new Date("2026-10-04T17:00:00Z")), true);
-  assert.equal(isJobActionableNow(job, new Date("2026-10-06T12:00:00Z")), true);
+  assert.equal(isJobActionableNow(job, new Date("2026-10-06T12:00:00Z")), false);
+  assert.equal(isJobActionableNow(job, new Date("2026-10-09T12:00:00Z")), true);
+  assert.equal(isJobActionableNow(job, new Date("2026-10-10T12:00:00Z")), true);
   assert.equal(getDocumentWorkflowAction(job), "POST_SOCIAL");
   assert.equal(isJobActionableNow({ ...job, social_status: "POSTED" }), false);
   assert.equal(isReadyForExecution({ ...job, social_status: "POSTED" }), true);
@@ -211,7 +266,7 @@ test("queue resolver separates waiting Social, due Social, ready and closed", ()
     assert.match(getWaitingForTimeLabel(waiting), /รอโพสต์ Social.*05 ต\.ค\. 69/);
   }
   assert.equal(getJobQueueState(job, new Date("2026-10-04T17:00:00Z")).kind, "ACTIONABLE_NOW");
-  assert.equal(getJobQueueState(job, new Date("2026-10-06T12:00:00Z")).kind, "ACTIONABLE_NOW");
+  assert.deepEqual(getJobQueueState(job, new Date("2026-10-06T12:00:00Z")), { kind: "WAITING_FOR_TIME", reason: "SOCIAL", nextActionDate: "2026-10-09" });
   assert.equal(getJobQueueState({ ...job, social_status: "POSTED" }).kind, "READY_FOR_OPERATION");
   assert.equal(getJobQueueState({ ...job, is_closed: true }).kind, "CLOSED");
   assert.equal(getJobQueueState({ notice_status: "COMPLETED", outage_date: null }).kind, "ACTIONABLE_NOW");
