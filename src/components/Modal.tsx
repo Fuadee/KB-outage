@@ -2,6 +2,7 @@
 
 import { type FormEventHandler, type ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { cardDark, titleText } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ type ModalProps = {
   onSubmit?: FormEventHandler<HTMLFormElement>;
   panelClassName?: string;
   bodyClassName?: string;
+  closeButtonIcon?: boolean;
 };
 
 // Keep background isolation until the last modal closes (including nested
@@ -60,7 +62,8 @@ export default function Modal({
   footer,
   onSubmit,
   panelClassName,
-  bodyClassName
+  bodyClassName,
+  closeButtonIcon = false
 }: ModalProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -110,9 +113,12 @@ export default function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            aria-label={closeButtonIcon ? "ปิด" : undefined}
+            className={closeButtonIcon
+              ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
+              : "rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"}
           >
-            ปิด
+            {closeButtonIcon ? <X className="h-5 w-5" aria-hidden="true" /> : "ปิด"}
           </button>
         </div>
         {onSubmit ? (

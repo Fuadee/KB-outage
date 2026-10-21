@@ -6,7 +6,6 @@ import {
   isDirectDistributionRoute
 } from "@/lib/distributionWorkflow";
 import {
-  findActivePersonForDepartment,
   findPersonById,
   normalizePersonId
 } from "@/lib/peopleServer";
@@ -114,26 +113,17 @@ export async function PATCH(
     let distributorName: string | null = null;
     let distributorPersonId = completedByPersonId;
     const preservingExistingPerson =
+      distributionWorkflow.completed &&
       Boolean(completedByPersonId) &&
       completedByPersonId === current.notice_by_person_id;
 
-    if (preservingExistingPerson) {
-      const existingDistributor = await findPersonById(
-        admin,
-        completedByPersonId as string
-      );
-      if (
-        existingDistributor?.department === distributionWorkflow.responsibleUnit
-      ) {
-        distributorName = existingDistributor.full_name;
+    if (completedByPersonId) {
+      const distributor = await findPersonById(admin, completedByPersonId);
+      if (distributor && (preservingExistingPerson || distributor.is_active)) {
+        distributorName = preservingExistingPerson
+          ? current.notice_by || distributor.full_name
+          : distributor.full_name;
       }
-    } else if (completedByPersonId && distributionWorkflow.responsibleUnit) {
-      const distributor = await findActivePersonForDepartment(
-        admin,
-        completedByPersonId,
-        distributionWorkflow.responsibleUnit
-      );
-      if (distributor) distributorName = distributor.full_name;
     } else if (
       !completedByPersonId &&
       !current.notice_by_person_id &&
@@ -149,7 +139,7 @@ export async function PATCH(
         {
           ok: false,
           error:
-            "ผู้แจกจริงต้องเป็นบุคลากรที่เปิดใช้งานอยู่และสังกัดตรงกับหน่วยงานของงาน"
+            "กรุณาเลือกผู้แจกจริงจากรายชื่อบุคลากรที่เปิดใช้งานอยู่"
         },
         { status: 400 }
       );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { History } from "lucide-react";
+import { getDocumentReceiptDetail, type DocumentReceiptSource } from "@/lib/documentReceipt";
 
 type WorkflowAudit = {
   id: string;
@@ -9,6 +10,7 @@ type WorkflowAudit = {
   to_step: string;
   reason: string;
   created_at: string;
+  before_state?: DocumentReceiptSource | null;
 };
 
 type Props = {
@@ -79,6 +81,12 @@ export default function WorkflowAuditHistory({ jobId, refreshKey = 0 }: Props) {
                 })}
               </p>
               <p>เหตุผล: {item.reason}</p>
+              {item.before_state?.document_received_at ? (
+                <details className="mt-1">
+                  <summary className="cursor-pointer">ข้อมูลรับเอกสารก่อนย้อน</summary>
+                  <p>{getDocumentReceiptDetail(item.before_state)}</p>
+                </details>
+              ) : null}
             </li>
           ))}
         </ol>

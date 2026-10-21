@@ -10,6 +10,7 @@ import {
   useState
 } from "react";
 import JobCard, { type JobAction } from "@/components/job/JobCard";
+import { getDocumentReceiptDetail } from "@/lib/documentReceipt";
 import DocumentWorkflowModal, {
   type DocumentWorkflowModalMode
 } from "@/components/job/DocumentWorkflowModal";
@@ -27,7 +28,7 @@ import {
   setNakhonNotified,
   setNakhonNotRequired
 } from "@/lib/jobsRepo";
-import { getNoticeDistributorDisplayName } from "@/lib/people";
+import { getNoticeDistributorDisplayName, getNoticeDistributorDisplayDepartment } from "@/lib/people";
 import {
   closeOutageJob,
   normalizeJobId
@@ -286,14 +287,20 @@ export default function JobsPage() {
   const docAreaDetailRef = useRef<HTMLTextAreaElement>(null);
   const mapLinkRef = useRef<HTMLInputElement>(null);
 
-  const fetchJobs = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchJobs = async ({ background = false }: { background?: boolean } = {}) => {
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     setActionError(null);
     const { data, error: fetchError } = await listJobs();
     if (fetchError) {
-      setError(fetchError.message);
-      setJobs([]);
+      if (background) {
+        setActionError("บันทึกผลแล้ว แต่โหลดรายการล่าสุดไม่สำเร็จ กรุณาลองใหม่ภายหลัง");
+      } else {
+        setError(fetchError.message);
+        setJobs([]);
+      }
     } else {
       const nextJobs = data ?? [];
       setJobs(nextJobs);
@@ -311,7 +318,7 @@ export default function JobsPage() {
         console.warn("Unable to load GIS issue counts", countsError);
       }
     }
-    setLoading(false);
+    if (!background) setLoading(false);
   };
 
   useEffect(() => {
@@ -846,6 +853,10 @@ export default function JobsPage() {
     setNoticeJob((prev) =>
       prev?.id === jobId ? { ...prev, ...patch } : prev
     );
+    if (patch.notice_status === "COMPLETED") {
+      setToast({ message: "บันทึกผลการแจกหนังสือแล้ว", tone: "success" });
+      void fetchJobs({ background: true });
+    }
   };
 
   const handleDocumentJobUpdate = (patch: Partial<OutageJob>) => {
@@ -1036,7 +1047,7 @@ export default function JobsPage() {
             if (job.document_received_at) {
               secondaryActions.push({
                 id: "receive_document",
-                label: "แก้ไขข้อมูลการรับเอกสาร",
+                label: "ดูข้อมูลการรับเอกสาร",
                 onClick: () => openDocumentModal(job, "receive")
               });
             }
@@ -1109,15 +1120,15 @@ export default function JobsPage() {
             }
             if (isNotRequired) tertiaryItems.push("ไม่ต้องแจ้งศูนย์นคร");
             if (job.document_received_at) {
-              tertiaryItems.push(`รับเอกสารแล้ว · ${job.document_received_by ?? "-"}`);
+              tertiaryItems.push(getDocumentReceiptDetail(job));
             }
-            if (job.document_delivered_at) {
-              tertiaryItems.push(`ส่งเอกสารแล้ว · ${job.document_delivered_by ?? "-"}`);
+            if (job.document_delivered_at && job.document_delivery_sender_status !== "UNKNOWN") {
+              tertiaryItems.push(`ส่งเอกสารแล้ว · ${job.document_delivered_by ?? "-"}${job.document_delivered_by_department ? ` · ${job.document_delivered_by_department}` : ""}`);
             }
             if (socialStatus === "POSTED") tertiaryItems.push("โพสต์ Social แล้ว");
             if (noticeCompleted) {
               tertiaryItems.push(
-                `แจกหนังสือแล้ว · ${getNoticeDistributorDisplayName(job) ?? "-"}`
+                `แจกหนังสือแล้ว · ${getNoticeDistributorDisplayName(job) ?? "-"}${getNoticeDistributorDisplayDepartment(job) ? ` · ${getNoticeDistributorDisplayDepartment(job)}` : ""}`
               );
             } else if (
               noticeScheduled &&

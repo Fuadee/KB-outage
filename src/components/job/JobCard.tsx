@@ -1,3 +1,4 @@
+import DocumentDeliveryUnknownNotice from "@/components/job/DocumentDeliveryUnknownNotice";
 import type { ReactElement } from "react";
 import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Megaphone, MapPin, TriangleAlert, Users } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
@@ -431,6 +432,9 @@ export default function JobCard({
             </Button>
           ))}
 
+          {job.document_delivered_at && job.document_delivery_sender_status === "UNKNOWN" ? (
+            <DocumentDeliveryUnknownNotice reason={job.document_delivery_unknown_reason} />
+          ) : null}
           {tertiaryItems.length > 0 ? (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {tertiaryItems.map((item) => (

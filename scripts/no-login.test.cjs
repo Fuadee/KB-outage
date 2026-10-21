@@ -46,7 +46,12 @@ function harness(legacyFlag) {
       const query = {
         select() { return query; }, order() { return query; }, limit() { return query; },
         eq(key, value) { filters.push(row => row[key] === value); return query; },
-        or(expression) { assert.equal(expression, 'social_status.eq.POSTED,social_posted_at.not.is.null'); socialFilter = true; return query; },
+        is(key, value) { filters.push(row => value === null ? row[key] == null : row[key] === value); return query; },
+        or(expression) {
+          if (expression === 'doc_status.eq.GENERATED,doc_generated_at.not.is.null') filters.push(row => row.doc_status === 'GENERATED' || row.doc_generated_at);
+          else { assert.equal(expression, 'social_status.eq.POSTED,social_posted_at.not.is.null'); socialFilter = true; }
+          return query;
+        },
         insert(value) { operation = 'insert'; patch = value; return query; },
         update(value) { operation = 'update'; patch = value; return query; },
         delete() { operation = 'delete'; return query; },
@@ -154,10 +159,12 @@ for (const flag of [undefined, 'true', 'false']) {
       await ok('jobs/[id]', 'PATCH', { ...jobInput, equipment_code: 'UPDATED' });
       assert.equal(h.tables.outage_jobs[0].equipment_code, 'UPDATED');
       h.tables.outage_jobs[0].doc_status = 'GENERATED';
-      await ok('jobs/[id]/document-workflow', 'PATCH', { action: 'receive', occurred_at: '2026-09-12T01:00:00Z', operator: 'Receiver' });
-      await ok('jobs/[id]/document-workflow', 'PATCH', { action: 'deliver', occurred_at: '2026-09-12T02:00:00Z', operator: 'Courier' });
-      assert.equal(h.tables.outage_jobs[0].document_received_by, 'Receiver');
-      assert.equal(h.tables.outage_jobs[0].document_delivered_by, 'Courier');
+      await ok('jobs/[id]/document-workflow', 'PATCH', { action: 'receive' });
+      await ok('jobs/[id]/document-workflow', 'PATCH', { action: 'deliver', occurred_at: h.tables.outage_jobs[0].document_received_at, person_id: constructionPersonId });
+      assert.equal(h.tables.outage_jobs[0].document_received_by, null);
+      assert.equal(h.tables.outage_jobs[0].document_delivered_by, 'บุคลากรก่อสร้าง');
+      assert.equal(h.tables.outage_jobs[0].document_delivered_by_person_id, constructionPersonId);
+      assert.equal(h.tables.outage_jobs[0].document_delivered_by_department, 'แผนกก่อสร้าง');
       await ok('jobs/notice-schedule', 'POST', { jobId: id, notice_date: '2026-09-12' });
       await ok('jobs/[id]/notice-completion', 'PATCH', { completed_at: '2026-09-12T03:00:00Z', completed_by_person_id: personId });
       assert.equal(h.tables.outage_jobs[0].notice_by, 'บุคลากรทดสอบ');
@@ -202,47 +209,48 @@ test('invalid data, workflow states, and database errors still fail without logi
   assert.equal((await h.call('jobs/[id]/workflow-rollback', 'POST', { target_step: 'DOCUMENT_CREATED', reason: 'test' })).status, 500);
 });
 
-test('actual notice distributor strictly follows each job department', async () => {
-  const scenarios = [
-    {
-      department: 'แผนกก่อสร้าง',
-      supervisorId: constructionPersonId,
-      validDistributorId: constructionPersonId,
-      invalidDistributorId: personId,
-      expectedName: 'บุคลากรก่อสร้าง'
-    },
-    {
-      department: 'กฟส.อ่าวนาง',
-      supervisorId: personId,
-      validDistributorId: aoNangPersonId,
-      invalidDistributorId: personId,
-      expectedName: 'บุคลากรอ่าวนาง'
-    }
+test('every job department accepts active notice distributors from every department without changing assignment', async () => {
+  const departments = [
+    { department: 'แผนกปฏิบัติการ', supervisorId: personId },
+    { department: 'แผนกก่อสร้าง', supervisorId: constructionPersonId },
+    { department: 'กฟส.อ่าวนาง', supervisorId: aoNangPersonId }
   ];
-
-  for (const scenario of scenarios) {
-    const h = harness();
-    const createResponse = await h.call('jobs', 'POST', {
-      ...jobInput,
-      responsible_unit: scenario.department,
-      work_supervisor_person_id: scenario.supervisorId
-    });
-    assert.equal(createResponse.status, 201);
-    h.tables.outage_jobs[0].document_delivered_at = '2026-09-12T02:00:00Z';
-
-    const rejected = await h.call('jobs/[id]/notice-completion', 'PATCH', {
-      completed_at: '2026-09-12T03:00:00Z',
-      completed_by_person_id: scenario.invalidDistributorId
-    });
-    assert.equal(rejected.status, 400);
-
-    const accepted = await h.call('jobs/[id]/notice-completion', 'PATCH', {
-      completed_at: '2026-09-12T03:00:00Z',
-      completed_by_person_id: scenario.validDistributorId
-    });
-    assert.equal(accepted.status, 200);
-    assert.equal(h.tables.outage_jobs[0].notice_by, scenario.expectedName);
+  for (const scenario of departments) {
+    for (const distributorId of [personId, constructionPersonId, aoNangPersonId]) {
+      const h = harness();
+      assert.equal((await h.call('jobs', 'POST', { ...jobInput, responsible_unit: scenario.department, work_supervisor_person_id: scenario.supervisorId })).status, 201);
+      Object.assign(h.tables.outage_jobs[0], { document_delivered_at: '2026-09-12T02:00:00Z', notice_status: 'SCHEDULED', notice_date: '2026-09-12' });
+      const body = { completed_at: '2026-09-12T03:00:00Z', completed_by_person_id: distributorId };
+      for (const invalidId of [null, 'พิมพ์ชื่อเอง', '00000000-0000-4000-8000-000000000099']) {
+        assert.equal((await h.call('jobs/[id]/notice-completion', 'PATCH', { ...body, completed_by_person_id: invalidId })).status, 400);
+      }
+      const selected = h.tables.people.find(person => person.id === distributorId);
+      selected.is_active = false;
+      assert.equal((await h.call('jobs/[id]/notice-completion', 'PATCH', body)).status, 400);
+      selected.is_active = true;
+      assert.equal((await h.call('jobs/[id]/notice-completion', 'PATCH', body)).status, 200);
+      assert.equal(h.tables.outage_jobs[0].notice_by, selected.full_name);
+      assert.equal(h.tables.outage_jobs[0].notice_by_person_id, distributorId);
+      assert.equal(h.tables.outage_jobs[0].responsible_unit, scenario.department);
+      assert.equal(h.tables.outage_jobs[0].notice_status, 'COMPLETED');
+    }
   }
+});
+
+test('cross-department distributor selection still requires delivery, operations scheduling and an open assigned job', async () => {
+  const h = harness();
+  h.tables.outage_jobs.push({ id, responsible_unit: 'แผนกปฏิบัติการ', is_closed: false });
+  const body = { completed_at: '2026-09-12T03:00:00Z', completed_by_person_id: constructionPersonId };
+  const complete = () => h.call('jobs/[id]/notice-completion', 'PATCH', body);
+  assert.equal((await complete()).status, 409);
+  h.tables.outage_jobs[0].document_delivered_at = '2026-09-12T02:00:00Z';
+  assert.equal((await complete()).status, 409);
+  h.tables.outage_jobs[0].notice_status = 'SCHEDULED';
+  h.tables.outage_jobs[0].responsible_unit = null;
+  assert.equal((await complete()).status, 409);
+  h.tables.outage_jobs[0].responsible_unit = 'แผนกปฏิบัติการ';
+  h.tables.outage_jobs[0].is_closed = true;
+  assert.equal((await complete()).status, 409);
 });
 
 test('legacy and inactive notice distributors remain preservable', async () => {
@@ -266,6 +274,8 @@ test('legacy and inactive notice distributors remain preservable', async () => {
 
   const inactive = harness();
   inactive.tables.people[0].is_active = false;
+  inactive.tables.people[0].department = 'กฟส.อ่าวนาง';
+  inactive.tables.people[0].full_name = 'ชื่อใหม่หลังแจก';
   inactive.tables.outage_jobs.push({
     id,
     responsible_unit: 'แผนกปฏิบัติการ',

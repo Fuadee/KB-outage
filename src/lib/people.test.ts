@@ -3,6 +3,7 @@ import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getNoticeDistributorDisplayName,
+  getNoticeDistributorDisplayDepartment,
   getPersonReference,
   getWorkSupervisorDisplayName,
   isWorkSupervisorDepartmentEligible,
@@ -83,7 +84,7 @@ function peopleClient(record: PersonReference | null): SupabaseClient {
   return { from: () => query } as unknown as SupabaseClient;
 }
 
-test("notice distributors must be active and strictly match every job department", async () => {
+test("the department-specific helper retains its existing filtering behavior", async () => {
   const activePerson = { ...person, is_active: true };
   const constructionPerson: PersonReference = {
     ...activePerson,
@@ -141,6 +142,13 @@ test("notice distributors must be active and strictly match every job department
     ),
     null
   );
+});
+
+test("notice display reads the actual distributor's department independently of job assignment", () => {
+  assert.equal(getNoticeDistributorDisplayDepartment({ notice_by_person_id: person.id, notice_by_person: person }), person.department);
+  assert.equal(getNoticeDistributorDisplayDepartment({ notice_by_person_id: person.id, notice_by_person: [person] }), person.department);
+  assert.equal(getNoticeDistributorDisplayDepartment({ notice_by_person_id: null, notice_by_person: person }), null);
+  assert.equal(getNoticeDistributorDisplayDepartment({}), null);
 });
 
 test("work-supervisor eligibility applies the Ao Nang all-departments exception", () => {

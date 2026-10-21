@@ -1,5 +1,6 @@
 "use client";
 
+import { getDocumentReceiptDetail } from "@/lib/documentReceipt";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Badge from "@/components/ui/Badge";
@@ -47,6 +48,8 @@ type DashboardJob = {
   document_received_by: string | null;
   document_delivered_at: string | null;
   document_delivered_by: string | null;
+  document_delivery_sender_status?: "PERSON" | "UNKNOWN" | null;
+  document_delivery_unknown_reason?: string | null;
   document_delivery_note: string | null;
   social_status: string | null;
   social_posted_at: string | null;
@@ -94,10 +97,10 @@ async function fetchDashboardJobs() {
 function getStageDetail(job: DashboardJob): string | null {
   if (job.step === "WAITING_DOCUMENT") return "รอรับเอกสารฉบับจริง";
   if (job.step === "WAITING_DELIVERY") {
-    return `รับโดย ${job.document_received_by ?? "ไม่ระบุ"}`;
+    return job.document_received_by ? `รับโดย ${job.document_received_by}` : getDocumentReceiptDetail(job);
   }
   if (job.step === "READY_FOR_NOTICE") {
-    return `ส่งโดย ${job.document_delivered_by ?? "ไม่ระบุ"}`;
+    return job.document_delivery_sender_status === "UNKNOWN" ? `⚠ ไม่ทราบชื่อผู้ส่ง · ${job.document_delivery_unknown_reason ?? ""}` : `ส่งโดย ${job.document_delivered_by ?? "ไม่ระบุ"}`;
   }
   if (job.step === "NOTICE_SCHEDULED") return "กำหนดแจกแล้ว · รอแจกจริง";
   if (job.step === "READY_FOR_SOCIAL") return "แจกหนังสือแล้ว · รอ Social";
@@ -218,7 +221,7 @@ export default function DashboardPage() {
                         <span className="min-w-0">
                           <span className="block truncate">{job.equipment_code ?? "—"}</span>
                           {getStageDetail(job) ? (
-                            <span className="mt-0.5 block truncate text-[10px] font-normal text-slate-600">
+                            <span className={`mt-0.5 block text-[10px] font-normal ${job.step === "READY_FOR_NOTICE" && job.document_delivery_sender_status === "UNKNOWN" ? "text-orange-700" : "truncate text-slate-600"}`}>
                               {getStageDetail(job)}
                             </span>
                           ) : null}

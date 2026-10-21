@@ -45,6 +45,8 @@ export async function GET(request: Request) {
           "document_received_by",
           "document_delivered_at",
           "document_delivered_by",
+          "document_delivery_sender_status",
+          "document_delivery_unknown_reason",
           "document_delivery_note",
           "social_status",
           "social_posted_at",

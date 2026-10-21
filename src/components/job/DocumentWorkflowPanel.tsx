@@ -1,3 +1,6 @@
+import DocumentDeliveryUnknownNotice from "@/components/job/DocumentDeliveryUnknownNotice";
+import { getDocumentDeliverySenderLabel } from "@/lib/documentDelivery";
+import { getDocumentReceiptDetail } from "@/lib/documentReceipt";
 import { Check, Clock3 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import type { OutageJob } from "@/lib/jobsRepo";
@@ -11,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getAvailableWorkflowRollbackOptions } from "@/lib/workflowRollback";
 import { getDistributionWorkflow } from "@/lib/distributionWorkflow";
-import { getNoticeDistributorDisplayName } from "@/lib/people";
+import { getNoticeDistributorDisplayName, getNoticeDistributorDisplayDepartment } from "@/lib/people";
 
 type Props = {
   job: OutageJob;
@@ -55,16 +58,14 @@ export default function DocumentWorkflowPanel({
       id: "received",
       label: "รับเอกสาร",
       done: Boolean(job.document_received_at) || noticeCompleted || isSocialPosted(job),
-      detail: job.document_received_at
-        ? `${formatDate(job.document_received_at)} · ${job.document_received_by ?? "-"}`
-        : "รอรับเอกสารฉบับจริง"
+      detail: getDocumentReceiptDetail(job)
     },
     {
       id: "delivered",
       label: "ส่งเอกสาร",
       done: Boolean(job.document_delivered_at) || noticeCompleted || isSocialPosted(job),
       detail: job.document_delivered_at
-        ? `${formatDate(job.document_delivered_at)} · ${job.document_delivered_by ?? "-"}`
+        ? `${formatDate(job.document_delivered_at)} · ${getDocumentDeliverySenderLabel(job)}`
         : "รอนำเอกสารไปส่ง"
     },
     {
@@ -72,7 +73,7 @@ export default function DocumentWorkflowPanel({
       label: "แจกหนังสือ",
       done: noticeCompleted || isSocialPosted(job),
       detail: noticeCompleted
-        ? `${formatDate(job.notice_completed_at)} · ${getNoticeDistributorDisplayName(job) ?? "ไม่ระบุผู้แจกจริง"}`
+        ? `${formatDate(job.notice_completed_at)} · ${getNoticeDistributorDisplayName(job) ?? "ไม่ระบุผู้แจกจริง"}${getNoticeDistributorDisplayDepartment(job) ? ` · ${getNoticeDistributorDisplayDepartment(job)}` : ""}`
         : isNoticeScheduled(job) && job.notice_date
           && distributionWorkflow.route === "OPERATIONS"
           ? `กำหนดแจก ${new Date(`${job.notice_date}T00:00:00`).toLocaleDateString("th-TH", { dateStyle: "medium" })} · รอแจก`
@@ -137,7 +138,12 @@ export default function DocumentWorkflowPanel({
                 </span>
                 <span className="text-sm font-semibold text-slate-800">{item.label}</span>
               </div>
-              <p className="mt-2 text-xs leading-5 text-slate-600">{item.detail}</p>
+              {item.id === "delivered" && job.document_delivered_at && job.document_delivery_sender_status === "UNKNOWN" ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-slate-600">{formatDate(job.document_delivered_at)}</p>
+                  <DocumentDeliveryUnknownNotice reason={job.document_delivery_unknown_reason} />
+                </div>
+              ) : <p className="mt-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
             </li>
           );
         })}
@@ -168,7 +174,7 @@ export default function DocumentWorkflowPanel({
           ) : null}
           {job.document_received_at ? (
             <Button type="button" variant="secondary" onClick={onReceive}>
-              แก้ไขการรับเอกสาร
+              ดูข้อมูลการรับเอกสาร
             </Button>
           ) : null}
           {job.document_delivered_at ? (

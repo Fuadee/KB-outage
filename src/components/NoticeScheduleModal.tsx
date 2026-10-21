@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "./Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -58,9 +58,11 @@ export default function NoticeScheduleModal({
     useState<PersonReference | null>(() =>
       getPersonReference(job?.notice_by_person)
     );
+  const [distributorChanged, setDistributorChanged] = useState(false);
   const [errors, setErrors] = useState<NoticeScheduleErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const completionInFlight = useRef(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [deliverySummary, setDeliverySummary] = useState<{
     total: number;
@@ -103,12 +105,13 @@ export default function NoticeScheduleModal({
     : false;
   const isCompleted = distributionWorkflow?.completed ?? false;
   const legacyCompletedBy =
-    job?.notice_by_person_id || !job?.notice_by ? null : job.notice_by;
-  const showMessagePreview =
-    Boolean(job) && !isCompleted && distributionWorkflow?.route !== "UNASSIGNED";
+    distributorChanged || job?.notice_by_person_id || !job?.notice_by ? null : job.notice_by;
   const showCompletion =
     Boolean(job) &&
     (isCompleted || isDirectFlow || (isOperationsFlow && noticeScheduled));
+  const isCompletionOnly = showCompletion;
+  const showMessagePreview =
+    Boolean(job) && !isCompletionOnly && !isCompleted && distributionWorkflow?.route !== "UNASSIGNED";
 
   const fetchDeliverySummary = useCallback(async () => {
     if (!jobId) return;
@@ -214,7 +217,7 @@ export default function NoticeScheduleModal({
   };
 
   const handleComplete = async () => {
-    if (!job) return;
+    if (!job || completionInFlight.current || isSaving) return;
     const completedDate = new Date(completedAt);
     if (
       !completedAt ||
@@ -225,6 +228,7 @@ export default function NoticeScheduleModal({
       return;
     }
 
+    completionInFlight.current = true;
     setIsCompleting(true);
     setErrors({});
     try {
@@ -237,11 +241,11 @@ export default function NoticeScheduleModal({
         })
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.ok) {
+      if (!response.ok || !result?.ok || result?.job?.notice_status !== "COMPLETED" || !result.job.notice_completed_at) {
         throw new Error(result?.error ?? "บันทึกผลการแจกหนังสือไม่สำเร็จ");
       }
-      onJobUpdate?.(job.id, result.job ?? {});
-      setToastMessage("บันทึกว่าแจกหนังสือแล้ว");
+      onJobUpdate?.(job.id, result.job);
+      onOpenChange(false);
     } catch (error) {
       setErrors({
         completion:
@@ -250,6 +254,7 @@ export default function NoticeScheduleModal({
             : "บันทึกผลการแจกหนังสือไม่สำเร็จ"
       });
     } finally {
+      completionInFlight.current = false;
       setIsCompleting(false);
     }
   };
@@ -293,9 +298,21 @@ export default function NoticeScheduleModal({
   return (
     <Modal
       isOpen={open}
-      title={distributionWorkflow?.modalTitle ?? "การแจกหนังสือดับไฟ"}
-      onClose={() => onOpenChange(false)}
-      panelClassName="max-w-3xl"
+      title={isCompletionOnly ? "บันทึกผลการแจกหนังสือ" : distributionWorkflow?.modalTitle ?? "การแจกหนังสือดับไฟ"}
+      onClose={() => { if (!completionInFlight.current) onOpenChange(false); }}
+      panelClassName={isCompletionOnly ? "max-w-xl" : "max-w-3xl"}
+      footer={isCompletionOnly ? (
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={isCompleting} className="w-full sm:w-auto">
+            ยกเลิก
+          </Button>
+          {job && showCompletion ? (
+            <Button type="button" onClick={() => void handleComplete()} disabled={isSaving || isCompleting} className="w-full sm:w-auto">
+              {isCompleting ? "กำลังบันทึก..." : isNoticeCompleted(job) ? "แก้ไขผลการแจกจริง" : "ยืนยันว่าแจกหนังสือแล้ว"}
+            </Button>
+          ) : null}
+        </div>
+      ) : undefined}
     >
       <div className="flex flex-col gap-4">
         {toastMessage ? (
@@ -303,7 +320,7 @@ export default function NoticeScheduleModal({
             {toastMessage}
           </div>
         ) : null}
-        {isOperationsFlow && !isCompleted ? (
+        {isOperationsFlow && !isCompleted && !isCompletionOnly ? (
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             วันที่จะไปดำเนินการแจ้ง
             <Input
@@ -317,7 +334,14 @@ export default function NoticeScheduleModal({
             ) : null}
           </label>
         ) : null}
-        {showMessagePreview ? (
+        {isCompletionOnly ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            หน่วยงานรับผิดชอบตามมอบหมายงาน:{" "}
+            <strong className="whitespace-nowrap">
+              {distributionWorkflow?.responsibleUnit}{isOperationsFlow ? ` · ${distributionWorkflow?.assignmentLabel}` : ""}
+            </strong>
+          </div>
+        ) : showMessagePreview ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
             ผู้รับผิดชอบตอนมอบหมายงาน:{" "}
             <strong>{distributionWorkflow?.assignmentLabel}</strong>
@@ -355,11 +379,12 @@ export default function NoticeScheduleModal({
             {errors.submit}
           </div>
         ) : null}
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+        {!isCompletionOnly ? <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
           <Button
             type="button"
             variant="secondary"
             onClick={() => onOpenChange(false)}
+            disabled={isCompleting}
             className="w-full sm:w-auto"
           >
             ยกเลิก
@@ -375,7 +400,7 @@ export default function NoticeScheduleModal({
               คัดลอกข้อความ
             </Button>
           ) : null}
-          {isOperationsFlow && !isCompleted ? (
+          {isOperationsFlow && !isCompleted && !isCompletionOnly ? (
             <Button
               type="button"
               onClick={() => void handleSubmit()}
@@ -385,10 +410,10 @@ export default function NoticeScheduleModal({
               {isSaving ? "กำลังบันทึก..." : "บันทึกและคัดลอกข้อความ"}
             </Button>
           ) : null}
-        </div>
+        </div> : null}
         {job && showCompletion ? (
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-            <div>
+          <section className={isCompletionOnly ? "space-y-4" : "space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4"}>
+            {!isCompletionOnly ? <div>
               <h3 className="text-sm font-semibold text-slate-900">
                 ผลการแจกหนังสือจริง
               </h3>
@@ -397,8 +422,8 @@ export default function NoticeScheduleModal({
                   ? "กำหนดการไม่ถือว่าแจกเสร็จ ให้ยืนยันส่วนนี้เมื่อทราบผู้ที่ไปแจกจริงแล้ว"
                   : "ยืนยันส่วนนี้เมื่อทราบวันเวลาและผู้ที่แจกจริงแล้ว"}
               </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            </div> : null}
+            <div className="grid items-start gap-3 sm:grid-cols-2">
               <label className="grid gap-1.5 text-sm font-medium text-slate-700">
                 วันและเวลาที่แจกจริง
                 <Input
@@ -410,15 +435,23 @@ export default function NoticeScheduleModal({
               <label className="grid gap-1.5 text-sm font-medium text-slate-700">
                 ผู้แจกจริง
                 <PersonSelect
-                  department={distributionWorkflow?.responsibleUnit ?? ""}
+                  department=""
+                  includeAllDepartments
+                  showDepartment
                   value={completedByPerson?.id ?? null}
                   selectedPerson={completedByPerson}
                   legacyName={legacyCompletedBy}
-                  onChange={setCompletedByPerson}
+                  onChange={(person) => {
+                    setCompletedByPerson(person);
+                    setDistributorChanged(true);
+                  }}
                   required
                   placeholder="ค้นหาและเลือกผู้แจกจริง"
-                  emptyMessage="ยังไม่มีรายชื่อบุคลากรในหน่วยงานนี้"
+                  emptyMessage="ไม่พบบุคลากรที่ใช้งานอยู่ กรุณาเพิ่มบุคลากรในหน้า /people"
                 />
+                {completedByPerson ? (
+                  <span className="text-xs font-normal text-slate-500">สังกัด: {completedByPerson.department}</span>
+                ) : null}
               </label>
             </div>
             {errors.completion ? (
@@ -434,7 +467,7 @@ export default function NoticeScheduleModal({
               >
                 {isNoticeCompleted(job) ? "แจกหนังสือแล้ว" : "สถานะ: รอแจก"}
               </span>
-              <Button
+              {!isCompletionOnly ? <Button
                 type="button"
                 onClick={() => void handleComplete()}
                 disabled={isSaving || isCompleting}
@@ -445,11 +478,11 @@ export default function NoticeScheduleModal({
                   : isNoticeCompleted(job)
                     ? "แก้ไขผลการแจกจริง"
                     : "ยืนยันว่าแจกหนังสือแล้ว"}
-              </Button>
+              </Button> : null}
             </div>
           </section>
         ) : null}
-        {job && isNoticeScheduled(job) ? (
+        {job && !isCompletionOnly && isNoticeScheduled(job) ? (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-900">

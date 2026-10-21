@@ -155,7 +155,7 @@ test("preview and both copy actions share the same builder output", () => {
   assert.match(completionRoute, /notice_status: "COMPLETED"/);
   assert.match(completionRoute, /notice_by: distributorName/);
   assert.match(completionRoute, /notice_by_person_id: distributorPersonId/);
-  assert.match(completionRoute, /findActivePersonForDepartment/);
+  assert.match(completionRoute, /findPersonById\(admin, completedByPersonId\)/);
   assert.match(completionRoute, /isDirectDistributionRoute/);
   assert.match(modal, /isOperationsFlow && !isCompleted/);
   assert.match(modal, /isDirectFlow/);

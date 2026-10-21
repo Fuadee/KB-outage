@@ -153,7 +153,7 @@ test("people master supports search, department filters, and soft activation", (
   assert.doesNotMatch(peopleMigration, /role|roles|junction/i);
 });
 
-test("person selectors filter distributors strictly while Ao Nang supervisors see all departments", () => {
+test("notice distributors see all departments while supervisor eligibility stays unchanged", () => {
   assert.match(personSelect, /active: "true"/);
   assert.match(personSelect, /if \(!includeAllDepartments\) params\.set\("department", department\)/);
   assert.match(newPage, /responsibleUnit === AONANG_RESPONSIBLE_UNIT/);
@@ -161,10 +161,11 @@ test("person selectors filter distributors strictly while Ao Nang supervisors se
   assert.match(newPage, /isWorkSupervisorDepartmentEligible/);
   assert.match(editPage, /isWorkSupervisorDepartmentEligible/);
   assert.match(newPage, /setWorkSupervisorPerson\(null\)/);
-  assert.match(noticeModal, /department=\{distributionWorkflow\?\.responsibleUnit \?\? ""\}/);
-  assert.match(noticeModal, /ยังไม่มีรายชื่อบุคลากรในหน่วยงานนี้/);
+  assert.match(noticeModal, /department=""\s+includeAllDepartments\s+showDepartment/);
   assert.match(noticeModal, /completed_by_person_id/);
-  assert.match(noticeCompletionRoute, /findActivePersonForDepartment/);
-  assert.match(noticeCompletionRoute, /distributionWorkflow\.responsibleUnit/);
+  assert.match(noticeCompletionRoute, /findPersonById\(admin, completedByPersonId\)/);
+  assert.match(noticeCompletionRoute, /distributor\.is_active/);
+  assert.doesNotMatch(noticeCompletionRoute, /findActivePersonForDepartment/);
+  assert.match(noticeCompletionRoute, /distributionWorkflow\.route === "UNASSIGNED"/);
   assert.doesNotMatch(noticeModal, /placeholder="ชื่อผู้ที่ดำเนินการจริง"/);
 });

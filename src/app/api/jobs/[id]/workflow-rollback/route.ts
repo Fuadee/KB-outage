@@ -97,7 +97,7 @@ export async function GET(
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("outage_job_workflow_audit")
-      .select("id, job_id, action, from_step, to_step, reason, created_at")
+      .select("id, job_id, action, from_step, to_step, reason, created_at, before_state")
       .eq("job_id", jobId)
       .order("created_at", { ascending: false })
       .limit(20);

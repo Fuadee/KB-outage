@@ -119,6 +119,41 @@ Placeholders list:
 
 The default flow is `Draft → Document ready → Received document → Document delivered → Social posted → Notice scheduled`. Receipt and delivery timestamps/operator names are stored in `outage_jobs`, so they survive refreshes and server restarts. If Social must be posted before physical delivery for a business exception, the preview modal shows a warning and requires explicit confirmation. Existing jobs already at Social/Notice remain at their completed stage even when the new nullable document fields are empty.
 
+## Document Receipt Confirmation
+
+ขั้นตอนรับเอกสารใช้ Popup “ยืนยันการรับเอกสาร” เพื่อยืนยันว่า “ได้รับเอกสารและจัดเข้าแฟ้มงานเรียบร้อยแล้ว” ไม่ต้องกรอกชื่อหรือวันเวลา ส่งคำขอเพียง `{ action: "receive" }` ไปยัง API เดิม
+
+- API บันทึกเวลาปัจจุบันจาก Server ใน `document_received_at` และใช้ `document_received_by=NULL` สำหรับรายการใหม่ โดยไม่ใช้ชื่อหรือเวลาจาก Client
+- รายการที่รับแล้วจะคืนข้อมูลเดิมโดยไม่เขียนทับเวลา/ชื่อ รวมถึงคำขอที่เข้าพร้อมกัน ใช้เงื่อนไข Update เฉพาะงานที่ยังไม่รับเอกสาร เอกสารพร้อม และยังไม่ปิดงาน หน้าเว็บปิดปุ่มระหว่างบันทึกและเปลี่ยนสถานะเมื่อ Server ตอบสำเร็จเท่านั้น
+- แสดง “รับเอกสารและจัดเข้าแฟ้มแล้ว” พร้อมเวลา ไม่มีช่องชื่อว่าง ข้อมูลเก่ายังแสดงชื่อผู้รับและเวลาเดิมแบบอ่านอย่างเดียว
+- หากยืนยันผิด ใช้ระบบย้อน Workflow เดิม ประวัติเดิมเก็บเวลาและชื่อก่อนย้อนใน `before_state` และเปิดอ่านได้จาก “ข้อมูลรับเอกสารก่อนย้อน” ในรายละเอียดงาน ไม่มีการแก้ข้อมูลย้อนหลังอัตโนมัติ
+- **ไม่มี SQL Migration ใหม่สำหรับการเปลี่ยนขั้นตอนรับเอกสารนี้** ใช้ Column และระบบ Audit เดิม ส่วน Migration 031/032 เป็นของการปรับผู้ส่งเอกสารก่อนหน้า
+- ทดสอบด้วย `npm run test:document-receipt` และ `npm run test:document-receipt:ui` (แอปต้องรัน Port 3100) ชุด SQL เดิม `npm run test:document-delivery:sql` เพิ่มการตรวจย้อนรับเอกสารและรักษา Audit แล้ว
+
+## Actual Notice Distributor
+
+ช่อง “ผู้แจกจริง” ใช้ PersonSelect กับ `/api/people?active=true` จากทุกสังกัดเหมือนกันทุกประเภทงาน แสดงชื่อและสังกัด ไม่เลือกบุคลากรให้อัตโนมัติ และไม่รับชื่อที่พิมพ์โดยไม่ได้เลือกรายการ
+
+- API บันทึก `notice_by_person_id` และ `notice_by` ตามโครงสร้างเดิม ผู้แจกที่เลือกใหม่ต้อง Active แต่ไม่ต้องอยู่สังกัดเดียวกับงาน ไม่แก้ `responsible_unit` ตามผู้แจก
+- รายการเดิมที่มีชื่อข้อความยังคงไว้ได้ และบุคลากรเดิมที่ปิดใช้งานหรือย้ายสังกัดยังบันทึกซ้ำได้ โดยไม่เขียนทับชื่อที่บันทึกไว้เพียงเพราะแก้ข้อมูลบุคลากร
+- ทุกหน้าบันทึกผลการแจกแสดงเฉพาะข้อมูลแจกจริงและสังกัดผู้แจก ไม่มี LINE Preview หน้ากำหนดการของแผนกปฏิบัติการยังบันทึกและคัดลอก LINE ได้ และระบบแจ้งเตือนใช้ Generator เดิม
+- เงื่อนไข Workflow และหน้าที่ผู้รับมอบหมายเดิมคงไว้ รวมถึงงานปฏิบัติการที่ต้องมีกำหนดการก่อนยืนยันผล และผู้รับมอบหมาย กะ 1 ช่องเลือกบุคลากรอื่นไม่เปลี่ยนเงื่อนไข
+- **ไม่มี SQL Migration ใหม่** ใช้ Schema บุคลากรและการแจกหนังสือเดิม
+
+## Document Delivery Sender
+
+ก่อน Deploy ให้ Run `sql/032_document_delivery_unknown_audit.sql` ใน Supabase SQL Editor ด้วยตนเอง โดยฐานข้อมูลต้องผ่าน Migration เดิมถึง `030` แล้ว Migration 032 รองรับทั้งกรณีที่รัน `031_document_delivery_person.sql` แล้วและยังไม่ได้รัน เพราะเพิ่ม Column/FK/Index ที่จำเป็นจาก 031 แบบตรวจสอบก่อนสร้าง จึงไม่ต้องรัน 031 ซ้ำ
+
+- ช่องผู้ส่งเลือกได้ระหว่างบุคลากร Active ทุกสังกัดจาก `/people` กับ “ไม่ทราบชื่อผู้ส่งเอกสาร”
+- UNKNOWN ต้องมีเหตุผล (ไม่เกิน 1,000 ตัวอักษร) และติ๊กยืนยันว่าเอกสารถูกส่งจริงทุกครั้ง API ตรวจสอบเงื่อนไขด้วย รวมถึงห้ามเวลาส่งในอนาคต ห้ามข้ามการรับเอกสาร และห้ามแก้งานที่ปิดแล้ว
+- UNKNOWN เก็บสถานะแยกใน `document_delivery_sender_status` เหตุผลใน `document_delivery_unknown_reason` และเวลายืนยันการส่งจริงใน `document_delivery_confirmed_at` โดยชื่อ สังกัด และ person_id เป็น NULL ไม่มีการสร้างบุคลากรปลอมหรือใช้ข้อความ UNKNOWN เป็นชื่อบุคลากร
+- การเปลี่ยน UNKNOWN เป็นบุคลากรจริง หรือแก้บุคลากรที่เลือกผิดเป็น UNKNOWN ทำได้ผ่าน Popup เดิม ประวัติก่อน–หลังและเวลาแก้ไขเก็บใน `outage_job_document_delivery_audit` ด้วย Database Trigger ใน Transaction เดียวกับการแก้ไข หากเขียนประวัติไม่ได้ การแก้ไขจะไม่สำเร็จด้วย
+- ประวัติไม่มีตัวตนผู้แก้ไขที่ยืนยันแล้ว (`actor_authenticated=false`) การยืนยันว่าส่งจริงไม่ใช่การยืนยันตัวตน เปิดดู 50 รายการล่าสุดได้ใน Popup แก้ไขการส่งเอกสาร ประวัติเริ่มตั้งแต่ติดตั้ง Migration ไม่มีการสร้างประวัติย้อนหลัง
+- Migration ไม่แก้ข้อมูลเดิมหรือจับคู่ชื่ออัตโนมัติ สถานะ NULL ของข้อมูลเก่าคงเดิม ชื่อ/สังกัดที่บันทึกไว้ไม่เปลี่ยนตามข้อมูลบุคลากร การย้อน Workflow เดิมจะล้างข้อมูลผู้ส่งรวมถึง UNKNOWN และมีประวัติการเปลี่ยนแปลง
+- ทดสอบ Logic/API แบบแยกจากฐานข้อมูลจริงด้วย `npm run test:document-delivery`
+- หลัง Build ให้เปิดแอปที่ Port 3100 แล้ว Run `npm run test:document-delivery:ui` เพื่อทดสอบ Desktop/Mobile โดยจำลอง API และไม่เขียนฐานข้อมูลจริง
+- ทดสอบ SQL/Trigger/Constraint ใน PostgreSQL ที่แยกจากฐานข้อมูลจริง: ติดตั้ง Runtime ชั่วคราวด้วย `npm install --prefix .tmp/delivery-sql-tests --no-save --no-package-lock @electric-sql/pglite` แล้ว Run `npm run test:document-delivery:sql` ครอบคลุมมี/ไม่มี 031, Run ซ้ำ, รักษาข้อมูลเก่า, Audit ก่อน–หลัง, ย้อน Workflow และยกเลิกการแก้ไขเมื่อ Audit ล้มเหลว
+
 ## Reminder Configuration
 
 - ระบบ reminder ใช้ค่าคงที่จาก code (`src/lib/reminderConfig.ts`) โดยตรง

@@ -71,3 +71,11 @@ export function getNoticeDistributorDisplayName(job: {
     null
   );
 }
+
+export function getNoticeDistributorDisplayDepartment(job: {
+  notice_by_person_id?: string | null;
+  notice_by_person?: PersonRelation;
+}): string | null {
+  if (job.notice_by_person_id === null) return null;
+  return getPersonReference(job.notice_by_person)?.department ?? null;
+}

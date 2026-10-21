@@ -21,6 +21,8 @@ type PersonSelectProps = {
   emptyMessage?: string;
   includeAllDepartments?: boolean;
   showDepartment?: boolean;
+  searchEmptyMessage?: string;
+  preferSelectedPerson?: boolean;
 };
 
 export default function PersonSelect({
@@ -34,7 +36,9 @@ export default function PersonSelect({
   placeholder = "ค้นหาและเลือกบุคลากร",
   emptyMessage = "ไม่พบบุคลากรที่ใช้งานอยู่",
   includeAllDepartments = false,
-  showDepartment = false
+  showDepartment = false,
+  searchEmptyMessage = "ไม่พบรายชื่อที่ค้นหา",
+  preferSelectedPerson = false
 }: PersonSelectProps) {
   const listboxId = useId();
   const [people, setPeople] = useState<PersonReference[]>([]);
@@ -43,7 +47,7 @@ export default function PersonSelect({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!department) {
+    if (!department && !includeAllDepartments) {
       setPeople([]);
       setLoading(false);
       return;
@@ -76,9 +80,10 @@ export default function PersonSelect({
 
   const selected = useMemo(
     () =>
+      (preferSelectedPerson && selectedPerson?.id === value ? selectedPerson : null) ??
       people.find((person) => person.id === value) ??
       (selectedPerson?.id === value ? selectedPerson : null),
-    [people, selectedPerson, value]
+    [people, selectedPerson, value, preferSelectedPerson]
   );
   const displayValue = open
     ? query
@@ -89,7 +94,7 @@ export default function PersonSelect({
       ? person.full_name.toLocaleLowerCase("th-TH").includes(normalizedQuery)
       : true
   );
-  const isDisabled = disabled || !department;
+  const isDisabled = disabled || (!department && !includeAllDepartments);
 
   return (
     <div className="relative">
@@ -102,7 +107,7 @@ export default function PersonSelect({
         value={displayValue}
         disabled={isDisabled}
         required={required}
-        placeholder={!department ? "กรุณาเลือกหน่วยงานก่อน" : placeholder}
+        placeholder={!department && !includeAllDepartments ? "กรุณาเลือกหน่วยงานก่อน" : placeholder}
         className={cn(inputLight, "w-full")}
         onFocus={() => {
           setQuery("");
@@ -148,7 +153,7 @@ export default function PersonSelect({
             ))
           ) : (
             <p className="px-3 py-2 text-sm text-slate-500">
-              {normalizedQuery ? "ไม่พบรายชื่อที่ค้นหา" : emptyMessage}
+              {normalizedQuery ? searchEmptyMessage : emptyMessage}
             </p>
           )}
         </div>
