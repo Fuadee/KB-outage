@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:people!outage_jobs_work_supervisor_person_id_fkey(id, full_name, department, is_active), has_switching, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, notice_completed_at, is_closed, created_at"
+        "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:people!outage_jobs_work_supervisor_person_id_fkey(id, full_name, department, is_active), has_switching, outage_periods, doc_time_start, doc_time_end, doc_area_title, doc_purpose, doc_status, doc_generated_at, document_received_at, document_delivered_at, social_status, social_posted_at, notice_status, notice_date, notice_completed_at, is_closed, created_at"
       )
       .eq("outage_date", date)
       .order("doc_time_start", { ascending: true, nullsFirst: true })
@@ -95,6 +95,7 @@ export async function GET(request: Request) {
       work_supervisor_name: getWorkSupervisorDisplayName(job),
       has_switching: job.has_switching ?? null,
       requires_shift_one_distribution: isShiftOneDistributionPending(job),
+      outage_periods: job.outage_periods ?? null,
       time_start: job.doc_time_start ?? null,
       time_end: job.doc_time_end ?? null,
       area_title: job.doc_area_title ?? null,

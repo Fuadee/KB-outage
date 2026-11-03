@@ -22,3 +22,10 @@ export const SOCIAL_LAYOUT = {
   },
   colors: { navy: "#123A63", darkNavy: "#0B2F52", orange: "#F57C18", background: "#F7F9FC", white: "#FFFFFF", text: "#17324D", muted: "#5F6B7A", mapBackground: "#263D51" }
 } as const;
+
+/** Shared by the exported renderer and the map-drag overlay. */
+export function socialPeriodLayout(periodCount: number) {
+  const extra = Math.max(0, periodCount - 1) * 58;
+  const shift = Math.min(extra, 500);
+  return { extra, shift, height: SOCIAL_LAYOUT.height + extra - shift, infoTop: SOCIAL_LAYOUT.infoTop - shift };
+}

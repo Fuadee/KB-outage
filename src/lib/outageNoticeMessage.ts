@@ -1,3 +1,4 @@
+import { formatOutagePeriods, type OutagePeriod } from "./outagePeriods.ts";
 import { formatCustomerCount } from "./jobMetadata.ts";
 import { normalizeGoogleMyMapsViewerUrl } from "./mapUrl.ts";
 import {
@@ -17,6 +18,7 @@ export type OutageNoticeMessageJob = {
   doc_purpose?: string | null;
   doc_area_title?: string | null;
   doc_area_detail?: string | null;
+  outage_periods?: OutagePeriod[] | null;
   doc_time_start?: string | null;
   doc_time_end?: string | null;
   map_link?: string | null;
@@ -62,6 +64,7 @@ export function buildOutageNoticeLineMessage(
     workflow.route === "OPERATIONS"
       ? `📌 รับหนังสือ: ${NOTICE_BOOK_PICKUP_LOCATION}`
       : null,
+    formatOutagePeriods(job) ? `⏰ เวลาดับไฟ: ${formatOutagePeriods(job)}` : null,
     `🗺️ แผนที่: ${mapUrl}`,
     "⚠️ หากข้อมูลพื้นที่ไม่ตรง กรุณาแจ้งกลับเพื่อแก้ไข",
     "",

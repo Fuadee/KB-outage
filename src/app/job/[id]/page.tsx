@@ -1,4 +1,5 @@
 "use client";
+import { formatOutagePeriods } from "@/lib/outagePeriods";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -592,6 +593,7 @@ export default function JobDetailPage() {
               <CardDescription>เข้าถึงแผนที่และจุดงาน</CardDescription>
             </CardHeader>
             <CardContent>
+              <p className="break-words text-sm text-slate-700">ช่วงเวลาดับไฟ: {job ? formatOutagePeriods(job) || "ยังไม่กำหนด" : "-"}</p>
               <MapActionButtons
                 googleUrl={job?.map_link}
                 className="mt-3"

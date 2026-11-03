@@ -214,13 +214,14 @@ export function formatThaiDateBE(dateText: string | null | undefined): string {
 }
 
 export function formatSameDayReminderMessage(input: {
+  outageTimeText?: string;
   equipmentCode?: string | null;
   outageDate?: string | null;
   mapLink?: string | null;
 }): string {
   const mapLinkText = input.mapLink?.trim() || "-";
 
-  return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}\n\n📍 พื้นที่ดับไฟ (ดูแผนที่):\n${mapLinkText}\n\n📅 ตรวจสอบแผนดับไฟล่วงหน้า:\nhttps://kb-outage.vercel.app/calendar\n\n📢 เตรียมความพร้อมก่อนปฏิบัติงาน`;
+  return `⚡ แจ้งเตือนการดับไฟ (วันนี้)\n\nงาน: ${input.equipmentCode ?? "-"}\nวันที่ดับไฟ: ${formatThaiDateBE(input.outageDate)}${input.outageTimeText ? `\nเวลาดับไฟ: ${input.outageTimeText}` : ""}\n\n📍 พื้นที่ดับไฟ (ดูแผนที่):\n${mapLinkText}\n\n📅 ตรวจสอบแผนดับไฟล่วงหน้า:\nhttps://kb-outage.vercel.app/calendar\n\n📢 เตรียมความพร้อมก่อนปฏิบัติงาน`;
 }
 
 export type ReminderRuntimeReadiness = {

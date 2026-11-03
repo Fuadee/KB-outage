@@ -1,6 +1,7 @@
 /* Native images intentionally display private signed URLs and local upload blobs unchanged. */
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatOutagePeriods } from "@/lib/outagePeriods";
 import Modal from "./Modal";
 import MapActionButtons from "@/components/job/MapActionButtons";
 import Button from "@/components/ui/Button";
@@ -104,7 +105,7 @@ export default function SocialPostPreviewModal({ job, isOpen, onClose, onJobUpda
   }
   const facts = current && <dl className="grid gap-3 rounded-xl bg-purple-50 p-4 sm:grid-cols-2">
     <div><dt>วันที่ดับไฟ</dt><dd className="text-2xl font-bold text-purple-900">{formatThaiFullDate(current.outage_date)}</dd></div>
-    <div><dt>เวลา</dt><dd className="text-2xl font-bold text-purple-900">{current.doc_time_start || "ยังไม่ระบุ"} - {current.doc_time_end || "ยังไม่ระบุ"} น.</dd></div>
+    <div><dt>เวลา</dt><dd className="text-2xl font-bold text-purple-900">{formatOutagePeriods(current) || "ยังไม่ระบุ"}</dd></div>
     <div className="sm:col-span-2"><dt>พื้นที่</dt><dd className="break-words text-xl font-semibold">{current.doc_area_title || "ยังไม่ระบุ"}</dd></div>
     <div><dt>รหัสอุปกรณ์ / Feeder</dt><dd>{current.equipment_code}</dd></div>
   </dl>;

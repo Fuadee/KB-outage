@@ -4,6 +4,7 @@ import type { ResponsibleUnit } from "./jobMetadata";
 import type { PersonRelation } from "./people";
 
 export type OutageJob = {
+  outage_periods?: import("./outagePeriods").OutagePeriod[] | null;
   id: string;
   outage_date: string;
   equipment_code: string;
@@ -87,7 +88,7 @@ export type UpdateOutageJob = {
 };
 
 const JOB_SELECT =
-  "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:people!outage_jobs_work_supervisor_person_id_fkey(id, full_name, department, is_active), has_switching, customer_count, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivered_by_person_id, document_delivered_by_department, document_delivery_sender_status, document_delivery_unknown_reason, document_delivery_confirmed_at, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by_person_id, notice_by, notice_by_person:people!outage_jobs_notice_by_person_id_fkey(id, full_name, department, is_active), notice_scheduled_at, notice_completed_at, is_closed, closed_at, closed_by, created_at, updated_at";
+  "id, outage_date, equipment_code, responsible_unit, work_supervisor_person_id, work_supervisor_name, work_supervisor_person:people!outage_jobs_work_supervisor_person_id_fkey(id, full_name, department, is_active), has_switching, customer_count, note, nakhon_status, nakhon_notified_date, nakhon_memo_no, doc_issue_date, doc_purpose, doc_area_title, doc_time_start, doc_time_end, outage_periods, doc_area_detail, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_check_checked_at, vulnerable_check_error, vulnerable_patient_ids, special_watchlist_check_status, special_watchlist_check_count, special_watchlist_check_checked_at, special_watchlist_check_error, special_watchlist_customer_ids, doc_status, doc_url, doc_generated_at, doc_requested_at, document_received_at, document_received_by, document_delivered_at, document_delivered_by, document_delivered_by_person_id, document_delivered_by_department, document_delivery_sender_status, document_delivery_unknown_reason, document_delivery_confirmed_at, document_delivery_note, social_status, social_post_text, social_posted_at, social_approved_at, notice_status, notice_date, notice_by_person_id, notice_by, notice_by_person:people!outage_jobs_notice_by_person_id_fkey(id, full_name, department, is_active), notice_scheduled_at, notice_completed_at, is_closed, closed_at, closed_by, created_at, updated_at";
 
 const LEGACY_JOB_SELECT = JOB_SELECT.replace(", notice_completed_at", "");
 

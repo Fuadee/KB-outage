@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import { DEFAULT_SOCIAL_MAP_VIEW, socialMapPlacement, type SocialMapView } from "@/lib/socialImage";
-import { SOCIAL_LAYOUT as L } from "@/lib/socialImageLayout";
+import { SOCIAL_LAYOUT as L, socialPeriodLayout } from "@/lib/socialImageLayout";
+import { getOutagePeriods } from "@/lib/outagePeriods";
 
-type Facts = { outage_date: string; doc_time_start: string | null; doc_time_end: string | null; doc_area_title: string | null };
+type Facts = { outage_periods?: import("@/lib/outagePeriods").OutagePeriod[] | null; outage_date: string; doc_time_start: string | null; doc_time_end: string | null; doc_area_title: string | null };
 type Props = { source: string; endpoint: string; file: File | null; job: Facts; view: SocialMapView; onViewChange: (view: SocialMapView) => void };
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -18,11 +19,12 @@ export default function SocialImageLivePreview({ source, endpoint, file, job, vi
     probe.src = source;
     return () => { active = false; };
   }, [source]);
-  const mapHeight = L.infoTop - L.mapTop;
+  const { height, infoTop } = socialPeriodLayout(getOutagePeriods(job).length);
+  const mapHeight = infoTop - L.mapTop;
   const geometry = dimensions.width && dimensions.height
     ? socialMapPlacement(dimensions.width, dimensions.height, L.width, mapHeight, view)
     : null;
-  const factsKey = JSON.stringify([job.outage_date, job.doc_time_start, job.doc_time_end, job.doc_area_title]);
+  const factsKey = JSON.stringify([job.outage_periods, job.outage_date, job.doc_time_start, job.doc_time_end, job.doc_area_title]);
   const viewKey = JSON.stringify(view);
   const requestKey = JSON.stringify([endpoint, source, factsKey, viewKey]);
   const [rendered, setRendered] = useState<{ key: string; url: string } | null>(null);
@@ -73,9 +75,9 @@ export default function SocialImageLivePreview({ source, endpoint, file, job, vi
     </label>}
     <p className="text-sm text-slate-600">{view.mode === "fit" ? "แสดงภาพแผนที่ทั้งหมดโดยไม่ตัดขอบ" : "ลากภาพในตัวอย่างเพื่อเลือกพื้นที่ที่ต้องการแสดง"}</p>
     <div aria-busy={!ready && failure?.key !== requestKey}
-      style={{ aspectRatio: `${L.width} / ${L.height}` }}
+      style={{ aspectRatio: `${L.width} / ${height}` }}
       className={`relative w-full max-w-[540px] overflow-hidden rounded-xl border bg-slate-100 shadow-sm ${view.mode === "fill" ? "touch-none cursor-grab" : ""}`}
-      onPointerDown={event => { if (view.mode !== "fill" || !geometry) return; const rect = event.currentTarget.getBoundingClientRect(); const y = (event.clientY - rect.top) * L.height / rect.height; if (y < L.mapTop || y > L.infoTop) return; event.currentTarget.setPointerCapture(event.pointerId); setDrag({ x: event.clientX, y: event.clientY, startX: view.x, startY: view.y }); }}
+      onPointerDown={event => { if (view.mode !== "fill" || !geometry) return; const rect = event.currentTarget.getBoundingClientRect(); const y = (event.clientY - rect.top) * height / rect.height; if (y < L.mapTop || y > infoTop) return; event.currentTarget.setPointerCapture(event.pointerId); setDrag({ x: event.clientX, y: event.clientY, startX: view.x, startY: view.y }); }}
       onPointerMove={event => { if (view.mode === "fill") pan(event.clientX, event.clientY, event.currentTarget); }}
       onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)} onLostPointerCapture={() => setDrag(null)}>
       {ready ? <img src={rendered.url} alt="ตัวอย่างภาพประชาสัมพันธ์ 4 ต่อ 5" draggable={false} className="block w-full select-none" />

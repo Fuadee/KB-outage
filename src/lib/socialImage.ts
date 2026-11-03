@@ -1,3 +1,4 @@
+import { getOutagePeriods, normalizeOutagePeriods } from "./outagePeriods.ts";
 import type { SocialPostJob } from "./socialPost.ts";
 
 export const MAX_SOCIAL_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -21,6 +22,7 @@ export function socialMapPlacement(sourceWidth: number, sourceHeight: number, vi
 }
 export function socialImageSnapshot(job: SocialPostJob & { equipment_code?: string }) {
   return {
+    ...(getOutagePeriods(job).length > 1 ? { outage_periods: getOutagePeriods(job) } : {}),
     outage_date: job.outage_date, doc_time_start: job.doc_time_start,
     doc_time_end: job.doc_time_end, doc_area_title: job.doc_area_title,
     doc_area_detail: job.doc_area_detail, doc_purpose: job.doc_purpose,
@@ -34,12 +36,13 @@ export type SocialImageAsset = {
 };
 export function isSocialImageStale(job: SocialPostJob & { equipment_code?: string }, asset: SocialImageAsset) {
   const current = socialImageSnapshot(job);
-  return Object.keys(current).some(key => current[key as keyof typeof current] !== asset.snapshot[key as keyof typeof current]);
+  if (JSON.stringify(getOutagePeriods(job)) !== JSON.stringify(getOutagePeriods(asset.snapshot))) return true;
+  return Object.keys(current).some(key => key !== "outage_periods" && current[key as keyof typeof current] !== asset.snapshot[key as keyof typeof current]);
 }
 export function validateSocialImageJob(job: SocialPostJob) {
+  normalizeOutagePeriods(getOutagePeriods(job));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(job.outage_date) || !Number.isFinite(Date.parse(job.outage_date)) ||
-      !job.doc_area_title?.trim() || !/^([01]\d|2[0-3]):[0-5]\d$/.test(job.doc_time_start ?? "") ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(job.doc_time_end ?? "")) {
+      !job.doc_area_title?.trim()) {
     throw new Error("กรุณาบันทึกวันที่ เวลา และพื้นที่ในข้อมูลงานให้ครบก่อนสร้างภาพ");
   }
 }

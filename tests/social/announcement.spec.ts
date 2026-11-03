@@ -117,6 +117,8 @@ test("existing Social modal: upload, review, stale edits, regeneration, mobile b
   await final.evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
   await expect(modal).toBeHidden();
   expect(postAttempts).toBe(2); expect(postUpdates).toBe(1);
+  // Completed Social follows the existing ready queue, rather than remaining active.
+  await page.goto("/jobs/ready");
   await expect(page.getByRole("button", { name: "Posted แล้วสื่อ Social" }).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Posted แล้วสื่อ Social" }).first()).toBeVisible();

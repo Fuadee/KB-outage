@@ -1,5 +1,8 @@
 "use client";
 
+import { OutagePeriodsInput } from "@/components/OutagePeriodsInput";
+import { getOutagePeriods, normalizeOutagePeriods, type OutagePeriod } from "@/lib/outagePeriods";
+
 import { usePathname, useRouter } from "next/navigation";
 import {
   type FormEvent,
@@ -64,11 +67,10 @@ type ActionKey =
   | "close_job";
 
 type DocForm = {
+  outage_periods: OutagePeriod[];
   doc_issue_date: string;
   doc_purpose: string;
   doc_area_title: string;
-  doc_time_start: string;
-  doc_time_end: string;
   customer_count: string;
   doc_area_detail: string;
   map_link: string;
@@ -253,8 +255,7 @@ export default function JobsPage() {
     doc_issue_date: "",
     doc_purpose: "",
     doc_area_title: "",
-    doc_time_start: "",
-    doc_time_end: "",
+    outage_periods: [{ start_time: "", end_time: "" }],
     customer_count: "",
     doc_area_detail: "",
     map_link: ""
@@ -282,7 +283,6 @@ export default function JobsPage() {
   const docPurposeRef = useRef<HTMLInputElement>(null);
   const docAreaTitleRef = useRef<HTMLInputElement>(null);
   const docTimeStartRef = useRef<HTMLInputElement>(null);
-  const docTimeEndRef = useRef<HTMLInputElement>(null);
   const customerCountRef = useRef<HTMLInputElement>(null);
   const docAreaDetailRef = useRef<HTMLTextAreaElement>(null);
   const mapLinkRef = useRef<HTMLInputElement>(null);
@@ -369,8 +369,7 @@ export default function JobsPage() {
       doc_issue_date: "",
       doc_purpose: "",
       doc_area_title: "",
-      doc_time_start: "",
-      doc_time_end: "",
+      outage_periods: [{ start_time: "", end_time: "" }],
       customer_count: "",
       doc_area_detail: "",
       map_link: ""
@@ -405,8 +404,7 @@ export default function JobsPage() {
       doc_issue_date: job.doc_issue_date ?? "",
       doc_purpose: job.doc_purpose ?? "",
       doc_area_title: job.doc_area_title ?? "",
-      doc_time_start: job.doc_time_start ?? "",
-      doc_time_end: job.doc_time_end ?? "",
+      outage_periods: getOutagePeriods(job).length ? getOutagePeriods(job) : [{ start_time: "", end_time: "" }],
       customer_count: job.customer_count === null ? "" : String(job.customer_count),
       doc_area_detail: job.doc_area_detail ?? "",
       map_link: job.map_link ?? ""
@@ -628,12 +626,9 @@ export default function JobsPage() {
     if (!docForm.doc_area_title.trim()) {
       nextErrors.doc_area_title = "กรุณาระบุบริเวณที่ดับ";
     }
-    if (!docForm.doc_time_start.trim()) {
-      nextErrors.doc_time_start = "กรุณาระบุเวลาเริ่มดับไฟ";
-    }
-    if (!docForm.doc_time_end.trim()) {
-      nextErrors.doc_time_end = "กรุณาระบุเวลาจ่ายไฟ";
-    }
+    let periods: OutagePeriod[] = [];
+    try { periods = normalizeOutagePeriods(docForm.outage_periods); }
+    catch (error) { nextErrors.outage_periods = (error as Error).message; }
     const customerCount = parseCustomerCount(docForm.customer_count);
     if (!customerCount.success) {
       nextErrors.customer_count = customerCount.error;
@@ -654,8 +649,7 @@ export default function JobsPage() {
           "doc_issue_date",
           "doc_purpose",
           "doc_area_title",
-          "doc_time_start",
-          "doc_time_end",
+          "outage_periods",
           "customer_count",
           "doc_area_detail",
           "map_link"
@@ -668,8 +662,7 @@ export default function JobsPage() {
         doc_issue_date: docIssueDateRef,
         doc_purpose: docPurposeRef,
         doc_area_title: docAreaTitleRef,
-        doc_time_start: docTimeStartRef,
-        doc_time_end: docTimeEndRef,
+        outage_periods: docTimeStartRef,
         customer_count: customerCountRef,
         doc_area_detail: docAreaDetailRef,
         map_link: mapLinkRef
@@ -686,8 +679,9 @@ export default function JobsPage() {
       doc_issue_date: docForm.doc_issue_date,
       doc_purpose: docForm.doc_purpose.trim(),
       doc_area_title: docForm.doc_area_title.trim(),
-      doc_time_start: docForm.doc_time_start.trim(),
-      doc_time_end: docForm.doc_time_end.trim(),
+      outage_periods: periods,
+      doc_time_start: periods[0].start_time,
+      doc_time_end: periods[0].end_time,
       customer_count: customerCount.success ? customerCount.value : null,
       doc_area_detail: docForm.doc_area_detail.trim(),
       map_link: docForm.map_link.trim()
@@ -1022,6 +1016,14 @@ export default function JobsPage() {
                   openDocModal(job);
                 }
               });
+              if (job.doc_url && !isClosed) {
+                secondaryActions.push({
+                  id: "edit_doc",
+                  label: "แก้ไขข้อมูลเอกสาร",
+                  onClick: () => openDocModal(job),
+                  disabled: actionDisabled || isDocGenerating
+                });
+              }
             } else {
               secondaryActions.push({
                 id: "create_doc",
@@ -1285,48 +1287,12 @@ export default function JobsPage() {
               </span>
             ) : null}
           </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            เวลาเริ่มดับไฟ
-            <Input
-              ref={docTimeStartRef}
-              type="time"
-              value={docForm.doc_time_start}
-              onChange={(event) =>
-                setDocForm((prev) => ({
-                  ...prev,
-                  doc_time_start: event.target.value
-                }))
-              }
-              className="h-10"
-              required
-            />
-            {docErrors.doc_time_start ? (
-              <span className="text-xs text-red-600">
-                {docErrors.doc_time_start}
-              </span>
-            ) : null}
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            เวลาจ่ายไฟ
-            <Input
-              ref={docTimeEndRef}
-              type="time"
-              value={docForm.doc_time_end}
-              onChange={(event) =>
-                setDocForm((prev) => ({
-                  ...prev,
-                  doc_time_end: event.target.value
-                }))
-              }
-              className="h-10"
-              required
-            />
-            {docErrors.doc_time_end ? (
-              <span className="text-xs text-red-600">
-                {docErrors.doc_time_end}
-              </span>
-            ) : null}
-          </label>
+          <OutagePeriodsInput value={docForm.outage_periods} disabled={docSaving}
+            inputRef={docTimeStartRef} error={docErrors.outage_periods}
+            onChange={outage_periods => {
+              setDocForm(prev => ({ ...prev, outage_periods }));
+              setDocErrors(prev => ({ ...prev, outage_periods: undefined }));
+            }} />
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
             บริเวณที่ดับ
             <Input

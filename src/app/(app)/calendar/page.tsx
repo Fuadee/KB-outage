@@ -1,4 +1,5 @@
 "use client";
+import { formatOutagePeriods, type OutagePeriod } from "@/lib/outagePeriods";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -98,6 +99,7 @@ function CalendarSummaryRow({ entry }: { entry: CalendarSummaryEntry }) {
 }
 
 type DayJob = {
+  outage_periods?: OutagePeriod[] | null;
   id: string;
   outage_date: string;
   equipment_code: string | null;
@@ -144,6 +146,7 @@ function MobileSelectedDayJobCard({ job }: { job: DayJob }) {
       <p className="mt-2 break-words text-sm font-semibold leading-5 text-slate-900">
         {job.equipment_code || "ไม่ระบุรหัสอุปกรณ์"}
       </p>
+      <p className="mt-0.5 break-words text-xs leading-5 text-slate-600">{formatOutagePeriods({ outage_periods: job.outage_periods, doc_time_start: job.time_start, doc_time_end: job.time_end }) || "ไม่ระบุเวลา"}</p>
       <p className="mt-0.5 break-words text-sm leading-5 text-slate-600">
         {job.display_area || "ไม่ระบุพื้นที่"}
       </p>
@@ -765,8 +768,8 @@ export default function CalendarPage() {
                               <SwitchingBadge compact />
                             ) : null}
                           </div>
-                          <p className="shrink-0 text-xs font-medium text-slate-500">
-                            {formatTimeRange(job.time_start, job.time_end)}
+                          <p className="min-w-0 break-words text-xs font-medium text-slate-500">
+                            {formatOutagePeriods({ outage_periods: job.outage_periods, doc_time_start: job.time_start, doc_time_end: job.time_end }) || "ไม่ระบุเวลา"}
                           </p>
                         </div>
                         <p className="break-words text-sm font-semibold text-slate-900">

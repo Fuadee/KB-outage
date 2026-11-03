@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { formatThaiFullDate, type SocialPostJob } from "./socialPost.ts";
 import { DEFAULT_SOCIAL_MAP_VIEW, MAX_SOCIAL_IMAGE_BYTES, SOCIAL_IMAGE_MIMES, socialMapPlacement, validateSocialImageJob, type SocialMapView } from "./socialImage.ts";
-import { SOCIAL_LAYOUT as L } from "./socialImageLayout.ts";
+import { SOCIAL_LAYOUT as L, socialPeriodLayout } from "./socialImageLayout.ts";
+import { formatOutagePeriods, getOutagePeriods } from "./outagePeriods.ts";
 
 const T = L.text;
 // This is the bundled Noto Sans Thai variable font with a private family name.
@@ -51,7 +52,10 @@ function place(image: TextImage, left: number, top: number) { return { input: im
 export async function renderSocialImage(map: Buffer, job: SocialPostJob, view: SocialMapView = DEFAULT_SOCIAL_MAP_VIEW) {
   assertSocialImageFont();
   validateSocialImageJob(job);
-  const { width, height, headerBottom, mapTop, infoTop, colors } = L;
+  const periods = getOutagePeriods(job);
+  // Make room for each range without clipping or shrinking the official announcement text.
+  const { extra, shift, height, infoTop } = socialPeriodLayout(periods.length);
+  const { width, headerBottom, mapTop, colors } = L;
   const mapHeight = infoTop - mapTop;
   const meta = await sharp(map).metadata();
   if (!meta.width || !meta.height) throw new Error("ไฟล์ภาพแผนที่ไม่ถูกต้อง");
@@ -74,7 +78,7 @@ export async function renderSocialImage(map: Buffer, job: SocialPostJob, view: S
     textImage("ปรับปรุงระบบจำหน่ายแรงสูง\nเพื่อแก้ปัญหาไฟฟ้าขัดข้อง", T.explanation.size, T.explanation.width, colors.white, "bold"),
     textImage("บริเวณ", T.areaLabel.size, T.areaLabel.width, colors.muted), textImage("วันที่", T.dateLabel.size, T.dateLabel.width, colors.muted), textImage("เวลา", T.timeLabel.size, T.timeLabel.width, colors.muted),
     fitText(formatThaiFullDate(job.outage_date), T.date.sizes, T.date.width, T.date.maxHeight),
-    fitText(`${job.doc_time_start} - ${job.doc_time_end} น.`, T.time.sizes, T.time.width, T.time.maxHeight)
+    fitText(periods.map(period => formatOutagePeriods({ outage_periods: [period] })).join("\n"), T.time.sizes, T.time.width, T.time.maxHeight + extra)
   ]);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <defs><linearGradient id="navy"><stop stop-color="${colors.darkNavy}"/><stop offset="1" stop-color="${colors.navy}"/></linearGradient></defs>
@@ -86,17 +90,19 @@ export async function renderSocialImage(map: Buffer, job: SocialPostJob, view: S
     <rect y="${headerBottom}" width="${width}" height="4" fill="${colors.white}"/>
     <rect y="${infoTop}" width="${width}" height="${height-infoTop}" fill="${colors.background}"/>
     <rect y="${infoTop}" width="${width}" height="4" fill="${colors.orange}"/>
-    <path d="M34 1190 H1046 M540 1207 V1326" stroke="#D7E2EC" stroke-width="2"/>
+    <g transform="translate(0,-${shift})">
+    <path d="M34 1190 H1046 M540 1207 V${1326 + extra}" stroke="#D7E2EC" stroke-width="2"/>
     <path d="M52 1027 C46 1027 42 1031 42 1037 C42 1044 52 1052 52 1052 C52 1052 62 1044 62 1037 C62 1031 58 1027 52 1027 Z" fill="none" stroke="${colors.orange}" stroke-width="4"/><circle cx="52" cy="1037" r="3" fill="${colors.orange}"/>
     <rect x="43" y="1221" width="26" height="25" rx="3" fill="none" stroke="${colors.orange}" stroke-width="4"/><path d="M43 1229 H69 M50 1217 V1225 M62 1217 V1225" stroke="${colors.orange}" stroke-width="4" stroke-linecap="round"/>
     <circle cx="578" cy="1234" r="15" fill="none" stroke="${colors.orange}" stroke-width="4"/><path d="M578 1223 V1234 L587 1240" fill="none" stroke="${colors.orange}" stroke-width="4" stroke-linecap="round"/>
+    </g>
   </svg>`;
   return sharp(Buffer.from(svg)).composite([
     { input: mapLayer, left: 0, top: mapTop },
     place(headline, T.headline.left, Math.floor((headerBottom-headline.info.height)/2)),
     place(explanation, T.explanation.left, Math.floor((headerBottom-explanation.info.height)/2)),
-    place(areaLabel, T.areaLabel.left, T.areaLabel.top), place(area, T.area.left, T.area.top),
-    place(dateLabel, T.dateLabel.left, T.dateLabel.top), place(date, T.date.left, T.date.top),
-    place(timeLabel, T.timeLabel.left, T.timeLabel.top), place(time, T.time.left, T.time.top)
+    place(areaLabel, T.areaLabel.left, T.areaLabel.top - shift), place(area, T.area.left, T.area.top - shift),
+    place(dateLabel, T.dateLabel.left, T.dateLabel.top - shift), place(date, T.date.left, T.date.top - shift),
+    place(timeLabel, T.timeLabel.left, T.timeLabel.top - shift), place(time, T.time.left, T.time.top - shift)
   ]).png().toBuffer();
 }

@@ -1,3 +1,4 @@
+import { getOutagePeriods, normalizeOutagePeriods, type OutagePeriod } from "@/lib/outagePeriods";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs/promises";
@@ -11,6 +12,7 @@ import { parseCustomerCount } from "@/lib/jobMetadata";
 export const runtime = "nodejs";
 
 type DocPayload = {
+  outage_periods?: OutagePeriod[] | null;
   doc_issue_date: string;
   doc_purpose: string;
   doc_area_title: string;
@@ -41,15 +43,8 @@ function createSupabaseServerClient() {
 }
 
 function isPayloadValid(payload: Partial<DocPayload>) {
-  return (
-    Boolean(payload.doc_issue_date) &&
-    Boolean(payload.doc_purpose?.trim()) &&
-    Boolean(payload.doc_area_title?.trim()) &&
-    Boolean(payload.doc_time_start?.trim()) &&
-    Boolean(payload.doc_time_end?.trim()) &&
-    Boolean(payload.doc_area_detail?.trim()) &&
-    Boolean(payload.map_link?.trim())
-  );
+  return [payload.doc_issue_date, payload.doc_purpose, payload.doc_area_title,
+    payload.doc_area_detail, payload.map_link].every(value => typeof value === "string" && value.trim());
 }
 
 function toAsciiFilename(value: string) {
@@ -68,6 +63,7 @@ function buildContentDisposition(asciiName: string, utf8Name?: string) {
 
 export async function POST(request: Request) {
   let jobId: string | number | undefined;
+  let generationStarted = false;
   try {
     const body = (await request.json()) as Partial<CreateDocRequest> & {
       id?: string | number;
@@ -89,6 +85,14 @@ export async function POST(request: Request) {
         { ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" },
         { status: 400 }
       );
+    }
+
+    let periods: OutagePeriod[];
+    try {
+      periods = normalizeOutagePeriods(body.payload.outage_periods === undefined
+        ? getOutagePeriods(body.payload) : body.payload.outage_periods);
+    } catch (error) {
+      return NextResponse.json({ ok: false, error: (error as Error).message }, { status: 400 });
     }
 
     const hasCustomerCount = Object.prototype.hasOwnProperty.call(body.payload, "customer_count");
@@ -127,13 +131,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const payload = body.payload as DocPayload;
-    const { error: updateError } = await supabase
+    // Older clients may edit one-period jobs, but must never discard a multi-period schedule.
+    if (body.payload.outage_periods === undefined && getOutagePeriods(job).length > 1) {
+      return NextResponse.json({ ok: false, error: "งานนี้มีหลายช่วงเวลาดับไฟ กรุณาโหลดหน้าใหม่ก่อนแก้ไข" }, { status: 409 });
+    }
+    const payload = { ...body.payload, outage_periods: periods, doc_time_start: periods[0].start_time, doc_time_end: periods[0].end_time } as DocPayload;
+    const { data: savedJob, error: updateError } = await supabase
       .from("outage_jobs")
       .update({
         doc_issue_date: payload.doc_issue_date,
         doc_purpose: payload.doc_purpose,
         doc_area_title: payload.doc_area_title,
+        outage_periods: periods,
         doc_time_start: payload.doc_time_start,
         doc_time_end: payload.doc_time_end,
         ...(hasCustomerCount ? { customer_count: customerCount.value } : {}),
@@ -143,11 +152,18 @@ export async function POST(request: Request) {
         doc_url: null,
         doc_generated_at: null
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .eq("updated_at", job.updated_at)
+      .select("*")
+      .single();
 
     if (updateError) {
+      if (updateError.code === "PGRST116") {
+        return NextResponse.json({ ok: false, error: "งานมีการแก้ไขระหว่างบันทึก กรุณาโหลดข้อมูลล่าสุดแล้วลองใหม่" }, { status: 409 });
+      }
       throw new Error(updateError.message);
     }
+    generationStarted = true;
     await runVulnerablePatientsCheck(supabase, jobId, payload.map_link);
 
     console.info("DOCX template path:", OUTAGE_TEMPLATE_PATH);
@@ -174,7 +190,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const buffer = await generateOutageDocxBuffer({ payload, job });
+    const buffer = await generateOutageDocxBuffer({ payload, job: savedJob });
     const bytes = new Uint8Array(buffer);
 
     const { error: finalizeError } = await supabase
@@ -184,9 +200,16 @@ export async function POST(request: Request) {
         doc_url: null,
         doc_generated_at: new Date().toISOString()
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .eq("outage_date", savedJob.outage_date)
+      .eq("outage_periods", JSON.stringify(periods))
+      .select("id")
+      .single();
 
     if (finalizeError) {
+      if (finalizeError.code === "PGRST116") {
+        return NextResponse.json({ ok: false, error: "วันหรือช่วงเวลาดับไฟมีการแก้ไขระหว่างสร้างเอกสาร กรุณาสร้างเอกสารใหม่" }, { status: 409 });
+      }
       throw new Error(finalizeError.message);
     }
 
@@ -218,7 +241,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Doc generation failed", error);
-    if (jobId) {
+    if (jobId && generationStarted) {
       try {
         const supabase = createSupabaseServerClient();
         await supabase

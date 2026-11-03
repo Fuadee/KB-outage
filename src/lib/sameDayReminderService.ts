@@ -1,3 +1,4 @@
+import { formatOutagePeriods, type OutagePeriod } from "@/lib/outagePeriods";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import {
@@ -26,6 +27,9 @@ import {
 import { ensureSystemCertificateAuthorities } from "@/lib/serverTls";
 
 export type SameDayReminderJob = {
+  outage_periods?: OutagePeriod[] | null;
+  doc_time_start?: string | null;
+  doc_time_end?: string | null;
   id: number | string;
   equipment_code: string | null;
   outage_date: string | null;
@@ -267,7 +271,7 @@ async function fetchSameDayReminderJobs(
 
   const withStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,map_link,line_same_day_reminder_sent_at,status,is_closed")
+    .select("id,equipment_code,outage_date,outage_periods,doc_time_start,doc_time_end,map_link,line_same_day_reminder_sent_at,status,is_closed")
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
 
@@ -284,7 +288,7 @@ async function fetchSameDayReminderJobs(
 
   const withoutStatus = await supabase
     .from("outage_jobs")
-    .select("id,equipment_code,outage_date,map_link,line_same_day_reminder_sent_at")
+    .select("id,equipment_code,outage_date,outage_periods,doc_time_start,doc_time_end,map_link,line_same_day_reminder_sent_at")
     .eq("outage_date", targetDate)
     .order("outage_date", { ascending: true });
 
@@ -308,7 +312,7 @@ async function fetchNoticeDistributionJobs(
   const { data, error } = await supabase
     .from("outage_jobs")
     .select(
-      "id,equipment_code,outage_date,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_scheduled_at,notice_completed_at,notice_completion_source,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
+      "id,equipment_code,outage_date,outage_periods,doc_time_start,doc_time_end,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_scheduled_at,notice_completed_at,notice_completion_source,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
     )
     .or(`notice_date.lte.${targetDate},notice_date.is.null`)
     .eq("responsible_unit", "แผนกปฏิบัติการ")
@@ -502,6 +506,7 @@ export async function runSameDayReminder(
             equipmentCode: job.equipment_code,
             outageDate: job.outage_date,
             mapLink: job.map_link,
+            outageTimeText: formatOutagePeriods(job),
           });
           sameDaySummary.lineSendAttempts += 1;
           const outageEventKey = `SAME_DAY_OUTAGE:${job.id}:${targetDateUsed}`;

@@ -1,3 +1,4 @@
+import { formatOutagePeriods, type OutagePeriod } from "@/lib/outagePeriods";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -47,6 +48,7 @@ function formatThaiDate(dateStr: string) {
 }
 
 type OutageRow = {
+  outage_periods?: OutagePeriod[] | null;
   doc_time_start: string | null;
   doc_time_end: string | null;
   doc_area_title: string | null;
@@ -117,8 +119,6 @@ function formatOutageReply(
   const lines = ["📢 สรุปพื้นที่ดับไฟวันนี้", `📅 ${formatThaiDate(date)}`, ""];
 
   rows.forEach((row, index) => {
-    const start = row.doc_time_start ?? "-";
-    const end = row.doc_time_end ?? "-";
     const location = row.doc_area_title ?? "-";
     const mapLink = row.map_link ?? "-";
     const count = row.vulnerable_check_count ?? 0;
@@ -126,13 +126,13 @@ function formatOutageReply(
       row.vulnerable_check_status === "FOUND_IN_POLYGON" && count > 0;
 
     lines.push(
-      `${index + 1}) เวลา ${start}-${end}`,
+      `${index + 1}) เวลา ${formatOutagePeriods(row) || "ไม่ระบุเวลา"}`,
       `📍 ${location}`,
       `🔗 ${mapLink}`
     );
 
     if (hasVulnerablePatients) {
-      const key = `${row.doc_time_start ?? ""}|${row.doc_time_end ?? ""}|${row.doc_area_title ?? ""}`;
+      const key = `${formatOutagePeriods(row)}|${row.doc_area_title ?? ""}`;
       const patients = patientsByOutageKey.get(key) ?? [];
       lines.push("", ...formatPatientBlock(count, patients));
     }
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from("outage_jobs")
       .select(
-        "doc_time_start, doc_time_end, doc_area_title, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_patient_ids"
+        "outage_periods, doc_time_start, doc_time_end, doc_area_title, map_link, vulnerable_check_status, vulnerable_check_count, vulnerable_patient_ids"
       )
       .eq("outage_date", bangkokToday)
       .order("doc_time_start", { ascending: true, nullsFirst: true });
@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      const key = `${row.doc_time_start ?? ""}|${row.doc_time_end ?? ""}|${row.doc_area_title ?? ""}`;
+      const key = `${formatOutagePeriods(row)}|${row.doc_area_title ?? ""}`;
       const ids = Array.isArray(row.vulnerable_patient_ids)
         ? row.vulnerable_patient_ids.filter((id): id is string => Boolean(id))
         : [];

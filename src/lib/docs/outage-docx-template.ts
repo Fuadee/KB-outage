@@ -3,11 +3,14 @@ import path from "path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import QRCode from "qrcode";
+import { formatOutagePeriods, getOutagePeriods, normalizeOutagePeriods, formatThaiOutageDate, type OutagePeriod } from "../outagePeriods.ts";
+import { prepareOutageTimePlaceholder } from "./outage-template-periods.ts";
 
 const PLACEHOLDER_QR_IMAGE = "word/media/image2.png";
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
 type DocPayload = {
+  outage_periods?: OutagePeriod[] | null;
   doc_issue_date: string;
   doc_purpose: string;
   doc_area_title: string;
@@ -28,114 +31,10 @@ type GenerateArgs = {
   job: Record<string, unknown>;
 };
 
-const THAI_MONTHS = [
-  "มกราคม",
-  "กุมภาพันธ์",
-  "มีนาคม",
-  "เมษายน",
-  "พฤษภาคม",
-  "มิถุนายน",
-  "กรกฎาคม",
-  "สิงหาคม",
-  "กันยายน",
-  "ตุลาคม",
-  "พฤศจิกายน",
-  "ธันวาคม"
-];
-const THAI_WEEKDAYS = [
-  "วันอาทิตย์",
-  "วันจันทร์",
-  "วันอังคาร",
-  "วันพุธ",
-  "วันพฤหัสบดี",
-  "วันศุกร์",
-  "วันเสาร์"
-];
+export const formatThaiDateBE = (value: string): string => formatThaiOutageDate(value);
 
-export const formatThaiDateBE = (isoDate: string): string => {
-  if (!isoDate?.trim()) {
-    return "";
-  }
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
-  if (!match) {
-    return "";
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return "";
-  }
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return "";
-  }
-
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  if (
-    utcDate.getUTCFullYear() !== year ||
-    utcDate.getUTCMonth() !== month - 1 ||
-    utcDate.getUTCDate() !== day
-  ) {
-    return "";
-  }
-
-  const thaiMonth = THAI_MONTHS[month - 1];
-  if (!thaiMonth) {
-    return "";
-  }
-
-  const beYear = year + 543;
-  return `${day} ${thaiMonth} ${beYear}`;
-};
-
-export const formatThaiDateWithWeekdayBE = (isoDate: unknown): string => {
-  if (typeof isoDate !== "string" || !isoDate.trim()) {
-    return "";
-  }
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
-  if (!match) {
-    return "";
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return "";
-  }
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return "";
-  }
-
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  if (
-    utcDate.getUTCFullYear() !== year ||
-    utcDate.getUTCMonth() !== month - 1 ||
-    utcDate.getUTCDate() !== day
-  ) {
-    return "";
-  }
-
-  const thaiMonth = THAI_MONTHS[month - 1];
-  if (!thaiMonth) {
-    return "";
-  }
-
-  const weekday = THAI_WEEKDAYS[utcDate.getUTCDay()];
-  if (!weekday) {
-    return "";
-  }
-
-  const beYear = year + 543;
-  return `${weekday}ที่ ${day} ${thaiMonth} ${beYear}`;
-};
+export const formatThaiDateWithWeekdayBE = (value: unknown): string =>
+  typeof value === "string" ? formatThaiOutageDate(value, true) : "";
 
 const containsInvalidXmlChars = (xml: string) =>
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xml) || xml.includes("\uFFFD");
@@ -222,8 +121,12 @@ const logDocxRenderError = (error: unknown) => {
   }
 };
 
-const renderTextPass = (templateBuffer: Buffer, data: Record<string, string>) => {
+const renderTextPass = (templateBuffer: Buffer, data: Record<string, string>, periodCount = 1) => {
   const zip = new PizZip(templateBuffer);
+  const supportsPeriods = prepareOutageTimePlaceholder(zip, periodCount >= 3);
+  if (periodCount > 1 && !supportsPeriods) {
+    throw new Error("เทมเพลตไม่มีช่อง DOC_TIME_RANGES สำหรับหลายช่วงเวลา กรุณาตรวจสอบเทมเพลต");
+  }
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
     linebreaks: true,
@@ -245,7 +148,9 @@ const ensurePngContentType = (zip: PizZip) => {
     return;
   }
   const xml = contentTypesFile.asText();
-  if (xml.includes('Extension="png"')) {
+  // OPC extensions are case-insensitive. The actual template already declares PNG.
+  // Adding a second lowercase entry makes Microsoft Word reject the package.
+  if (/Extension="png"/i.test(xml)) {
     return;
   }
   const insertTag =
@@ -262,6 +167,7 @@ export async function generateOutageDocxBuffer({
   payload,
   job
 }: GenerateArgs): Promise<Buffer> {
+  const periods = normalizeOutagePeriods(getOutagePeriods(payload));
   let templateBuffer: Buffer;
   try {
     templateBuffer = await fs.readFile(OUTAGE_TEMPLATE_PATH);
@@ -289,9 +195,7 @@ export async function generateOutageDocxBuffer({
   }
 
   const doc_issue_date_th = formatThaiDateBE(payload.doc_issue_date);
-  const doc_outage_date_full_th = formatThaiDateWithWeekdayBE(
-    job?.outage_date ?? ""
-  );
+  const doc_outage_date_full_th = formatThaiOutageDate(String(job?.outage_date ?? ""), true);
   const baseData = {
     doc_issue_date: payload.doc_issue_date,
     doc_issue_date_th,
@@ -299,15 +203,16 @@ export async function generateOutageDocxBuffer({
     DOC_ISSUE_DATE: payload.doc_issue_date,
     DOC_PURPOSE: payload.doc_purpose,
     DOC_AREA_TITLE: payload.doc_area_title,
-    DOC_TIME_START: payload.doc_time_start,
-    DOC_TIME_END: payload.doc_time_end,
+    DOC_TIME_RANGES: formatOutagePeriods({ outage_periods: periods }),
+    DOC_TIME_START: periods[0].start_time.replace(":", "."),
+    DOC_TIME_END: periods[0].end_time.replace(":", "."),
     DOC_AREA_DETAIL: payload.doc_area_detail,
     MAP_LINK: payload.map_link,
     OUTAGE_DATE: String(job.outage_date ?? "-"),
     EQUIPMENT_CODE: String(job.equipment_code ?? "-")
   };
 
-  const pass1Buffer = renderTextPass(templateBuffer, baseData);
+  const pass1Buffer = renderTextPass(templateBuffer, baseData, periods.length);
   console.info("PASS1 OK");
 
   if (!imageBuffer) {

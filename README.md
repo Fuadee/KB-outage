@@ -55,6 +55,8 @@ npm run dev
 
 ## DOCX Template Setup
 
+Multi-period outages use migration `sql/033_multi_period_outage.sql`. Apply it before deploying this version. See [data compatibility, rollout, changed files, and test results](docs/multi-period-outage.md). The existing Word template is retained; `{{DOC_TIME_RANGES}}` is supported and the original start/end placeholder pair is adapted automatically.
+
 1. Create the file locally at `templates/outage_template.docx` (this file is **not** committed to the repo).
 2. Open Microsoft Word (or LibreOffice) and design the layout:
    - Use A4 page size.

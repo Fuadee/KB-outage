@@ -1,4 +1,5 @@
 import DocumentDeliveryUnknownNotice from "@/components/job/DocumentDeliveryUnknownNotice";
+import { formatOutagePeriods } from "@/lib/outagePeriods";
 import type { ReactElement } from "react";
 import { ArrowRight, CalendarDays, CircleCheck, Clock3, FileCheck2, FileText, Megaphone, MapPin, TriangleAlert, Users } from "lucide-react";
 import MapActionButtons from "@/components/job/MapActionButtons";
@@ -295,11 +296,9 @@ export default function JobCard({
 
         <section className="min-w-0 space-y-3 border-b border-[#e8ecf2] pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5">
           <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-3">
-            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-600">
+            <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium text-slate-600">
               <Clock3 className="h-3.5 w-3.5" />
-              {job.doc_time_start && job.doc_time_end
-                ? `${job.doc_time_start}–${job.doc_time_end}`
-                : "ยังไม่กำหนดช่วงเวลา"}
+              {formatOutagePeriods(job) || "ยังไม่กำหนดช่วงเวลา"}
             </span>
             <p className="min-w-0 text-sm font-semibold leading-6 text-slate-800 sm:truncate">
               {job.doc_area_title || job.doc_purpose || "ยังไม่มีรายละเอียดงาน"}

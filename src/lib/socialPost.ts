@@ -1,21 +1,7 @@
-import { parseLocalDate } from "./dateUtils.ts";
-
-const THAI_MONTHS = [
-  "มกราคม",
-  "กุมภาพันธ์",
-  "มีนาคม",
-  "เมษายน",
-  "พฤษภาคม",
-  "มิถุนายน",
-  "กรกฎาคม",
-  "สิงหาคม",
-  "กันยายน",
-  "ตุลาคม",
-  "พฤศจิกายน",
-  "ธันวาคม"
-];
+import { formatOutagePeriods, formatThaiOutageDate, type OutagePeriod } from "./outagePeriods.ts";
 
 export type SocialPostJob = {
+  outage_periods?: OutagePeriod[] | null;
   outage_date: string;
   doc_purpose: string | null;
   doc_area_title: string | null;
@@ -27,19 +13,12 @@ export type SocialPostJob = {
 };
 
 export function formatThaiFullDate(dateString: string) {
-  if (!dateString) return "";
-  const date = parseLocalDate(dateString);
-  const day = date.getDate();
-  const month = THAI_MONTHS[date.getMonth()] ?? "";
-  const year = date.getFullYear() + 543;
-  return `${day} ${month} ${year}`.trim();
+  return formatThaiOutageDate(dateString);
 }
 
 export function buildSocialPostText(job: SocialPostJob) {
   const docPurpose = job.doc_purpose ?? "";
   const docAreaTitle = job.doc_area_title ?? "";
-  const docTimeStart = job.doc_time_start ?? "";
-  const docTimeEnd = job.doc_time_end ?? "";
   const docAreaDetail = job.doc_area_detail ?? "";
   const mapLink = job.map_link ?? "";
   const outageDateTh = formatThaiFullDate(job.outage_date);
@@ -47,7 +26,7 @@ export function buildSocialPostText(job: SocialPostJob) {
   return [
     `เพื่อ${docPurpose} บริเวณ ${docAreaTitle}`,
     `📅${outageDateTh}`,
-    `☣️โซนสีเหลือง แสดงพื้นที่ไฟดับ ตั้งแต่เวลา ${docTimeStart} .- ${docTimeEnd} น.`,
+    `☣️โซนสีเหลือง แสดงพื้นที่ไฟดับ ตั้งแต่เวลา ${formatOutagePeriods(job)}`,
     `🌏บริเวณพื้นที่ผู้ใช้ไฟได้รับผลกระทบ ${docAreaDetail}`,
     `📌กดลิ้งค์ 👇 เพื่อตรวจสอบพื้นที่ไฟดับ ${mapLink}`
   ].join("\n");

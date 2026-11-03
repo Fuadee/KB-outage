@@ -41,10 +41,10 @@ const expectedMessage = [
   "ขอบคุณครับ 🙏"
 ].join("\n");
 
-test("builds the exact compact LINE message", () => {
+test("builds the compact LINE message including the outage time", () => {
   const message = buildOutageNoticeLineMessage(completeJob);
 
-  assert.equal(message, expectedMessage);
+  assert.equal(message, expectedMessage.replace("🗺️ แผนที่:", "⏰ เวลาดับไฟ: 09.00–15.30 น.\n🗺️ แผนที่:"));
   assert.doesNotMatch(message, /ข้อความประกาศเต็ม/);
   assert.doesNotMatch(message, /วันที่ไปแจก|วันและเวลาไฟดับ|ยังไม่ระบุ/);
   assert.doesNotMatch(message, /\[[^\]]+\]\(https?:\/\//);
