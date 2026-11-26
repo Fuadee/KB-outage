@@ -10,6 +10,7 @@ import {
   type NoticeDistributionJob,
   type NoticeDistributionRunSummary
 } from "@/lib/dailyNoticeDistribution";
+import { RESPONSIBLE_UNITS } from "@/lib/jobMetadata";
 import {
   BANGKOK_TIMEZONE,
   computeBangkokTodayDateOnly,
@@ -312,10 +313,10 @@ async function fetchNoticeDistributionJobs(
   const { data, error } = await supabase
     .from("outage_jobs")
     .select(
-      "id,equipment_code,outage_date,outage_periods,doc_time_start,doc_time_end,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_status,notice_scheduled_at,notice_completed_at,notice_completion_source,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
+      "id,equipment_code,outage_date,outage_periods,doc_time_start,doc_time_end,responsible_unit,customer_count,doc_purpose,doc_area_title,doc_area_detail,map_link,notice_date,notice_by,notice_by_person_id,notice_by_person:people!outage_jobs_notice_by_person_id_fkey(id,full_name,department,is_active),notice_status,notice_scheduled_at,notice_completed_at,notice_completion_source,document_received_at,document_delivered_at,social_status,social_posted_at,is_closed"
     )
     .or(`notice_date.lte.${targetDate},notice_date.is.null`)
-    .eq("responsible_unit", "แผนกปฏิบัติการ")
+    .in("responsible_unit", RESPONSIBLE_UNITS)
     .eq("is_closed", false)
     .order("outage_date", { ascending: true });
 

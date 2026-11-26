@@ -14,6 +14,12 @@ import {
 } from "./dailyNoticeDistribution.ts";
 import { computeBangkokTodayDateOnly } from "./reminder.ts";
 import { buildOutageNoticeLineMessage } from "./outageNoticeMessage.ts";
+import {
+  AONANG_RESPONSIBLE_UNIT,
+  CONSTRUCTION_RESPONSIBLE_UNIT,
+  OPERATIONS_RESPONSIBLE_UNIT,
+  RESPONSIBLE_UNITS
+} from "./jobMetadata.ts";
 
 const targetDate = "2026-09-12";
 
@@ -198,7 +204,7 @@ test("TEST-like pending distribution is returned by the query rule and sent", as
   assert.equal(harness.messages.length, 1);
 });
 
-test("query rule excludes future, non-operation, and closed jobs", () => {
+test("query rule excludes future, unsupported-unit, and closed jobs", () => {
   assert.equal(
     matchesNoticeDistributionQuery(
       makeJob("future-query", { notice_date: "2026-09-13" }),
@@ -210,7 +216,7 @@ test("query rule excludes future, non-operation, and closed jobs", () => {
     matchesNoticeDistributionQuery(
       makeJob("other-unit-query", {
         notice_date: "2026-09-10",
-        responsible_unit: "แผนกก่อสร้าง"
+        responsible_unit: "หน่วยงานอื่น"
       }),
       targetDate
     ),
@@ -413,37 +419,111 @@ test("an overdue closed job is not sent", async () => {
   assert.equal(summary.skipReasons["is_closed=true"], 1);
 });
 
-test("overdue construction and Ao Nang jobs never enter the shift 1 reminder flow", async () => {
+for (const responsible_unit of RESPONSIBLE_UNITS) {
+  test(`${responsible_unit}: sends due and overdue jobs but skips future, completed, closed and already notified jobs`, async () => {
+    const job = makeJob("due", { responsible_unit });
+    const overdue = makeJob("overdue", {
+      responsible_unit,
+      notice_date: null
+    });
+    const harness = createHarness(new Set([
+      buildNoticeDistributionEventKey("already-notified", targetDate)
+    ]));
+
+    assert.equal(matchesNoticeDistributionQuery(job, targetDate), true);
+    assert.equal(matchesNoticeDistributionQuery(overdue, targetDate), true);
+
+    const summary = await processNoticeDistributionJobs({
+      jobs: [
+        job,
+        overdue,
+        makeJob("future", { responsible_unit, notice_date: "2026-09-13" }),
+        makeJob("completed", {
+          responsible_unit,
+          notice_status: "COMPLETED",
+          notice_completed_at: "2026-09-11T08:00:00+07:00",
+          notice_completion_source: "USER"
+        }),
+        makeJob("closed", { responsible_unit, is_closed: true }),
+        makeJob("already-notified", { responsible_unit })
+      ],
+      targetDate,
+      dryRun: false,
+      ...harness
+    });
+
+    assert.equal(summary.sent, 2);
+    assert.deepEqual(harness.recorded, [
+      buildNoticeDistributionEventKey(job.id, targetDate),
+      buildNoticeDistributionEventKey(overdue.id, targetDate)
+    ]);
+    assert.deepEqual(summary.skipReasons, {
+      notice_date_not_match: 1,
+      notice_already_completed: 1,
+      "is_closed=true": 1,
+      already_notified_today: 1
+    });
+  });
+}
+
+test("unsupported and missing units do not receive a notice distribution reminder", async () => {
   const harness = createHarness();
   const summary = await processNoticeDistributionJobs({
     jobs: [
-      makeJob("construction", {
-        notice_date: "2026-09-10",
-        responsible_unit: "แผนกก่อสร้าง"
-      }),
-      makeJob("ao-nang", {
-        notice_date: "2026-09-10",
-        responsible_unit: "กฟส.อ่าวนาง"
-      })
+      makeJob("unsupported", { responsible_unit: "หน่วยงานอื่น" }),
+      makeJob("missing", { responsible_unit: null })
     ],
     targetDate,
     dryRun: false,
     ...harness
   });
-
   assert.equal(summary.sent, 0);
-  assert.equal(summary.skipReasons.not_operations_distribution, 2);
+  assert.equal(summary.skipReasons.unsupported_responsible_unit, 2);
   assert.equal(harness.messages.length, 0);
 });
 
-test("a historical operations date stops after changing to construction", () => {
+test("daily LINE uses the recorded distributor and owning unit for direct jobs only", async () => {
+  const operations = makeJob("operations", { notice_by: "ชื่อเดิม" });
+  const construction = makeJob("construction", {
+    responsible_unit: CONSTRUCTION_RESPONSIBLE_UNIT,
+    notice_by: "ชื่อเดิม",
+    notice_by_person_id: "person-1",
+    notice_by_person: {
+      id: "person-1",
+      full_name: "สมชาย ตัวอย่าง",
+      department: OPERATIONS_RESPONSIBLE_UNIT,
+      is_active: true
+    }
+  });
+  const aoNang = makeJob("ao-nang", {
+    responsible_unit: AONANG_RESPONSIBLE_UNIT,
+    notice_by: "  สมศรี ตัวอย่าง  "
+  });
+  const aoNangWithoutDistributor = makeJob("ao-nang-no-distributor", {
+    responsible_unit: AONANG_RESPONSIBLE_UNIT,
+    notice_by: "  "
+  });
+  const harness = createHarness();
+
+  await processNoticeDistributionJobs({
+    jobs: [operations, construction, aoNang, aoNangWithoutDistributor],
+    targetDate,
+    dryRun: false,
+    ...harness
+  });
+
+  assert.equal(harness.messages[0], buildOutageNoticeLineMessage(operations));
+  assert.match(harness.messages[0], /ผู้ดำเนินการ: กะ 1/);
   assert.equal(
-    getNoticeDistributionSkipReason(
-      makeJob("changed-unit", { responsible_unit: "แผนกก่อสร้าง" }),
-      targetDate
-    ),
-    "not_operations_distribution"
+    harness.messages[1],
+    buildOutageNoticeLineMessage(construction).replace(
+      "ผู้ดำเนินการ: แผนกก่อสร้าง",
+      "ผู้ดำเนินการ: สมชาย ตัวอย่าง (แผนกก่อสร้าง)"
+    )
   );
+  assert.match(harness.messages[2], /ผู้ดำเนินการ: สมศรี ตัวอย่าง \(กฟส\.อ่าวนาง\)/);
+  assert.match(harness.messages[3], /ผู้ดำเนินการ: กฟส\.อ่าวนาง/);
+  assert.doesNotMatch(harness.messages.slice(1).join("\n"), /กะ 1/);
 });
 
 test("three due jobs produce three independent messages", async () => {
@@ -597,7 +677,7 @@ test("manual preview and daily notification use the same builder", () => {
     "utf8"
   );
 
-  assert.match(service, /buildOutageNoticeLineMessage\(job\)/);
+  assert.match(service, /buildOutageNoticeLineMessage\(job, getNoticeDistributionAssignment\(job\)\)/);
   assert.match(service, /completionReason: "user_confirmed_notice_completion"/);
   assert.match(service, /ignoredEvidence: "legacy_migration_backfill"/);
   assert.match(service, /ignoredEvidence: "legacy_sent_status"/);
@@ -615,7 +695,8 @@ test("manual preview and daily notification use the same builder", () => {
   assert.match(cronService, /notice-distribution-job-diagnostic/);
   assert.match(cronService, /notice_date\.lte\.\$\{targetDate\},notice_date\.is\.null/);
   assert.doesNotMatch(cronService, /\.eq\("notice_date", targetDate\)/);
-  assert.match(cronService, /\.eq\("responsible_unit", "แผนกปฏิบัติการ"\)/);
+  assert.match(cronService, /\.in\("responsible_unit", RESPONSIBLE_UNITS\)/);
+  assert.match(cronService, /notice_by,notice_by_person_id,notice_by_person:people!outage_jobs_notice_by_person_id_fkey/);
   assert.match(cronService, /\.eq\("is_closed", false\)/);
   assert.doesNotMatch(cronService, /\.eq\("notice_status"/);
   assert.match(cronService, /X-Line-Retry-Key/);

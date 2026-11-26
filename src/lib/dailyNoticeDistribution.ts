@@ -4,8 +4,9 @@ import {
   type OutageNoticeMessageJob
 } from "./outageNoticeMessage.ts";
 import { normalizeDateOnly } from "./reminder.ts";
-import { getDistributionWorkflow } from "./distributionWorkflow.ts";
 import { getDistributionDueDate } from "./distributionReminder.ts";
+import { isResponsibleUnit, OPERATIONS_RESPONSIBLE_UNIT } from "./jobMetadata.ts";
+import { getNoticeDistributorDisplayName, type PersonRelation } from "./people.ts";
 
 export const NOTICE_DISTRIBUTION_EVENT_TYPE = "NOTICE_DISTRIBUTION";
 
@@ -13,6 +14,9 @@ export type NoticeDistributionJob = OutageNoticeMessageJob & {
   id: number | string;
   equipment_code?: string | null;
   notice_date?: string | null;
+  notice_by?: string | null;
+  notice_by_person_id?: string | null;
+  notice_by_person?: PersonRelation;
   notice_status?: string | null;
   notice_scheduled_at?: string | null;
   notice_completed_at?: string | null;
@@ -195,7 +199,7 @@ export function matchesNoticeDistributionQuery(
   targetDate: string
 ): boolean {
   if (job.is_closed) return false;
-  if (getDistributionWorkflow(job).route !== "OPERATIONS") return false;
+  if (!isResponsibleUnit(job.responsible_unit)) return false;
 
   const { dueDate } = resolveNoticeDistributionDueDate(job);
   return Boolean(dueDate && dueDate <= targetDate);
@@ -211,10 +215,8 @@ export function getNoticeDistributionSkipReason(
     return "notice_already_completed";
   }
 
-  // Use the shared resolver only for the responsible-unit route. Its broader
-  // UI workflow completion state must not decide this daily reminder.
-  if (getDistributionWorkflow(job).route !== "OPERATIONS") {
-    return "not_operations_distribution";
+  if (!isResponsibleUnit(job.responsible_unit)) {
+    return "unsupported_responsible_unit";
   }
 
   const { dueDate } = resolveNoticeDistributionDueDate(job);
@@ -260,6 +262,16 @@ export function buildNoticeDistributionDiagnostic(
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getNoticeDistributionAssignment(job: NoticeDistributionJob) {
+  const unit = job.responsible_unit;
+  if (!isResponsibleUnit(unit) || unit === OPERATIONS_RESPONSIBLE_UNIT) {
+    return undefined;
+  }
+
+  const distributor = getNoticeDistributorDisplayName(job);
+  return distributor ? `${distributor} (${unit})` : unit;
 }
 
 export async function processNoticeDistributionJobs(
@@ -310,7 +322,7 @@ export async function processNoticeDistributionJobs(
     try {
       // This is intentionally the same builder used by the Jobs modal preview
       // and clipboard actions.
-      message = buildOutageNoticeLineMessage(job);
+      message = buildOutageNoticeLineMessage(job, getNoticeDistributionAssignment(job));
     } catch (error) {
       summary.ok = false;
       summary.errors.push({

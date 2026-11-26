@@ -6,10 +6,11 @@
 - This endpoint is the **primary production entrypoint** for scheduler calls.
 - Business logic stays in `runSameDayReminder` service.
 - The run first processes the existing same-day outage reminder, then sends one
-  notice-distribution assignment per eligible Operations job
-  (`responsible_unit = แผนกปฏิบัติการ`) whose `notice_date` is the Bangkok
-  target date. Construction and Ao Nang jobs are distributed directly and are
-  excluded even if they retain a historical `notice_date`.
+  notice-distribution assignment per eligible job in Operations, Construction,
+  or Ao Nang. An open job is due when its `notice_date` is on or before the
+  Bangkok target date. If the job has no scheduled date, the deadline is seven
+  days before the outage, moved to Monday when it falls on a weekend. A recorded
+  user confirmation of distribution stops the reminders.
 - Vercel Cron is removed from same-day production path to avoid duplicate triggers.
 - 5-day reminder flow is intentionally not changed in this migration.
 
@@ -144,10 +145,11 @@ keys, and LINE retry keys prevent successful work from being sent twice.
    - `line_notification_events` contains one
       `NOTICE_DISTRIBUTION:{jobId}:{YYYY-MM-DD}` row per successfully accepted
       distribution assignment
-   - every notice-distribution event belongs to an Operations job; Construction
-     and Ao Nang jobs must not create an event
+   - notice-distribution events can belong to Operations, Construction, or Ao
+     Nang jobs
 4. Re-run same date:
-   - should skip with `already_sent_same_day`
+   - outage reminders should skip with `already_sent_same_day`
+   - previously sent distribution reminders should skip with `already_notified_today`
 
 ## 8) Deployment / ops checklist
 

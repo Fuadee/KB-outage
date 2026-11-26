@@ -40,7 +40,8 @@ export function getOutageNoticeAreaText(
 }
 
 export function buildOutageNoticeLineMessage(
-  job: OutageNoticeMessageJob
+  job: OutageNoticeMessageJob,
+  assignmentLabel?: string
 ): string {
   const workflow = getDistributionWorkflow(job);
   const customerCount =
@@ -57,7 +58,7 @@ export function buildOutageNoticeLineMessage(
     "",
     `📍 พื้นที่: ${getOutageNoticeAreaText(job)}`,
     `📄 จำนวนหนังสือ: ${customerCount} ราย`,
-    `👷 ผู้ดำเนินการ: ${workflow.assignmentLabel ?? "ไม่ระบุหน่วยงาน"}`,
+    `👷 ผู้ดำเนินการ: ${assignmentLabel ?? workflow.assignmentLabel ?? "ไม่ระบุหน่วยงาน"}`,
     workflow.route === "OPERATIONS"
       ? null
       : `📅 วันดับไฟ: ${formatThaiDateBE(job.outage_date)}`,
